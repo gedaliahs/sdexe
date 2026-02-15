@@ -37,7 +37,7 @@ This starts the server on `http://localhost:5001` and opens it in your browser.
 ## Development
 
 ```
-git clone <repo-url>
+git clone https://github.com/gedaliahs/sdexe.git
 cd sdexe
 python -m venv venv
 source venv/bin/activate
