@@ -217,10 +217,10 @@
 
         <button class="install-cmd" onclick="copyInstall(this)" title="Click to copy">
             <span class="prompt">$</span>
-            <span>pip install sdexe</span>
+            <span>pipx install sdexe</span>
             <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
         </button>
-        <p class="hint">then run <code>sdexe</code></p>
+        <p class="hint">then run <code>sdexe</code> &mdash; need pipx? <code>brew install pipx</code></p>
 
         <div class="features">
             <div class="feat">
@@ -249,7 +249,7 @@
 
 <script>
 function copyInstall(btn) {
-    navigator.clipboard.writeText('pip install sdexe');
+    navigator.clipboard.writeText('pipx install sdexe');
     btn.classList.add('copied');
     const label = btn.querySelector('span:nth-child(2)');
     const orig = label.textContent;
