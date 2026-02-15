@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}PDF Tools{% endblock %}
+{% block nav_pdf %}active{% endblock %}
+
+{% block content %}
+    <main>
+        <div class="hero">
+            <h1>PDF Tools</h1>
+            <p class="subtitle">Merge, split, and convert — everything runs locally on your machine.</p>
+        </div>
+
+        <div class="pdf-tabs">
+            <button class="pdf-tab active" data-tab="merge">Merge</button>
+            <button class="pdf-tab" data-tab="split">Split</button>
+            <button class="pdf-tab" data-tab="img2pdf">Images to PDF</button>
+        </div>
+
+        <!-- Merge -->
+        <div id="tab-merge" class="pdf-section card active">
+            <div class="card-body">
+                <h2>Merge PDFs</h2>
+                <p class="meta">Combine multiple PDF files into one. Drag to reorder.</p>
+
+                <div class="drop-zone" id="merge-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <polyline points="9 15 12 12 15 15"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF files<input type="file" id="merge-input" accept=".pdf" multiple hidden></label>
+                    <p class="drop-hint">or drop files here</p>
+                </div>
+
+                <div id="merge-list" class="file-list"></div>
+
+                <div id="merge-actions" class="pdf-actions" hidden>
+                    <button id="merge-btn" class="btn-download" onclick="doMerge()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Merge PDFs
+                    </button>
+                </div>
+
+                <div id="merge-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Split -->
+        <div id="tab-split" class="pdf-section card">
+            <div class="card-body">
+                <h2>Split PDF</h2>
+                <p class="meta">Split a PDF into separate pages or custom ranges.</p>
+
+                <div class="drop-zone" id="split-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <polyline points="9 15 12 12 15 15"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="split-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop files here</p>
+                </div>
+
+                <div id="split-file-info" class="split-info" hidden>
+                    <span id="split-file-name" class="split-name"></span>
+                    <span id="split-page-count" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearSplitFile()">&times;</button>
+                </div>
+
+                <div id="split-options" hidden>
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Page ranges (leave empty to split all pages)</label>
+                        <input type="text" id="split-ranges" placeholder="e.g. 1-3, 5, 7-10">
+                    </div>
+                </div>
+
+                <div id="split-actions" class="pdf-actions" hidden>
+                    <button id="split-btn" class="btn-download" onclick="doSplit()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Split PDF
+                    </button>
+                </div>
+
+                <div id="split-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Images to PDF -->
+        <div id="tab-img2pdf" class="pdf-section card">
+            <div class="card-body">
+                <h2>Images to PDF</h2>
+                <p class="meta">Convert images to a single PDF document. Drag to reorder.</p>
+
+                <div class="drop-zone" id="img-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <label class="drop-browse">Select images<input type="file" id="img-input" accept="image/jpeg,image/png,image/webp" multiple hidden></label>
+                    <p class="drop-hint">or drop files here</p>
+                </div>
+
+                <div id="img-list" class="file-list"></div>
+
+                <div id="img-actions" class="pdf-actions" hidden>
+                    <button id="img-btn" class="btn-download" onclick="doImagesToPdf()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to PDF
+                    </button>
+                </div>
+
+                <div id="img-error" class="error" hidden></div>
+            </div>
+        </div>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+    <script src="/static/pdf.js"></script>
+{% endblock %}

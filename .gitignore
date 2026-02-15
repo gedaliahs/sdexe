@@ -1,0 +1,9 @@
+downloads/
+__pycache__/
+venv/
+*.pyc
+*.egg-info/
+dist/
+build/
+.DS_Store
+.vercel

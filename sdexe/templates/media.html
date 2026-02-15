@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Media Downloader{% endblock %}
+{% block nav_media %}active{% endblock %}
+
+{% block content %}
+    <main>
+        <div class="hero">
+            <h1>Download videos &amp; audio from anywhere</h1>
+            <p class="subtitle">YouTube, Instagram, Twitch, TikTok, SoundCloud, X, Vimeo &amp; 1000+ more sites.</p>
+        </div>
+
+        <div class="search-bar multi-link">
+            <div class="search-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+                    <path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="8"/>
+                </svg>
+            </div>
+            <textarea id="url" rows="1" placeholder="Paste any video or audio URL (one per line for batch)..." autofocus></textarea>
+            <button id="fetch-btn" onclick="fetchInfo()">
+                <span class="btn-text">Fetch</span>
+                <span class="btn-arrow">&rarr;</span>
+            </button>
+        </div>
+
+        <div id="error" class="error" hidden></div>
+
+        <!-- Loading Skeleton -->
+        <div id="skeleton-card" class="card skeleton-card" hidden>
+            <div class="skeleton-thumb skeleton-pulse"></div>
+            <div class="skeleton-body">
+                <div class="skeleton-line skeleton-pulse" style="width:70%"></div>
+                <div class="skeleton-line skeleton-pulse short" style="width:40%"></div>
+                <div class="skeleton-row">
+                    <div class="skeleton-block skeleton-pulse"></div>
+                    <div class="skeleton-block skeleton-pulse"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Single Video -->
+        <div id="video-card" class="card" hidden>
+            <div class="card-media">
+                <img id="v-thumb" alt="">
+                <span id="v-duration" class="badge"></span>
+            </div>
+            <div class="card-body">
+                <div class="meta-fields">
+                    <div class="field">
+                        <label>Title</label>
+                        <input type="text" id="v-title" placeholder="Title">
+                    </div>
+                    <div class="field-row">
+                        <div class="field"><label>Artist</label><input type="text" id="v-artist" placeholder="Artist"></div>
+                        <div class="field"><label>Album</label><input type="text" id="v-album" placeholder="Album"></div>
+                    </div>
+                </div>
+                <div class="controls">
+                    <div class="control-row">
+                        <div class="select-wrap">
+                            <label>Format</label>
+                            <select id="v-format" onchange="updateQuality('v')">
+                                <option value="mp3">MP3 — Audio</option>
+                                <option value="mp4">MP4 — Video</option>
+                                <option value="flac">FLAC — Audio</option>
+                                <option value="wav">WAV — Audio</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <label>Quality</label>
+                            <select id="v-quality">
+                                <option value="best">Best</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="v-dl-btn" class="btn-download" onclick="startSingleDownload()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Download
+                    </button>
+                </div>
+                <div id="v-progress" class="progress-panel" hidden>
+                    <div class="progress-track"><div id="v-progress-fill" class="progress-fill"></div></div>
+                    <p id="v-progress-text">Starting...</p>
+                </div>
+                <a id="v-save" class="btn-save" hidden>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                    Save File
+                </a>
+            </div>
+        </div>
+
+        <!-- Playlist / Channel / Multi-link -->
+        <div id="playlist-panel" class="card" hidden>
+            <div class="card-body">
+                <div class="playlist-header">
+                    <h2 id="p-title"></h2>
+                    <p id="p-meta" class="meta"></p>
+                </div>
+
+                <div class="playlist-toolbar">
+                    <label class="check-label">
+                        <input type="checkbox" id="p-select-all" checked onchange="toggleSelectAll()">
+                        <span>Select all</span>
+                    </label>
+                    <span id="p-count" class="count-badge"></span>
+                </div>
+
+                <div class="controls">
+                    <div class="control-row">
+                        <div class="select-wrap">
+                            <label>Format</label>
+                            <select id="p-format" onchange="updateQuality('p')">
+                                <option value="mp3">MP3 — Audio</option>
+                                <option value="mp4">MP4 — Video</option>
+                                <option value="flac">FLAC — Audio</option>
+                                <option value="wav">WAV — Audio</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <label>Quality</label>
+                            <select id="p-quality">
+                                <option value="best">Best</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field"><label>Artist (all)</label><input type="text" id="p-artist" placeholder="Apply to all"></div>
+                        <div class="field"><label>Album (all)</label><input type="text" id="p-album" placeholder="Apply to all"></div>
+                    </div>
+                    <button id="p-dl-btn" class="btn-download" onclick="startPlaylistDownload()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Download Selected
+                    </button>
+                </div>
+
+                <!-- Batch Progress Summary -->
+                <div id="p-summary" class="batch-summary" hidden>
+                    <div class="bs-top">
+                        <span id="bs-label" class="bs-label">Downloading...</span>
+                        <span id="bs-counter" class="bs-counter">0 / 0</span>
+                    </div>
+                    <div class="bs-track"><div id="bs-fill" class="bs-fill"></div></div>
+                    <div class="bs-bottom">
+                        <span id="bs-now" class="bs-now"></span>
+                        <span id="bs-stats" class="bs-stats"></span>
+                    </div>
+                </div>
+
+                <div id="p-entries" class="entries-list"></div>
+            </div>
+        </div>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+    <script src="/static/app.js"></script>
+{% endblock %}

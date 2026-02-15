@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}sdexe{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <div class="nav-inner">
+            <a href="/" class="logo">sd<span>exe</span></a>
+            <div class="nav-links">
+                <a href="/media" class="nav-link {% block nav_media %}{% endblock %}">Media</a>
+                <a href="/pdf" class="nav-link {% block nav_pdf %}{% endblock %}">PDF</a>
+                <a href="/images" class="nav-link {% block nav_images %}{% endblock %}">Images</a>
+                <a href="/convert" class="nav-link {% block nav_convert %}{% endblock %}">Convert</a>
+            </div>
+        </div>
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <footer>
+        <p>Runs locally &middot; No data leaves your machine</p>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

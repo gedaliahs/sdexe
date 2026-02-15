@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}File Converter{% endblock %}
+{% block nav_convert %}active{% endblock %}
+
+{% block content %}
+    <main>
+        <div class="hero">
+            <h1>File Converter</h1>
+            <p class="subtitle">Convert between file formats — everything runs locally on your machine.</p>
+        </div>
+
+        <div class="pdf-tabs">
+            <button class="pdf-tab active" data-tab="md2html">Markdown to HTML</button>
+            <button class="pdf-tab" data-tab="csv2json">CSV to JSON</button>
+            <button class="pdf-tab" data-tab="json2csv">JSON to CSV</button>
+        </div>
+
+        <!-- Markdown to HTML -->
+        <div id="tab-md2html" class="pdf-section card active">
+            <div class="card-body">
+                <h2>Markdown to HTML</h2>
+                <p class="meta">Upload a .md file or paste markdown text to convert to a styled HTML document.</p>
+
+                <div class="drop-zone" id="md-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <polyline points="9 15 12 12 15 15"/>
+                    </svg>
+                    <label class="drop-browse">Select .md file<input type="file" id="md-input" accept=".md,.markdown,.txt" hidden></label>
+                    <p class="drop-hint">or drop files here</p>
+                </div>
+
+                <div id="md-file-info" class="split-info" hidden>
+                    <span id="md-file-name" class="split-name"></span>
+                    <span id="md-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearMdFile()">&times;</button>
+                </div>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Or paste markdown here</label>
+                    <textarea id="md-text" class="convert-textarea" placeholder="# Hello&#10;&#10;Write your **markdown** here..." rows="8"></textarea>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 16px;">
+                    <button id="md-btn" class="btn-download" onclick="doMdToHtml()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to HTML
+                    </button>
+                </div>
+
+                <div id="md-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- CSV to JSON -->
+        <div id="tab-csv2json" class="pdf-section card">
+            <div class="card-body">
+                <h2>CSV to JSON</h2>
+                <p class="meta">Upload a CSV file to convert it to JSON format.</p>
+
+                <div class="drop-zone" id="csv-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <polyline points="9 15 12 12 15 15"/>
+                    </svg>
+                    <label class="drop-browse">Select .csv file<input type="file" id="csv-input" accept=".csv" hidden></label>
+                    <p class="drop-hint">or drop files here</p>
+                </div>
+
+                <div id="csv-file-info" class="split-info" hidden>
+                    <span id="csv-file-name" class="split-name"></span>
+                    <span id="csv-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearCsvFile()">&times;</button>
+                </div>
+
+                <div id="csv-actions" class="pdf-actions" hidden>
+                    <button id="csv-btn" class="btn-download" onclick="doCsvToJson()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to JSON
+                    </button>
+                </div>
+
+                <div id="csv-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- JSON to CSV -->
+        <div id="tab-json2csv" class="pdf-section card">
+            <div class="card-body">
+                <h2>JSON to CSV</h2>
+                <p class="meta">Upload a JSON file (array of objects) to convert it to CSV format.</p>
+
+                <div class="drop-zone" id="json-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <polyline points="9 15 12 12 15 15"/>
+                    </svg>
+                    <label class="drop-browse">Select .json file<input type="file" id="json-input" accept=".json" hidden></label>
+                    <p class="drop-hint">or drop files here</p>
+                </div>
+
+                <div id="json-file-info" class="split-info" hidden>
+                    <span id="json-file-name" class="split-name"></span>
+                    <span id="json-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearJsonFile()">&times;</button>
+                </div>
+
+                <div id="json-actions" class="pdf-actions" hidden>
+                    <button id="json-btn" class="btn-download" onclick="doJsonToCsv()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to CSV
+                    </button>
+                </div>
+
+                <div id="json-error" class="error" hidden></div>
+            </div>
+        </div>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+    <script src="/static/convert.js"></script>
+{% endblock %}
