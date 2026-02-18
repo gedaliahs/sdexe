@@ -6,6 +6,9 @@ let cropFile = null;
 let rotateFile = null;
 let stripExifFile = null;
 let toIcoFile = null;
+let flipFile = null;
+let grayscaleFile = null;
+let blurFile = null;
 
 /* ── Hash Routing ── */
 function showTab(tab) {
@@ -36,7 +39,35 @@ function setupDropZone(zoneId, inputId, handler) {
         handler(input.files);
         input.value = "";
     });
+    if (!window._pageDropHandlers) window._pageDropHandlers = [];
+    window._pageDropHandlers.push({ zoneId, handler });
 }
+
+(function() {
+    var ov = document.createElement("div");
+    ov.className = "page-drop-overlay";
+    ov.innerHTML = '<div class="page-drop-message">Drop files anywhere</div>';
+    document.body.appendChild(ov);
+    var dc = 0;
+    document.addEventListener("dragenter", function(e) {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault(); if (++dc === 1) ov.classList.add("visible");
+    });
+    document.addEventListener("dragover", function(e) { e.preventDefault(); });
+    document.addEventListener("dragleave", function() { if (--dc === 0) ov.classList.remove("visible"); });
+    document.addEventListener("drop", function(e) {
+        dc = 0; ov.classList.remove("visible");
+        if (!e.dataTransfer.files.length) return;
+        var handlers = window._pageDropHandlers || [];
+        for (var i = 0; i < handlers.length; i++) {
+            var zone = document.getElementById(handlers[i].zoneId);
+            if (zone && zone.closest(".pdf-section.active")) {
+                e.preventDefault(); handlers[i].handler(e.dataTransfer.files); return;
+            }
+        }
+        if (handlers.length) { e.preventDefault(); handlers[0].handler(e.dataTransfer.files); }
+    });
+})();
 
 /* ── Resize ── */
 setupDropZone("resize-drop", "resize-input", files => {
@@ -558,4 +589,157 @@ function downloadBlob(blob, name) {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+}
+
+/* ── Flip ── */
+setupDropZone("flip-drop", "flip-input", files => {
+    const f = files[0];
+    if (!f || !f.type.startsWith("image/")) return;
+    flipFile = f;
+    document.getElementById("flip-thumb").src = URL.createObjectURL(f);
+    document.getElementById("flip-file-name").textContent = f.name;
+    document.getElementById("flip-file-info").hidden = false;
+    document.getElementById("flip-options").hidden = false;
+    document.getElementById("flip-actions").hidden = false;
+});
+
+function clearFlipFile() {
+    flipFile = null;
+    document.getElementById("flip-file-info").hidden = true;
+    document.getElementById("flip-options").hidden = true;
+    document.getElementById("flip-actions").hidden = true;
+}
+
+async function doFlip() {
+    if (!flipFile) return;
+    const btn = document.getElementById("flip-btn");
+    const err = document.getElementById("flip-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Flipping...";
+
+    const form = new FormData();
+    form.append("file", flipFile);
+    form.append("direction", document.getElementById("flip-direction").value);
+
+    try {
+        const res = await fetch("/api/images/flip", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Flip failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = flipFile.name.replace(/\.[^.]+$/, "");
+            const ext = flipFile.name.split(".").pop();
+            downloadBlob(blob, `${base}_flipped.${ext}`);
+            showToast("Saved: " + base + "_flipped." + ext);
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Flip Image`;
+}
+
+/* ── Grayscale ── */
+setupDropZone("grayscale-drop", "grayscale-input", files => {
+    const f = files[0];
+    if (!f || !f.type.startsWith("image/")) return;
+    grayscaleFile = f;
+    document.getElementById("grayscale-thumb").src = URL.createObjectURL(f);
+    document.getElementById("grayscale-file-name").textContent = f.name;
+    document.getElementById("grayscale-file-info").hidden = false;
+    document.getElementById("grayscale-actions").hidden = false;
+});
+
+function clearGrayscaleFile() {
+    grayscaleFile = null;
+    document.getElementById("grayscale-file-info").hidden = true;
+    document.getElementById("grayscale-actions").hidden = true;
+}
+
+async function doGrayscale() {
+    if (!grayscaleFile) return;
+    const btn = document.getElementById("grayscale-btn");
+    const err = document.getElementById("grayscale-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Converting...";
+
+    const form = new FormData();
+    form.append("file", grayscaleFile);
+
+    try {
+        const res = await fetch("/api/images/grayscale", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Conversion failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = grayscaleFile.name.replace(/\.[^.]+$/, "");
+            const ext = grayscaleFile.name.split(".").pop();
+            downloadBlob(blob, `${base}_grayscale.${ext}`);
+            showToast("Saved: " + base + "_grayscale." + ext);
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Convert to Grayscale`;
+}
+
+/* ── Blur ── */
+setupDropZone("blur-drop", "blur-input", files => {
+    const f = files[0];
+    if (!f || !f.type.startsWith("image/")) return;
+    blurFile = f;
+    document.getElementById("blur-thumb").src = URL.createObjectURL(f);
+    document.getElementById("blur-file-name").textContent = f.name;
+    document.getElementById("blur-file-info").hidden = false;
+    document.getElementById("blur-options").hidden = false;
+    document.getElementById("blur-actions").hidden = false;
+});
+
+function clearBlurFile() {
+    blurFile = null;
+    document.getElementById("blur-file-info").hidden = true;
+    document.getElementById("blur-options").hidden = true;
+    document.getElementById("blur-actions").hidden = true;
+}
+
+async function doBlur() {
+    if (!blurFile) return;
+    const btn = document.getElementById("blur-btn");
+    const err = document.getElementById("blur-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Applying blur...";
+
+    const form = new FormData();
+    form.append("file", blurFile);
+    form.append("radius", document.getElementById("blur-radius").value);
+
+    try {
+        const res = await fetch("/api/images/blur", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Blur failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = blurFile.name.replace(/\.[^.]+$/, "");
+            const ext = blurFile.name.split(".").pop();
+            downloadBlob(blob, `${base}_blur.${ext}`);
+            showToast("Saved: " + base + "_blur." + ext);
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Apply Blur`;
 }

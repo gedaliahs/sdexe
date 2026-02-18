@@ -6,7 +6,7 @@
     <title>{% block title %}sdexe{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css?v={{ version }}">
     {% block head %}{% endblock %}
 </head>
@@ -65,6 +65,9 @@ function showToast(msg, type, actions) {
                         <a href="/images#rotate" class="nav-group-item">Rotate</a>
                         <a href="/images#stripexif" class="nav-group-item">Strip EXIF</a>
                         <a href="/images#toico" class="nav-group-item">To ICO</a>
+                        <a href="/images#flip" class="nav-group-item">Flip</a>
+                        <a href="/images#grayscale" class="nav-group-item">Grayscale</a>
+                        <a href="/images#blur" class="nav-group-item">Blur</a>
                     </div>
                 </div>
 
@@ -116,14 +119,30 @@ function showToast(msg, type, actions) {
                     <a href="/text" class="nav-group-trigger">Text
                         <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
-                    <div class="nav-group-menu">
-                        <a href="/text#wordcount" class="nav-group-item">Word Count</a>
-                        <a href="/text#findreplace" class="nav-group-item">Find &amp; Replace</a>
-                        <a href="/text#regex" class="nav-group-item">Regex Tester</a>
-                        <a href="/text#base64" class="nav-group-item">Base64</a>
-                        <a href="/text#hash" class="nav-group-item">Hash Generator</a>
-                        <a href="/text#diff" class="nav-group-item">Text Diff</a>
-                        <a href="/text#color" class="nav-group-item">Color Converter</a>
+                    <div class="nav-group-menu nav-group-cols">
+                        <div class="nav-group-col">
+                            <div class="nav-group-col-head">Analyze</div>
+                            <a href="/text#wordcount" class="nav-group-item">Word Count</a>
+                            <a href="/text#findreplace" class="nav-group-item">Find &amp; Replace</a>
+                            <a href="/text#regex" class="nav-group-item">Regex Tester</a>
+                            <a href="/text#diff" class="nav-group-item">Text Diff</a>
+                            <a href="/text#case" class="nav-group-item">Case Converter</a>
+                        </div>
+                        <div class="nav-group-col">
+                            <div class="nav-group-col-head">Encode</div>
+                            <a href="/text#base64" class="nav-group-item">Base64</a>
+                            <a href="/text#hash" class="nav-group-item">Hash Generator</a>
+                            <a href="/text#urlencode" class="nav-group-item">URL Encode</a>
+                            <a href="/text#json" class="nav-group-item">JSON Format</a>
+                            <a href="/text#jwt" class="nav-group-item">JWT Decoder</a>
+                        </div>
+                        <div class="nav-group-col">
+                            <div class="nav-group-col-head">Generate</div>
+                            <a href="/text#uuid" class="nav-group-item">UUID Generator</a>
+                            <a href="/text#timestamp" class="nav-group-item">Timestamp</a>
+                            <a href="/text#lorem" class="nav-group-item">Lorem Ipsum</a>
+                            <a href="/text#color" class="nav-group-item">Color Converter</a>
+                        </div>
                     </div>
                 </div>
             </div>

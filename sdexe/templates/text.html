@@ -263,6 +263,187 @@
                 </div>
             </div>
         </div>
+        <!-- URL Encoder/Decoder -->
+        <div id="tab-urlencode" class="pdf-section card">
+            <div class="card-body">
+                <h2>URL Encoder / Decoder</h2>
+                <p class="meta">Encode or decode URL components.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Input</label>
+                    <textarea id="url-input" class="convert-textarea" rows="4" placeholder="Paste text or encoded URL..."></textarea>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn-download" onclick="doUrlEncode()">Encode</button>
+                    <button class="btn-download btn-secondary" onclick="doUrlDecode()">Decode</button>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Output</label>
+                        <button onclick="copyText('url-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                    </div>
+                    <textarea id="url-output" class="convert-textarea" rows="4" readonly placeholder="Result will appear here..."></textarea>
+                </div>
+                <div id="url-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- JSON Formatter -->
+        <div id="tab-json" class="pdf-section card">
+            <div class="card-body">
+                <h2>JSON Formatter</h2>
+                <p class="meta">Format, validate, and minify JSON.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Input JSON</label>
+                    <textarea id="json-input" class="convert-textarea" rows="8" placeholder='{"key": "value", "array": [1,2,3]}' style="font-family: ui-monospace, monospace;"></textarea>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn-download" onclick="doJsonFormat()">Format</button>
+                    <button class="btn-download btn-secondary" onclick="doJsonMinify()">Minify</button>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Output</label>
+                        <button onclick="copyText('json-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                    </div>
+                    <textarea id="json-output" class="convert-textarea" rows="8" readonly style="font-family: ui-monospace, monospace;"></textarea>
+                </div>
+                <div id="json-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- JWT Decoder -->
+        <div id="tab-jwt" class="pdf-section card">
+            <div class="card-body">
+                <h2>JWT Decoder</h2>
+                <p class="meta">Decode a JSON Web Token to inspect its header and payload.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>JWT Token</label>
+                    <textarea id="jwt-input" class="convert-textarea" rows="4" placeholder="eyJhbGciOiJIUzI1NiIs..." style="font-family: ui-monospace, monospace;"></textarea>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 12px;">
+                    <button class="btn-download" onclick="doJwtDecode()">Decode</button>
+                </div>
+
+                <div id="jwt-results" style="margin-top: 16px;"></div>
+                <div id="jwt-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Case Converter -->
+        <div id="tab-case" class="pdf-section card">
+            <div class="card-body">
+                <h2>Case Converter</h2>
+                <p class="meta">Convert text between different cases.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Input</label>
+                    <textarea id="case-input" class="convert-textarea" rows="4" placeholder="Enter text to convert..."></textarea>
+                </div>
+
+                <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="pill" onclick="doCase('upper')">UPPER</button>
+                    <button class="pill" onclick="doCase('lower')">lower</button>
+                    <button class="pill" onclick="doCase('title')">Title Case</button>
+                    <button class="pill" onclick="doCase('camel')">camelCase</button>
+                    <button class="pill" onclick="doCase('snake')">snake_case</button>
+                    <button class="pill" onclick="doCase('kebab')">kebab-case</button>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Output</label>
+                        <button onclick="copyText('case-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                    </div>
+                    <textarea id="case-output" class="convert-textarea" rows="4" readonly></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- UUID Generator -->
+        <div id="tab-uuid" class="pdf-section card">
+            <div class="card-body">
+                <h2>UUID Generator</h2>
+                <p class="meta">Generate random UUIDs (v4).</p>
+
+                <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+                    <div class="field" style="width: 120px;">
+                        <label>Count</label>
+                        <input type="number" id="uuid-count" value="1" min="1" max="100">
+                    </div>
+                    <button class="btn-download" onclick="doUuid()" style="height: 42px; padding: 0 24px; width: auto;">Generate</button>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>UUIDs</label>
+                        <button onclick="copyText('uuid-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                    </div>
+                    <textarea id="uuid-output" class="convert-textarea" rows="6" readonly style="font-family: ui-monospace, monospace;"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Unix Timestamp -->
+        <div id="tab-timestamp" class="pdf-section card">
+            <div class="card-body">
+                <h2>Unix Timestamp Converter</h2>
+                <p class="meta">Convert between Unix timestamps and human-readable dates.</p>
+
+                <div style="margin-top: 16px; display: flex; gap: 16px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 240px;">
+                        <div class="field">
+                            <label>Unix Timestamp</label>
+                            <input type="text" id="ts-unix" placeholder="e.g. 1700000000" oninput="tsFromUnix()">
+                        </div>
+                        <div id="ts-date-display" style="margin-top: 8px; font-size: .85rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div style="flex: 1; min-width: 240px;">
+                        <div class="field">
+                            <label>Date/Time</label>
+                            <input type="datetime-local" id="ts-datetime" oninput="tsFromDatetime()" step="1">
+                        </div>
+                        <div id="ts-unix-display" style="margin-top: 8px; font-size: .85rem; color: var(--text-secondary); font-family: ui-monospace, monospace;"></div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 12px;">
+                    <button class="pill active" onclick="tsNow()">Now</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lorem Ipsum -->
+        <div id="tab-lorem" class="pdf-section card">
+            <div class="card-body">
+                <h2>Lorem Ipsum Generator</h2>
+                <p class="meta">Generate placeholder text.</p>
+
+                <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+                    <div class="field" style="width: 120px;">
+                        <label>Paragraphs</label>
+                        <input type="number" id="lorem-count" value="3" min="1" max="20">
+                    </div>
+                    <button class="btn-download" onclick="doLorem()" style="height: 42px; padding: 0 24px; width: auto;">Generate</button>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Output</label>
+                        <button onclick="copyText('lorem-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                    </div>
+                    <textarea id="lorem-output" class="convert-textarea" rows="8" readonly></textarea>
+                </div>
+            </div>
+        </div>
+
     </main>
 {% endblock %}
 

@@ -1,3 +1,3 @@
 """sdexe - Local tools for media downloads, PDF, images, and file conversion."""
 
-__version__ = "0.1.14"
+__version__ = "0.2.3"

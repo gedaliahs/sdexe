@@ -1,6 +1,5 @@
 import os
 import io
-import csv
 import uuid
 import time
 import tempfile
@@ -9,25 +8,18 @@ import json
 import subprocess
 import zipfile
 import atexit
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
-try:
-    import yaml as _yaml
-    _YAML_AVAILABLE = True
-except ImportError:
-    _YAML_AVAILABLE = False
-
 from flask import Flask, render_template, request, jsonify, send_file, Response
 import yt_dlp
-import markdown as md_lib
-from pypdf import PdfReader, PdfWriter
 from PIL import Image
+
+from sdexe import __version__
+from sdexe import tools
 
 app = Flask(__name__)
 
-from sdexe import __version__
 
 @app.context_processor
 def inject_version():
@@ -352,7 +344,6 @@ def info():
         return jsonify({"error": "No URL provided"}), 400
 
     # Normalise YouTube video+list URLs to pure playlist URLs
-    # so extract_flat returns all entries instead of the single video
     parsed = urlparse(url)
     if parsed.hostname in ("www.youtube.com", "youtube.com") and "list" in parse_qs(parsed.query):
         qs = parse_qs(parsed.query)
@@ -378,7 +369,6 @@ def info():
             if not entry:
                 continue
             vid = entry.get("id", "")
-            # Get thumbnail from entry data; YouTube fallback if needed
             thumb = entry.get("thumbnail") or ""
             if not thumb and entry.get("thumbnails"):
                 thumb = entry["thumbnails"][0].get("url", "")
@@ -725,17 +715,9 @@ def pdf_merge():
     files = request.files.getlist("files")
     if len(files) < 2:
         return jsonify({"error": "Need at least 2 PDF files"}), 400
-
-    writer = PdfWriter()
     try:
-        for f in files:
-            reader = PdfReader(f.stream)
-            for page in reader.pages:
-                writer.add_page(page)
-        buf = io.BytesIO()
-        writer.write(buf)
-        buf.seek(0)
-        return send_file(buf, as_attachment=True, download_name="merged.pdf",
+        result = tools.merge_pdfs([f.stream for f in files])
+        return send_file(io.BytesIO(result), as_attachment=True, download_name="merged.pdf",
                          mimetype="application/pdf")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -746,56 +728,19 @@ def pdf_split():
     f = request.files.get("file")
     if not f:
         return jsonify({"error": "No PDF file provided"}), 400
-
     ranges_str = request.form.get("ranges", "").strip()
-
     try:
-        reader = PdfReader(f.stream)
-        total_pages = len(reader.pages)
+        parts = tools.split_pdf(f.stream, ranges_str)
     except Exception as e:
-        return jsonify({"error": f"Invalid PDF: {e}"}), 400
+        return jsonify({"error": str(e)}), 400
 
-    # Parse page ranges
-    page_groups = []
-    if ranges_str:
-        for part in ranges_str.split(","):
-            part = part.strip()
-            if "-" in part:
-                start, end = part.split("-", 1)
-                start = max(1, int(start.strip()))
-                end = min(total_pages, int(end.strip()))
-                page_groups.append(list(range(start - 1, end)))
-            else:
-                p = int(part.strip())
-                if 1 <= p <= total_pages:
-                    page_groups.append([p - 1])
-    else:
-        # Split into individual pages
-        page_groups = [[i] for i in range(total_pages)]
-
-    if len(page_groups) == 1:
-        # Return single PDF
-        writer = PdfWriter()
-        for p in page_groups[0]:
-            writer.add_page(reader.pages[p])
-        buf = io.BytesIO()
-        writer.write(buf)
-        buf.seek(0)
-        return send_file(buf, as_attachment=True, download_name="split.pdf",
+    if len(parts) == 1:
+        name, data = parts[0]
+        return send_file(io.BytesIO(data), as_attachment=True, download_name="split.pdf",
                          mimetype="application/pdf")
     else:
-        # Return ZIP of PDFs
-        zip_buf = io.BytesIO()
-        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for idx, pages in enumerate(page_groups, 1):
-                writer = PdfWriter()
-                for p in pages:
-                    writer.add_page(reader.pages[p])
-                pdf_buf = io.BytesIO()
-                writer.write(pdf_buf)
-                zf.writestr(f"page_{idx}.pdf", pdf_buf.getvalue())
-        zip_buf.seek(0)
-        return send_file(zip_buf, as_attachment=True, download_name="split_pages.zip",
+        zip_data = tools.create_zip(parts)
+        return send_file(io.BytesIO(zip_data), as_attachment=True, download_name="split_pages.zip",
                          mimetype="application/zip")
 
 
@@ -804,30 +749,13 @@ def images_to_pdf():
     files = request.files.getlist("files")
     if not files:
         return jsonify({"error": "No images provided"}), 400
-
-    images = []
     try:
-        for f in files:
-            img = Image.open(f.stream)
-            if img.mode == "RGBA":
-                img = img.convert("RGB")
-            elif img.mode != "RGB":
-                img = img.convert("RGB")
-            images.append(img)
+        images = [Image.open(f.stream) for f in files]
+        result = tools.images_to_pdf(images)
+        return send_file(io.BytesIO(result), as_attachment=True, download_name="images.pdf",
+                         mimetype="application/pdf")
     except Exception as e:
-        return jsonify({"error": f"Invalid image: {e}"}), 400
-
-    if not images:
-        return jsonify({"error": "No valid images"}), 400
-
-    buf = io.BytesIO()
-    if len(images) == 1:
-        images[0].save(buf, "PDF")
-    else:
-        images[0].save(buf, "PDF", save_all=True, append_images=images[1:])
-    buf.seek(0)
-    return send_file(buf, as_attachment=True, download_name="images.pdf",
-                     mimetype="application/pdf")
+        return jsonify({"error": str(e)}), 400
 
 
 @app.route("/api/pdf/page-count", methods=["POST"])
@@ -836,8 +764,7 @@ def pdf_page_count():
     if not f:
         return jsonify({"error": "No PDF file provided"}), 400
     try:
-        reader = PdfReader(f.stream)
-        return jsonify({"pages": len(reader.pages)})
+        return jsonify({"pages": tools.pdf_page_count(f.stream)})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -848,17 +775,10 @@ def pdf_compress():
     if not f:
         return jsonify({"error": "No PDF file provided"}), 400
     try:
-        reader = PdfReader(f.stream)
-        writer = PdfWriter()
-        for page in reader.pages:
-            page.compress_content_streams()
-            writer.add_page(page)
-        buf = io.BytesIO()
-        writer.write(buf)
-        buf.seek(0)
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "document"
-        return send_file(buf, as_attachment=True, download_name=f"{base}_compressed.pdf",
-                         mimetype="application/pdf")
+        result = tools.compress_pdf(f.stream)
+        base = tools._base_from_filename(f.filename, "document")
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_compressed.pdf", mimetype="application/pdf")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -869,17 +789,11 @@ def pdf_to_text():
     if not f:
         return jsonify({"error": "No PDF file provided"}), 400
     try:
-        reader = PdfReader(f.stream)
-        parts = []
-        for i, page in enumerate(reader.pages, 1):
-            text = page.extract_text() or ""
-            if text.strip():
-                parts.append(f"--- Page {i} ---\n{text.strip()}")
-        combined = "\n\n".join(parts)
-        if not combined:
+        text = tools.pdf_to_text(f.stream)
+        if not text:
             return jsonify({"error": "No extractable text found in this PDF"}), 400
-        buf = io.BytesIO(combined.encode("utf-8"))
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "document"
+        buf = io.BytesIO(text.encode("utf-8"))
+        base = tools._base_from_filename(f.filename, "document")
         return send_file(buf, as_attachment=True, download_name=f"{base}.txt",
                          mimetype="text/plain")
     except Exception as e:
@@ -895,17 +809,10 @@ def pdf_add_password():
     if not password:
         return jsonify({"error": "No password provided"}), 400
     try:
-        reader = PdfReader(f.stream)
-        writer = PdfWriter()
-        for page in reader.pages:
-            writer.add_page(page)
-        writer.encrypt(password)
-        buf = io.BytesIO()
-        writer.write(buf)
-        buf.seek(0)
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "document"
-        return send_file(buf, as_attachment=True, download_name=f"{base}_protected.pdf",
-                         mimetype="application/pdf")
+        result = tools.add_pdf_password(f.stream, password)
+        base = tools._base_from_filename(f.filename, "document")
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_protected.pdf", mimetype="application/pdf")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -917,25 +824,127 @@ def pdf_remove_password():
     if not f:
         return jsonify({"error": "No PDF file provided"}), 400
     try:
-        reader = PdfReader(f.stream)
-        if reader.is_encrypted:
-            result = reader.decrypt(password)
-            if not result:
-                return jsonify({"error": "Incorrect password"}), 400
-        writer = PdfWriter()
-        for page in reader.pages:
-            writer.add_page(page)
-        buf = io.BytesIO()
-        writer.write(buf)
-        buf.seek(0)
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "document"
-        return send_file(buf, as_attachment=True, download_name=f"{base}_unlocked.pdf",
-                         mimetype="application/pdf")
+        result = tools.remove_pdf_password(f.stream, password)
+        base = tools._base_from_filename(f.filename, "document")
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_unlocked.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/pdf/rotate", methods=["POST"])
+def pdf_rotate():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    try:
+        angle = int(request.form.get("angle", 90))
+    except ValueError:
+        return jsonify({"error": "Invalid angle"}), 400
+    pages_str = request.form.get("pages", "all").strip()
+    try:
+        result = tools.rotate_pdf(f.stream, angle, pages_str)
+        base = tools._base_from_filename(f.filename, "document")
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_rotated.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/pdf/reorder", methods=["POST"])
+def pdf_reorder():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    order_str = request.form.get("order", "").strip()
+    if not order_str:
+        return jsonify({"error": "No page order provided"}), 400
+    try:
+        order = [int(x.strip()) for x in order_str.split(",")]
+        result = tools.reorder_pdf(f.stream, order)
+        base = tools._base_from_filename(f.filename, "document")
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_reordered.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/pdf/delete-pages", methods=["POST"])
+def pdf_delete_pages():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    pages_str = request.form.get("pages", "").strip()
+    if not pages_str:
+        return jsonify({"error": "No pages specified"}), 400
+    try:
+        result = tools.delete_pdf_pages(f.stream, pages_str)
+        base = tools._base_from_filename(f.filename, "document")
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_edited.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/pdf/metadata", methods=["GET", "POST"])
+def pdf_metadata():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    if request.method == "GET" or request.form.get("action") == "get":
+        try:
+            return jsonify(tools.get_pdf_metadata(f.stream))
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+    else:
+        try:
+            result = tools.set_pdf_metadata(
+                f.stream,
+                title=request.form.get("title", ""),
+                author=request.form.get("author", ""),
+                subject=request.form.get("subject", ""),
+                keywords=request.form.get("keywords", ""),
+            )
+            base = tools._base_from_filename(f.filename, "document")
+            return send_file(io.BytesIO(result), as_attachment=True,
+                             download_name=f"{base}_meta.pdf", mimetype="application/pdf")
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/pdf/watermark", methods=["POST"])
+def pdf_watermark():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    text = request.form.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "No watermark text provided"}), 400
+    try:
+        font_size = int(request.form.get("font_size", 36))
+        opacity = float(request.form.get("opacity", 0.3))
+        position = request.form.get("position", "center")
+        result = tools.watermark_pdf(f.stream, text, font_size=font_size,
+                                     opacity=opacity, position=position)
+        base = tools._base_from_filename(f.filename, "document")
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_watermarked.pdf", mimetype="application/pdf")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 
 # ── Image API ──
+
+def _image_response(img, filename, suffix, fmt=None):
+    """Helper to return an image response."""
+    if fmt is None:
+        fmt = tools._ext_from_filename(filename)
+    data = tools._save_image(img, fmt)
+    base = tools._base_from_filename(filename, "image")
+    mime = tools._MIME_MAP.get(fmt, f"image/{fmt}")
+    return send_file(io.BytesIO(data), as_attachment=True,
+                     download_name=f"{base}_{suffix}.{fmt}", mimetype=mime)
+
 
 @app.route("/api/images/resize", methods=["POST"])
 def image_resize():
@@ -956,55 +965,31 @@ def image_resize():
             img = Image.open(f.stream)
         except Exception as e:
             return jsonify({"error": f"Invalid image {f.filename}: {e}"}), 400
-
         try:
-            if mode == "percentage":
-                pct = float(request.form.get("percentage", 100)) / 100
-                new_w = max(1, int(img.width * pct))
-                new_h = max(1, int(img.height * pct))
-            else:
-                new_w = request.form.get("width", "")
-                new_h = request.form.get("height", "")
-                if new_w and new_h:
-                    new_w, new_h = int(new_w), int(new_h)
-                    if maintain:
-                        ratio = min(new_w / img.width, new_h / img.height)
-                        new_w = max(1, int(img.width * ratio))
-                        new_h = max(1, int(img.height * ratio))
-                elif new_w:
-                    new_w = int(new_w)
-                    new_h = max(1, int(img.height * (new_w / img.width))) if maintain else img.height
-                elif new_h:
-                    new_h = int(new_h)
-                    new_w = max(1, int(img.width * (new_h / img.height))) if maintain else img.width
-                else:
-                    return jsonify({"error": "Provide width, height, or percentage"}), 400
-            img = img.resize((new_w, new_h), Image.LANCZOS)
+            w_str = request.form.get("width", "")
+            h_str = request.form.get("height", "")
+            pct = float(request.form.get("percentage", 100))
+            img = tools.resize_image(img, mode,
+                                     width=int(w_str) if w_str else 0,
+                                     height=int(h_str) if h_str else 0,
+                                     percentage=pct,
+                                     maintain_aspect=maintain)
         except Exception as e:
             return jsonify({"error": str(e)}), 400
 
-        fmt = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "png"
-        mime_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}
-        pil_fmt = mime_map.get(fmt, "png")
-        buf = io.BytesIO()
-        save_img = img.convert("RGB") if pil_fmt == "jpeg" and img.mode == "RGBA" else img
-        save_img.save(buf, pil_fmt.upper())
-        buf.seek(0)
-        out_name = f.filename.rsplit(".", 1)[0] + f"_resized.{fmt}" if "." in f.filename else "resized.png"
-        results.append((out_name, buf, pil_fmt))
+        fmt = tools._ext_from_filename(f.filename)
+        data = tools._save_image(img, fmt)
+        out_name = tools._base_from_filename(f.filename, "image") + f"_resized.{fmt}"
+        results.append((out_name, data, fmt))
 
     if len(results) == 1:
-        out_name, buf, pil_fmt = results[0]
-        return send_file(buf, as_attachment=True, download_name=out_name,
-                         mimetype=f"image/{pil_fmt}")
+        name, data, fmt = results[0]
+        mime = tools._MIME_MAP.get(fmt, f"image/{fmt}")
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=name, mimetype=mime)
     else:
-        zip_buf = io.BytesIO()
-        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for out_name, buf, _ in results:
-                zf.writestr(out_name, buf.getvalue())
-        zip_buf.seek(0)
-        return send_file(zip_buf, as_attachment=True, download_name="resized_images.zip",
-                         mimetype="application/zip")
+        zip_data = tools.create_zip([(n, d) for n, d, _ in results])
+        return send_file(io.BytesIO(zip_data), as_attachment=True,
+                         download_name="resized_images.zip", mimetype="application/zip")
 
 
 @app.route("/api/images/compress", methods=["POST"])
@@ -1020,42 +1005,25 @@ def image_compress():
     for f in files:
         try:
             img = Image.open(f.stream)
-            buf = io.BytesIO()
-            fmt = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "png"
-
-            if fmt in ("jpg", "jpeg"):
-                if img.mode == "RGBA":
-                    img = img.convert("RGB")
-                img.save(buf, "JPEG", quality=quality, optimize=True)
-            elif fmt == "webp":
-                img.save(buf, "WEBP", quality=quality)
-            else:
-                img.save(buf, "PNG", optimize=True)
-
-            buf.seek(0)
-            out_name = f.filename.rsplit(".", 1)[0] + f"_compressed.{fmt}" if "." in f.filename else f"compressed.{fmt}"
-            results.append((out_name, buf))
+            fmt = tools._ext_from_filename(f.filename)
+            data = tools.compress_image(img, quality, fmt)
+            out_name = tools._base_from_filename(f.filename, "image") + f"_compressed.{fmt}"
+            results.append((out_name, data, fmt))
         except Exception as e:
             return jsonify({"error": f"Error processing {f.filename}: {e}"}), 400
 
     original_size = sum(f.seek(0, 2) or f.tell() for f in files)
     if len(results) == 1:
-        name, buf = results[0]
-        fmt = name.rsplit(".", 1)[-1]
-        mime_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}
-        resp = send_file(buf, as_attachment=True, download_name=name,
-                         mimetype=f"image/{mime_map.get(fmt, 'png')}")
+        name, data, fmt = results[0]
+        mime = tools._MIME_MAP.get(fmt, f"image/{fmt}")
+        resp = send_file(io.BytesIO(data), as_attachment=True, download_name=name, mimetype=mime)
         resp.headers["X-Original-Size"] = str(original_size)
-        resp.headers["X-Compressed-Size"] = str(buf.getbuffer().nbytes)
+        resp.headers["X-Compressed-Size"] = str(len(data))
         return resp
     else:
-        zip_buf = io.BytesIO()
-        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for name, buf in results:
-                zf.writestr(name, buf.getvalue())
-        zip_buf.seek(0)
-        return send_file(zip_buf, as_attachment=True, download_name="compressed_images.zip",
-                         mimetype="application/zip")
+        zip_data = tools.create_zip([(n, d) for n, d, _ in results])
+        return send_file(io.BytesIO(zip_data), as_attachment=True,
+                         download_name="compressed_images.zip", mimetype="application/zip")
 
 
 @app.route("/api/images/convert", methods=["POST"])
@@ -1068,469 +1036,25 @@ def image_convert():
     if target not in ("png", "jpg", "webp"):
         return jsonify({"error": "Unsupported format"}), 400
 
-    pil_fmt = "JPEG" if target == "jpg" else target.upper()
-
     results = []
     for f in files:
         try:
             img = Image.open(f.stream)
-            if pil_fmt == "JPEG" and img.mode == "RGBA":
-                img = img.convert("RGB")
-            buf = io.BytesIO()
-            img.save(buf, pil_fmt)
-            buf.seek(0)
-            base = f.filename.rsplit(".", 1)[0] if "." in f.filename else f.filename
-            out_name = f"{base}.{target}"
-            results.append((out_name, buf))
+            data = tools.convert_image(img, target)
+            base = tools._base_from_filename(f.filename, f.filename)
+            results.append((f"{base}.{target}", data))
         except Exception as e:
             return jsonify({"error": f"Error processing {f.filename}: {e}"}), 400
 
     if len(results) == 1:
-        name, buf = results[0]
-        mime_map = {"jpg": "jpeg", "png": "png", "webp": "webp"}
-        return send_file(buf, as_attachment=True, download_name=name,
-                         mimetype=f"image/{mime_map.get(target, 'png')}")
+        name, data = results[0]
+        mime = tools._MIME_MAP.get(target, f"image/{target}")
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=name, mimetype=mime)
     else:
-        zip_buf = io.BytesIO()
-        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for name, buf in results:
-                zf.writestr(name, buf.getvalue())
-        zip_buf.seek(0)
-        return send_file(zip_buf, as_attachment=True, download_name=f"converted_{target}.zip",
-                         mimetype="application/zip")
+        zip_data = tools.create_zip(results)
+        return send_file(io.BytesIO(zip_data), as_attachment=True,
+                         download_name=f"converted_{target}.zip", mimetype="application/zip")
 
-
-# ── Convert API ──
-
-@app.route("/api/convert/md-to-html", methods=["POST"])
-def md_to_html():
-    text = None
-    f = request.files.get("file")
-    if f:
-        text = f.stream.read().decode("utf-8", errors="replace")
-    else:
-        text = request.form.get("text", "").strip()
-
-    if not text:
-        return jsonify({"error": "No markdown content provided"}), 400
-
-    html_body = md_lib.markdown(text, extensions=["tables", "fenced_code"])
-    html_doc = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Converted Markdown</title>
-<style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }}
-  pre {{ background: #f5f5f5; padding: 16px; overflow-x: auto; border-radius: 4px; }}
-  code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }}
-  pre code {{ background: none; padding: 0; }}
-  table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
-  th, td {{ border: 1px solid #ddd; padding: 8px 12px; text-align: left; }}
-  th {{ background: #f5f5f5; font-weight: 600; }}
-  blockquote {{ border-left: 4px solid #ddd; margin: 16px 0; padding: 0 16px; color: #666; }}
-  img {{ max-width: 100%; }}
-  h1, h2, h3, h4, h5, h6 {{ margin-top: 24px; margin-bottom: 8px; }}
-</style>
-</head>
-<body>
-{html_body}
-</body>
-</html>"""
-
-    buf = io.BytesIO(html_doc.encode("utf-8"))
-    return send_file(buf, as_attachment=True, download_name="converted.html",
-                     mimetype="text/html")
-
-
-@app.route("/api/convert/csv-to-json", methods=["POST"])
-def csv_to_json():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No CSV file provided"}), 400
-
-    try:
-        text = f.stream.read().decode("utf-8", errors="replace")
-        reader = csv.DictReader(io.StringIO(text))
-        rows = list(reader)
-        result = json.dumps(rows, indent=2, ensure_ascii=False)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-    buf = io.BytesIO(result.encode("utf-8"))
-    base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
-    return send_file(buf, as_attachment=True, download_name=f"{base}.json",
-                     mimetype="application/json")
-
-
-@app.route("/api/convert/json-to-csv", methods=["POST"])
-def json_to_csv():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No JSON file provided"}), 400
-
-    try:
-        text = f.stream.read().decode("utf-8", errors="replace")
-        data = json.loads(text)
-        if not isinstance(data, list):
-            return jsonify({"error": "JSON must be an array of objects"}), 400
-
-        # Collect all keys across objects for headers
-        headers = []
-        seen = set()
-        for obj in data:
-            if isinstance(obj, dict):
-                for key in obj:
-                    if key not in seen:
-                        headers.append(key)
-                        seen.add(key)
-
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=headers)
-        writer.writeheader()
-        for obj in data:
-            if isinstance(obj, dict):
-                writer.writerow(obj)
-    except json.JSONDecodeError as e:
-        return jsonify({"error": f"Invalid JSON: {e}"}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-    buf = io.BytesIO(output.getvalue().encode("utf-8"))
-    base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
-    return send_file(buf, as_attachment=True, download_name=f"{base}.csv",
-                     mimetype="text/csv")
-
-
-@app.route("/api/convert/md-preview", methods=["POST"])
-def md_preview():
-    text = request.form.get("text", "").strip()
-    if not text:
-        return jsonify({"error": "No text provided"}), 400
-    html = md_lib.markdown(text, extensions=["tables", "fenced_code"])
-    return jsonify({"html": html})
-
-
-@app.route("/api/convert/yaml-to-json", methods=["POST"])
-def yaml_to_json():
-    if not _YAML_AVAILABLE:
-        return jsonify({"error": "PyYAML not installed — run: pip install PyYAML"}), 501
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No YAML file provided"}), 400
-    try:
-        text = f.stream.read().decode("utf-8", errors="replace")
-        data = _yaml.safe_load(text)
-        result = json.dumps(data, indent=2, ensure_ascii=False)
-        buf = io.BytesIO(result.encode("utf-8"))
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
-        return send_file(buf, as_attachment=True, download_name=f"{base}.json",
-                         mimetype="application/json")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-@app.route("/api/convert/json-to-yaml", methods=["POST"])
-def json_to_yaml():
-    if not _YAML_AVAILABLE:
-        return jsonify({"error": "PyYAML not installed — run: pip install PyYAML"}), 501
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No JSON file provided"}), 400
-    try:
-        text = f.stream.read().decode("utf-8", errors="replace")
-        data = json.loads(text)
-        result = _yaml.dump(data, default_flow_style=False, allow_unicode=True)
-        buf = io.BytesIO(result.encode("utf-8"))
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
-        return send_file(buf, as_attachment=True, download_name=f"{base}.yaml",
-                         mimetype="text/yaml")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-@app.route("/api/convert/csv-to-tsv", methods=["POST"])
-def csv_to_tsv():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No CSV file provided"}), 400
-    try:
-        text = f.stream.read().decode("utf-8", errors="replace")
-        rows = list(csv.reader(io.StringIO(text)))
-        output = io.StringIO()
-        csv.writer(output, delimiter="\t").writerows(rows)
-        buf = io.BytesIO(output.getvalue().encode("utf-8"))
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
-        return send_file(buf, as_attachment=True, download_name=f"{base}.tsv",
-                         mimetype="text/tab-separated-values")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-@app.route("/api/convert/tsv-to-csv", methods=["POST"])
-def tsv_to_csv():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No TSV file provided"}), 400
-    try:
-        text = f.stream.read().decode("utf-8", errors="replace")
-        rows = list(csv.reader(io.StringIO(text), delimiter="\t"))
-        output = io.StringIO()
-        csv.writer(output).writerows(rows)
-        buf = io.BytesIO(output.getvalue().encode("utf-8"))
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
-        return send_file(buf, as_attachment=True, download_name=f"{base}.csv",
-                         mimetype="text/csv")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-def _xml_to_dict(el):
-    result = {}
-    if el.attrib:
-        result.update({f"@{k}": v for k, v in el.attrib.items()})
-    children = list(el)
-    if children:
-        child_map = {}
-        for child in children:
-            cd = _xml_to_dict(child)
-            if child.tag in child_map:
-                existing = child_map[child.tag]
-                if not isinstance(existing, list):
-                    child_map[child.tag] = [existing]
-                child_map[child.tag].append(cd)
-            else:
-                child_map[child.tag] = cd
-        result.update(child_map)
-    text = (el.text or "").strip()
-    if text:
-        result["_text"] = text if result else text
-    return result or {}
-
-
-@app.route("/api/convert/xml-to-json", methods=["POST"])
-def xml_to_json():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No XML file provided"}), 400
-    try:
-        text = f.stream.read().decode("utf-8", errors="replace")
-        root = ET.fromstring(text)
-        data = {root.tag: _xml_to_dict(root)}
-        result = json.dumps(data, indent=2, ensure_ascii=False)
-        buf = io.BytesIO(result.encode("utf-8"))
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
-        return send_file(buf, as_attachment=True, download_name=f"{base}.json",
-                         mimetype="application/json")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-# ── AV API ──
-
-def _run_ffmpeg_route(input_data, in_suffix, out_suffix, ffmpeg_args, download_name, timeout=300):
-    """Write input to temp file, run ffmpeg, return send_file."""
-    with tempfile.NamedTemporaryFile(suffix=in_suffix, delete=False) as inf:
-        inf.write(input_data)
-        inf_path = inf.name
-    with tempfile.NamedTemporaryFile(suffix=out_suffix, delete=False) as outf:
-        out_path = outf.name
-    try:
-        cmd = ["ffmpeg", "-y", "-i", inf_path] + ffmpeg_args + [out_path]
-        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
-        if result.returncode != 0:
-            raise Exception(result.stderr.decode("utf-8", errors="replace").strip())
-        buf = io.BytesIO(Path(out_path).read_bytes())
-        buf.seek(0)
-        return send_file(buf, as_attachment=True, download_name=download_name)
-    finally:
-        Path(inf_path).unlink(missing_ok=True)
-        Path(out_path).unlink(missing_ok=True)
-
-
-@app.route("/api/av/convert-audio", methods=["POST"])
-def av_convert_audio():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No audio file provided"}), 400
-    fmt = request.form.get("format", "mp3").lower()
-    if fmt not in ("mp3", "wav", "ogg", "flac", "aac", "m4a"):
-        return jsonify({"error": "Unsupported format"}), 400
-    codec_map = {
-        "mp3": ["-codec:a", "libmp3lame", "-q:a", "2"],
-        "wav": ["-codec:a", "pcm_s16le"],
-        "ogg": ["-codec:a", "libvorbis", "-q:a", "6"],
-        "flac": ["-codec:a", "flac"],
-        "aac": ["-codec:a", "aac", "-b:a", "192k"],
-        "m4a": ["-codec:a", "aac", "-b:a", "192k"],
-    }
-    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "bin"
-    base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "audio"
-    try:
-        return _run_ffmpeg_route(
-            f.stream.read(), f".{ext}", f".{fmt}",
-            ["-map", "0:a"] + codec_map[fmt],
-            f"{base}.{fmt}",
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)[-500:]}), 500
-
-
-@app.route("/api/av/trim-audio", methods=["POST"])
-def av_trim_audio():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No audio file provided"}), 400
-    start = request.form.get("start", "").strip()
-    end = request.form.get("end", "").strip()
-    if not start:
-        return jsonify({"error": "Start time required"}), 400
-    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "mp3"
-    base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "audio"
-    args = ["-ss", start]
-    if end:
-        args += ["-to", end]
-    args += ["-map", "0:a", "-c", "copy"]
-    try:
-        return _run_ffmpeg_route(
-            f.stream.read(), f".{ext}", f".{ext}",
-            args, f"{base}_trimmed.{ext}",
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)[-500:]}), 500
-
-
-@app.route("/api/av/audio-speed", methods=["POST"])
-def av_audio_speed():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No audio file provided"}), 400
-    speed = request.form.get("speed", "1.5")
-    try:
-        speed_f = float(speed)
-    except ValueError:
-        return jsonify({"error": "Invalid speed"}), 400
-    if speed_f < 0.25 or speed_f > 4.0:
-        return jsonify({"error": "Speed must be between 0.25 and 4.0"}), 400
-    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "mp3"
-    base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "audio"
-    # atempo only supports 0.5–2.0; chain filters if outside that range
-    if 0.5 <= speed_f <= 2.0:
-        atempo_chain = f"atempo={speed_f}"
-    elif speed_f < 0.5:
-        atempo_chain = f"atempo=0.5,atempo={speed_f / 0.5:.4f}"
-    else:
-        atempo_chain = f"atempo=2.0,atempo={speed_f / 2.0:.4f}"
-    out_ext = ext if ext in ("mp3", "wav", "ogg", "flac") else "mp3"
-    try:
-        return _run_ffmpeg_route(
-            f.stream.read(), f".{ext}", f".{out_ext}",
-            ["-map", "0:a", "-filter:a", atempo_chain],
-            f"{base}_{speed}x.{out_ext}",
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)[-500:]}), 500
-
-
-@app.route("/api/av/extract-audio", methods=["POST"])
-def av_extract_audio():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No video file provided"}), 400
-    fmt = request.form.get("format", "mp3").lower()
-    if fmt not in ("mp3", "wav", "ogg", "flac", "aac", "m4a"):
-        return jsonify({"error": "Unsupported format"}), 400
-    codec_map = {
-        "mp3": ["-codec:a", "libmp3lame", "-q:a", "2"],
-        "wav": ["-codec:a", "pcm_s16le"],
-        "ogg": ["-codec:a", "libvorbis", "-q:a", "6"],
-        "flac": ["-codec:a", "flac"],
-        "aac": ["-codec:a", "aac", "-b:a", "192k"],
-        "m4a": ["-codec:a", "aac", "-b:a", "192k"],
-    }
-    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "mp4"
-    base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "video"
-    try:
-        return _run_ffmpeg_route(
-            f.stream.read(), f".{ext}", f".{fmt}",
-            ["-vn", "-map", "0:a"] + codec_map[fmt],
-            f"{base}_audio.{fmt}",
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)[-500:]}), 500
-
-
-@app.route("/api/av/trim-video", methods=["POST"])
-def av_trim_video():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No video file provided"}), 400
-    start = request.form.get("start", "").strip()
-    end = request.form.get("end", "").strip()
-    if not start:
-        return jsonify({"error": "Start time required"}), 400
-    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "mp4"
-    base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "video"
-    args = ["-ss", start]
-    if end:
-        args += ["-to", end]
-    args += ["-c", "copy"]
-    try:
-        return _run_ffmpeg_route(
-            f.stream.read(), f".{ext}", f".{ext}",
-            args, f"{base}_trimmed.{ext}", timeout=300,
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)[-500:]}), 500
-
-
-@app.route("/api/av/compress-video", methods=["POST"])
-def av_compress_video():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No video file provided"}), 400
-    quality = request.form.get("quality", "medium")
-    crf_map = {"high": "18", "medium": "23", "low": "28"}
-    crf = crf_map.get(quality, "23")
-    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "mp4"
-    base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "video"
-    try:
-        return _run_ffmpeg_route(
-            f.stream.read(), f".{ext}", ".mp4",
-            ["-vcodec", "libx264", "-crf", crf, "-preset", "fast", "-acodec", "aac"],
-            f"{base}_compressed.mp4", timeout=300,
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)[-500:]}), 500
-
-
-@app.route("/api/av/convert-video", methods=["POST"])
-def av_convert_video():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No video file provided"}), 400
-    fmt = request.form.get("format", "mp4").lower()
-    if fmt not in ("mp4", "webm", "avi", "mov"):
-        return jsonify({"error": "Unsupported format"}), 400
-    codec_map = {
-        "mp4": ["-vcodec", "libx264", "-acodec", "aac"],
-        "webm": ["-vcodec", "libvpx-vp9", "-acodec", "libopus"],
-        "avi": ["-vcodec", "mpeg4", "-acodec", "mp3"],
-        "mov": ["-vcodec", "libx264", "-acodec", "aac"],
-    }
-    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "mp4"
-    base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "video"
-    try:
-        return _run_ffmpeg_route(
-            f.stream.read(), f".{ext}", f".{fmt}",
-            codec_map[fmt], f"{base}.{fmt}", timeout=300,
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)[-500:]}), 500
-
-
-# ── Image extras ──
 
 @app.route("/api/images/crop", methods=["POST"])
 def image_crop():
@@ -1546,21 +1070,8 @@ def image_crop():
         return jsonify({"error": "Invalid crop values"}), 400
     try:
         img = Image.open(f.stream)
-        if right <= 0:
-            right = img.width
-        if bottom <= 0:
-            bottom = img.height
-        cropped = img.crop((left, top, right, bottom))
-        buf = io.BytesIO()
-        fmt = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "png"
-        pil_map = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP", "gif": "GIF"}
-        pil_fmt = pil_map.get(fmt, "PNG")
-        save_img = cropped.convert("RGB") if pil_fmt == "JPEG" and cropped.mode == "RGBA" else cropped
-        save_img.save(buf, pil_fmt)
-        buf.seek(0)
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "image"
-        mime = "image/jpeg" if fmt in ("jpg", "jpeg") else f"image/{fmt}"
-        return send_file(buf, as_attachment=True, download_name=f"{base}_cropped.{fmt}", mimetype=mime)
+        cropped = tools.crop_image(img, left, top, right, bottom)
+        return _image_response(cropped, f.filename, "cropped")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -1576,17 +1087,8 @@ def image_rotate():
         return jsonify({"error": "Invalid angle"}), 400
     try:
         img = Image.open(f.stream)
-        rotated = img.rotate(-angle, expand=True)
-        buf = io.BytesIO()
-        fmt = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "png"
-        pil_map = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP", "gif": "GIF"}
-        pil_fmt = pil_map.get(fmt, "PNG")
-        save_img = rotated.convert("RGB") if pil_fmt == "JPEG" and rotated.mode == "RGBA" else rotated
-        save_img.save(buf, pil_fmt)
-        buf.seek(0)
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "image"
-        mime = "image/jpeg" if fmt in ("jpg", "jpeg") else f"image/{fmt}"
-        return send_file(buf, as_attachment=True, download_name=f"{base}_rotated.{fmt}", mimetype=mime)
+        rotated = tools.rotate_image(img, angle)
+        return _image_response(rotated, f.filename, "rotated")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -1598,20 +1100,62 @@ def image_strip_exif():
         return jsonify({"error": "No image provided"}), 400
     try:
         img = Image.open(f.stream)
-        new_img = Image.new(img.mode, img.size)
-        new_img.putdata(list(img.getdata()))
+        clean = tools.strip_exif(img)
+        fmt = tools._ext_from_filename(f.filename, "jpg")
+        pil_fmt = tools._PIL_FMT_MAP.get(fmt, "PNG")
         buf = io.BytesIO()
-        fmt = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "jpg"
-        pil_map = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP", "gif": "GIF"}
-        pil_fmt = pil_map.get(fmt, "PNG")
         if pil_fmt == "JPEG":
-            new_img.save(buf, "JPEG", quality=95)
+            clean.save(buf, "JPEG", quality=95)
         else:
-            new_img.save(buf, pil_fmt)
-        buf.seek(0)
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "image"
-        mime = "image/jpeg" if fmt in ("jpg", "jpeg") else f"image/{fmt}"
-        return send_file(buf, as_attachment=True, download_name=f"{base}_clean.{fmt}", mimetype=mime)
+            clean.save(buf, pil_fmt)
+        base = tools._base_from_filename(f.filename, "image")
+        mime = tools._MIME_MAP.get(fmt, f"image/{fmt}")
+        return send_file(io.BytesIO(buf.getvalue()), as_attachment=True,
+                         download_name=f"{base}_clean.{fmt}", mimetype=mime)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/images/flip", methods=["POST"])
+def image_flip():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No image provided"}), 400
+    direction = request.form.get("direction", "horizontal")
+    try:
+        img = Image.open(f.stream)
+        flipped = tools.flip_image(img, direction)
+        return _image_response(flipped, f.filename, "flipped")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/images/grayscale", methods=["POST"])
+def image_grayscale():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No image provided"}), 400
+    try:
+        img = Image.open(f.stream)
+        gray = tools.grayscale_image(img)
+        return _image_response(gray, f.filename, "grayscale")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/images/blur", methods=["POST"])
+def image_blur():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No image provided"}), 400
+    try:
+        radius = float(request.form.get("radius", 5))
+    except ValueError:
+        return jsonify({"error": "Invalid radius"}), 400
+    try:
+        img = Image.open(f.stream)
+        blurred = tools.blur_image(img, radius)
+        return _image_response(blurred, f.filename, "blur")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -1629,58 +1173,337 @@ def image_to_ico():
     except ValueError:
         return jsonify({"error": "Invalid sizes"}), 400
     try:
-        img = Image.open(f.stream).convert("RGBA")
-        buf = io.BytesIO()
-        img.save(buf, format="ICO", sizes=[(s, s) for s in sizes])
-        buf.seek(0)
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "icon"
-        return send_file(buf, as_attachment=True, download_name=f"{base}.ico", mimetype="image/x-icon")
+        img = Image.open(f.stream)
+        result = tools.image_to_ico(img, sizes)
+        base = tools._base_from_filename(f.filename, "icon")
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}.ico", mimetype="image/x-icon")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 
-# ── PDF extras ──
-
-@app.route("/api/pdf/rotate", methods=["POST"])
-def pdf_rotate():
+@app.route("/api/images/watermark", methods=["POST"])
+def image_watermark():
     f = request.files.get("file")
     if not f:
-        return jsonify({"error": "No PDF file provided"}), 400
+        return jsonify({"error": "No image provided"}), 400
+    text = request.form.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "No watermark text provided"}), 400
     try:
-        angle = int(request.form.get("angle", 90))
-    except ValueError:
-        return jsonify({"error": "Invalid angle"}), 400
-    if angle not in (90, 180, 270):
-        return jsonify({"error": "Angle must be 90, 180, or 270"}), 400
-    pages_str = request.form.get("pages", "all").strip()
-    try:
-        reader = PdfReader(f.stream)
-        writer = PdfWriter()
-        total = len(reader.pages)
-        if pages_str == "all":
-            page_indices = set(range(total))
-        else:
-            page_indices = set()
-            for part in pages_str.split(","):
-                part = part.strip()
-                if "-" in part:
-                    s, e = part.split("-", 1)
-                    page_indices.update(range(int(s.strip()) - 1, int(e.strip())))
-                elif part:
-                    page_indices.add(int(part) - 1)
-            page_indices = {i for i in page_indices if 0 <= i < total}
-        for i, page in enumerate(reader.pages):
-            if i in page_indices:
-                page.rotate(angle)
-            writer.add_page(page)
-        buf = io.BytesIO()
-        writer.write(buf)
-        buf.seek(0)
-        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "document"
-        return send_file(buf, as_attachment=True, download_name=f"{base}_rotated.pdf",
-                         mimetype="application/pdf")
+        position = request.form.get("position", "center")
+        opacity = int(request.form.get("opacity", 128))
+        font_size = int(request.form.get("font_size", 36))
+        img = Image.open(f.stream)
+        result = tools.watermark_image(img, text, position=position,
+                                       opacity=opacity, font_size=font_size)
+        # Convert back from RGBA for output
+        fmt = tools._ext_from_filename(f.filename)
+        if fmt in ("jpg", "jpeg"):
+            result = result.convert("RGB")
+        return _image_response(result, f.filename, "watermarked")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/images/info", methods=["POST"])
+def image_info_route():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No image provided"}), 400
+    try:
+        img = Image.open(f.stream)
+        return jsonify(tools.image_info(img))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/images/adjust", methods=["POST"])
+def image_adjust():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No image provided"}), 400
+    try:
+        brightness = float(request.form.get("brightness", 1.0))
+        contrast = float(request.form.get("contrast", 1.0))
+        sharpness = float(request.form.get("sharpness", 1.0))
+    except ValueError:
+        return jsonify({"error": "Invalid adjustment values"}), 400
+    try:
+        img = Image.open(f.stream)
+        adjusted = tools.adjust_image(img, brightness=brightness,
+                                      contrast=contrast, sharpness=sharpness)
+        return _image_response(adjusted, f.filename, "adjusted")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ── Convert API ──
+
+@app.route("/api/convert/md-to-html", methods=["POST"])
+def md_to_html():
+    text = None
+    f = request.files.get("file")
+    if f:
+        text = f.stream.read().decode("utf-8", errors="replace")
+    else:
+        text = request.form.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "No markdown content provided"}), 400
+    html_doc = tools.md_to_html(text)
+    buf = io.BytesIO(html_doc.encode("utf-8"))
+    return send_file(buf, as_attachment=True, download_name="converted.html",
+                     mimetype="text/html")
+
+
+@app.route("/api/convert/md-preview", methods=["POST"])
+def md_preview():
+    text = request.form.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+    return jsonify({"html": tools.md_preview(text)})
+
+
+@app.route("/api/convert/csv-to-json", methods=["POST"])
+def csv_to_json():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No CSV file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        result = tools.csv_to_json_str(text)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = tools._base_from_filename(f.filename, "data")
+        return send_file(buf, as_attachment=True, download_name=f"{base}.json",
+                         mimetype="application/json")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/convert/json-to-csv", methods=["POST"])
+def json_to_csv():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No JSON file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        result = tools.json_to_csv_str(text)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = tools._base_from_filename(f.filename, "data")
+        return send_file(buf, as_attachment=True, download_name=f"{base}.csv",
+                         mimetype="text/csv")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/convert/yaml-to-json", methods=["POST"])
+def yaml_to_json():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No YAML file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        result = tools.yaml_to_json_str(text)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = tools._base_from_filename(f.filename, "data")
+        return send_file(buf, as_attachment=True, download_name=f"{base}.json",
+                         mimetype="application/json")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/convert/json-to-yaml", methods=["POST"])
+def json_to_yaml():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No JSON file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        result = tools.json_to_yaml_str(text)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = tools._base_from_filename(f.filename, "data")
+        return send_file(buf, as_attachment=True, download_name=f"{base}.yaml",
+                         mimetype="text/yaml")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/convert/csv-to-tsv", methods=["POST"])
+def csv_to_tsv():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No CSV file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        result = tools.csv_to_tsv_str(text)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = tools._base_from_filename(f.filename, "data")
+        return send_file(buf, as_attachment=True, download_name=f"{base}.tsv",
+                         mimetype="text/tab-separated-values")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/convert/tsv-to-csv", methods=["POST"])
+def tsv_to_csv():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No TSV file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        result = tools.tsv_to_csv_str(text)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = tools._base_from_filename(f.filename, "data")
+        return send_file(buf, as_attachment=True, download_name=f"{base}.csv",
+                         mimetype="text/csv")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/convert/xml-to-json", methods=["POST"])
+def xml_to_json():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No XML file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        result = tools.xml_to_json_str(text)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = tools._base_from_filename(f.filename, "data")
+        return send_file(buf, as_attachment=True, download_name=f"{base}.json",
+                         mimetype="application/json")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ── AV API ──
+
+@app.route("/api/av/convert-audio", methods=["POST"])
+def av_convert_audio():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No audio file provided"}), 400
+    fmt = request.form.get("format", "mp3").lower()
+    if fmt not in tools.AUDIO_CODEC_MAP:
+        return jsonify({"error": "Unsupported format"}), 400
+    ext = tools._ext_from_filename(f.filename, "bin")
+    base = tools._base_from_filename(f.filename, "audio")
+    try:
+        result = tools.convert_audio(f.stream.read(), ext, fmt)
+        return send_file(io.BytesIO(result), as_attachment=True, download_name=f"{base}.{fmt}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/trim-audio", methods=["POST"])
+def av_trim_audio():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No audio file provided"}), 400
+    start = request.form.get("start", "").strip()
+    end = request.form.get("end", "").strip()
+    if not start:
+        return jsonify({"error": "Start time required"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp3")
+    base = tools._base_from_filename(f.filename, "audio")
+    try:
+        result = tools.trim_audio(f.stream.read(), ext, start, end)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_trimmed.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/audio-speed", methods=["POST"])
+def av_audio_speed():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No audio file provided"}), 400
+    speed = request.form.get("speed", "1.5")
+    try:
+        speed_f = float(speed)
+    except ValueError:
+        return jsonify({"error": "Invalid speed"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp3")
+    base = tools._base_from_filename(f.filename, "audio")
+    out_ext = ext if ext in ("mp3", "wav", "ogg", "flac") else "mp3"
+    try:
+        result = tools.audio_speed(f.stream.read(), ext, speed_f)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_{speed}x.{out_ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/extract-audio", methods=["POST"])
+def av_extract_audio():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    fmt = request.form.get("format", "mp3").lower()
+    if fmt not in tools.AUDIO_CODEC_MAP:
+        return jsonify({"error": "Unsupported format"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.extract_audio(f.stream.read(), ext, fmt)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_audio.{fmt}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/trim-video", methods=["POST"])
+def av_trim_video():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    start = request.form.get("start", "").strip()
+    end = request.form.get("end", "").strip()
+    if not start:
+        return jsonify({"error": "Start time required"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.trim_video(f.stream.read(), ext, start, end)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_trimmed.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/compress-video", methods=["POST"])
+def av_compress_video():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    quality = request.form.get("quality", "medium")
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.compress_video(f.stream.read(), ext, quality)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_compressed.mp4")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/convert-video", methods=["POST"])
+def av_convert_video():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    fmt = request.form.get("format", "mp4").lower()
+    if fmt not in tools.VIDEO_CODEC_MAP:
+        return jsonify({"error": "Unsupported format"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.convert_video(f.stream.read(), ext, fmt)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}.{fmt}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
 
 
 # ── Archive convert ──
@@ -1691,13 +1514,10 @@ def convert_zip():
     if not files:
         return jsonify({"error": "No files provided"}), 400
     try:
-        zip_buf = io.BytesIO()
-        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for f in files:
-                zf.writestr(f.filename or "file", f.stream.read())
-        zip_buf.seek(0)
-        return send_file(zip_buf, as_attachment=True, download_name="archive.zip",
-                         mimetype="application/zip")
+        file_list = [(f.filename or "file", f.stream.read()) for f in files]
+        result = tools.create_zip(file_list)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name="archive.zip", mimetype="application/zip")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -1708,27 +1528,22 @@ def convert_unzip():
     if not f:
         return jsonify({"error": "No ZIP file provided"}), 400
     try:
-        zf = zipfile.ZipFile(io.BytesIO(f.stream.read()))
-        members = [m for m in zf.namelist() if not m.endswith("/")]
-        if not members:
+        extracted = tools.extract_zip(f.stream.read())
+        if not extracted:
             return jsonify({"error": "ZIP file is empty"}), 400
-        if len(members) == 1:
-            data = zf.read(members[0])
-            name = Path(members[0]).name
-            buf = io.BytesIO(data)
-            return send_file(buf, as_attachment=True, download_name=name)
+        if len(extracted) == 1:
+            name, data = extracted[0]
+            return send_file(io.BytesIO(data), as_attachment=True, download_name=name)
         else:
-            out_buf = io.BytesIO()
-            with zipfile.ZipFile(out_buf, "w", zipfile.ZIP_DEFLATED) as out_zf:
-                for member in members:
-                    out_zf.writestr(Path(member).name, zf.read(member))
-            out_buf.seek(0)
-            base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "archive"
-            return send_file(out_buf, as_attachment=True, download_name=f"{base}_extracted.zip",
-                             mimetype="application/zip")
+            zip_data = tools.create_zip(extracted)
+            base = tools._base_from_filename(f.filename, "archive")
+            return send_file(io.BytesIO(zip_data), as_attachment=True,
+                             download_name=f"{base}_extracted.zip", mimetype="application/zip")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+
+# ── Startup helpers ──
 
 def _check_ffmpeg(console):
     import shutil
@@ -1798,7 +1613,6 @@ def _run_tray(port):
         draw = _ImageDraw.Draw(img)
         draw.ellipse([2, 2, size - 2, size - 2], fill=(30, 30, 40, 255))
 
-        # Try to load a system font for "sd" text
         font = None
         for font_path in [
             "/System/Library/Fonts/Helvetica.ttc",
@@ -1847,46 +1661,150 @@ def _run_tray(port):
         return False
 
 
+def _find_free_port(host, start_port, max_tries=20):
+    """Find a free port starting from start_port."""
+    import socket
+    for offset in range(max_tries):
+        port = start_port + offset
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((host, port))
+                return port
+            except OSError:
+                continue
+    return None
+
+
+def _print_startup_info(console, host, port):
+    """Print a Rich info table with environment details."""
+    import shutil
+    import sys
+    from rich.table import Table
+
+    ffmpeg_ver = "not found"
+    if shutil.which("ffmpeg"):
+        try:
+            r = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
+            line = r.stdout.split("\n")[0] if r.stdout else ""
+            parts = line.split()
+            if len(parts) >= 3:
+                ffmpeg_ver = parts[2]
+        except Exception:
+            ffmpeg_ver = "installed"
+
+    ytdlp_ver = "unknown"
+    try:
+        ytdlp_ver = yt_dlp.version.__version__
+    except Exception:
+        pass
+
+    route_count = sum(1 for rule in app.url_map.iter_rules() if rule.endpoint != "static")
+
+    table = Table(show_header=False, box=None, padding=(0, 2), expand=False)
+    table.add_column(style="dim")
+    table.add_column()
+    table.add_row("Python", f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+    table.add_row("ffmpeg", ffmpeg_ver)
+    table.add_row("yt-dlp", ytdlp_ver)
+    table.add_row("Tools", str(route_count))
+    table.add_row("Config", str(CONFIG_DIR))
+    table.add_row("Server", f"[cyan]http://{host}:{port}[/cyan]")
+
+    console.print(table)
+    console.print()
+
+
 def main():
+    import argparse
     import logging
+    import signal
+    import sys
     import threading
     import webbrowser
     from rich.console import Console
     from rich.panel import Panel
 
+    parser = argparse.ArgumentParser(
+        prog="sdexe",
+        description="Local tools for media, PDF, images & files",
+    )
+    parser.add_argument("-V", "--version", action="version", version=f"sdexe {__version__}")
+    parser.add_argument("-p", "--port", type=int, default=5001, help="server port (default: 5001)")
+    parser.add_argument("--host", default="127.0.0.1", help="bind address (default: 127.0.0.1)")
+    parser.add_argument("--no-browser", action="store_true", help="don't open browser on start")
+    parser.add_argument("--no-tray", action="store_true", help="skip system tray, run Flask on main thread")
+    parser.add_argument("-q", "--quiet", action="store_true", help="suppress startup banner")
+    parser.add_argument("--open", metavar="PAGE", help="open specific page (e.g. pdf, images, text)")
+
+    args = parser.parse_args()
+
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
     console = Console()
-    port = 5001
+    host = args.host
+    port = args.port
 
-    console.print()
-    console.print(
-        Panel.fit(
-            f"[bold blue]sdexe[/bold blue]  [dim]v{__version__}[/dim]\n"
-            "[dim]Local tools for media, PDF, images & files[/dim]",
-            border_style="blue",
-            padding=(0, 2),
+    # Graceful Ctrl+C
+    def _sigint_handler(sig, frame):
+        console.print("\n  [dim]Shutting down...[/dim]")
+        sys.exit(0)
+    signal.signal(signal.SIGINT, _sigint_handler)
+
+    if not args.quiet:
+        console.print()
+        console.print(
+            Panel.fit(
+                f"[bold blue]sdexe[/bold blue]  [dim]v{__version__}[/dim]\n"
+                "[dim]Local tools for media, PDF, images & files[/dim]",
+                border_style="blue",
+                padding=(0, 2),
+            )
         )
-    )
-    console.print()
+        console.print()
 
-    _check_ffmpeg(console)
-    _check_for_updates(console)
+        _check_ffmpeg(console)
+        _check_for_updates(console)
 
-    console.print(f"  [dim]Starting →[/dim] [cyan]http://127.0.0.1:{port}[/cyan]\n")
-    webbrowser.open(f"http://127.0.0.1:{port}")
+    # Port auto-detection
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, port))
+        except OSError:
+            original_port = port
+            port = _find_free_port(host, port + 1)
+            if port is None:
+                console.print(f"  [red]Error:[/red] Port {original_port} is in use and no free port found nearby.")
+                sys.exit(1)
+            if not args.quiet:
+                console.print(f"  [yellow]Port {original_port} in use, using {port} instead[/yellow]\n")
 
-    # Try to run Flask in a thread + system tray on main thread
-    try:
-        import pystray  # noqa: F401 — just checking availability
-        flask_thread = threading.Thread(
-            target=lambda: app.run(host="127.0.0.1", port=port, use_reloader=False),
-            daemon=True,
-        )
-        flask_thread.start()
-        _run_tray(port)
-    except ImportError:
-        app.run(host="127.0.0.1", port=port, use_reloader=False)
+    if not args.quiet:
+        _print_startup_info(console, host, port)
+
+    # Determine URL to open
+    open_path = ""
+    if args.open:
+        open_path = f"/{args.open.strip('/')}"
+    url = f"http://{host}:{port}{open_path}"
+
+    if not args.no_browser:
+        webbrowser.open(url)
+
+    # Start server
+    if args.no_tray:
+        app.run(host=host, port=port, use_reloader=False)
+    else:
+        try:
+            import pystray  # noqa: F401 — just checking availability
+            flask_thread = threading.Thread(
+                target=lambda: app.run(host=host, port=port, use_reloader=False),
+                daemon=True,
+            )
+            flask_thread.start()
+            _run_tray(port)
+        except ImportError:
+            app.run(host=host, port=port, use_reloader=False)
 
 
 if __name__ == "__main__":

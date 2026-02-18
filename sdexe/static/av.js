@@ -31,7 +31,35 @@ function setupDropZone(zoneId, inputId, handler) {
         handler(input.files);
         input.value = "";
     });
+    if (!window._pageDropHandlers) window._pageDropHandlers = [];
+    window._pageDropHandlers.push({ zoneId, handler });
 }
+
+(function() {
+    var ov = document.createElement("div");
+    ov.className = "page-drop-overlay";
+    ov.innerHTML = '<div class="page-drop-message">Drop files anywhere</div>';
+    document.body.appendChild(ov);
+    var dc = 0;
+    document.addEventListener("dragenter", function(e) {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault(); if (++dc === 1) ov.classList.add("visible");
+    });
+    document.addEventListener("dragover", function(e) { e.preventDefault(); });
+    document.addEventListener("dragleave", function() { if (--dc === 0) ov.classList.remove("visible"); });
+    document.addEventListener("drop", function(e) {
+        dc = 0; ov.classList.remove("visible");
+        if (!e.dataTransfer.files.length) return;
+        var handlers = window._pageDropHandlers || [];
+        for (var i = 0; i < handlers.length; i++) {
+            var zone = document.getElementById(handlers[i].zoneId);
+            if (zone && zone.closest(".pdf-section.active")) {
+                e.preventDefault(); handlers[i].handler(e.dataTransfer.files); return;
+            }
+        }
+        if (handlers.length) { e.preventDefault(); handlers[0].handler(e.dataTransfer.files); }
+    });
+})();
 
 /* ── Generic AV file loader ── */
 function loadAvFile(prefix, files, acceptType) {

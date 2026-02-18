@@ -341,6 +341,121 @@
                 <div id="toico-error" class="error" hidden></div>
             </div>
         </div>
+
+        <!-- Flip -->
+        <div id="tab-flip" class="pdf-section card">
+            <div class="card-body">
+                <h2>Flip Image</h2>
+                <p class="meta">Mirror an image horizontally or vertically.</p>
+
+                <div class="drop-zone" id="flip-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polyline points="7 2 7 22"/><polyline points="17 2 17 22"/>
+                        <polyline points="3 6 7 2 11 6"/><polyline points="13 6 17 2 21 6"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="flip-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP &middot; flip horizontally or vertically</p>
+                </div>
+
+                <div id="flip-file-info" class="split-info" hidden>
+                    <img id="flip-thumb" class="img-thumb" src="" alt="">
+                    <span id="flip-file-name" class="split-name"></span>
+                    <button class="split-remove" onclick="clearFlipFile()">&times;</button>
+                </div>
+
+                <div id="flip-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Direction</label>
+                            <select id="flip-direction">
+                                <option value="horizontal">Horizontal (mirror)</option>
+                                <option value="vertical">Vertical (upside down)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="flip-actions" class="pdf-actions" hidden>
+                    <button id="flip-btn" class="btn-download" onclick="doFlip()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Flip Image
+                    </button>
+                </div>
+
+                <div id="flip-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Grayscale -->
+        <div id="tab-grayscale" class="pdf-section card">
+            <div class="card-body">
+                <h2>Grayscale</h2>
+                <p class="meta">Convert an image to black and white.</p>
+
+                <div class="drop-zone" id="grayscale-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 2a10 10 0 010 20V2z" fill="currentColor" opacity=".3"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="grayscale-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP &middot; converts to B&amp;W</p>
+                </div>
+
+                <div id="grayscale-file-info" class="split-info" hidden>
+                    <img id="grayscale-thumb" class="img-thumb" src="" alt="">
+                    <span id="grayscale-file-name" class="split-name"></span>
+                    <button class="split-remove" onclick="clearGrayscaleFile()">&times;</button>
+                </div>
+
+                <div id="grayscale-actions" class="pdf-actions" hidden>
+                    <button id="grayscale-btn" class="btn-download" onclick="doGrayscale()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to Grayscale
+                    </button>
+                </div>
+
+                <div id="grayscale-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Blur -->
+        <div id="tab-blur" class="pdf-section card">
+            <div class="card-body">
+                <h2>Blur Image</h2>
+                <p class="meta">Apply Gaussian blur with adjustable intensity.</p>
+
+                <div class="drop-zone" id="blur-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="12" cy="12" r="4" stroke-dasharray="2 2"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="blur-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP &middot; adjustable blur radius</p>
+                </div>
+
+                <div id="blur-file-info" class="split-info" hidden>
+                    <img id="blur-thumb" class="img-thumb" src="" alt="">
+                    <span id="blur-file-name" class="split-name"></span>
+                    <button class="split-remove" onclick="clearBlurFile()">&times;</button>
+                </div>
+
+                <div id="blur-options" hidden>
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Blur Radius</label>
+                        <input type="number" id="blur-radius" value="5" min="1" max="50" step="1">
+                    </div>
+                </div>
+
+                <div id="blur-actions" class="pdf-actions" hidden>
+                    <button id="blur-btn" class="btn-download" onclick="doBlur()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Apply Blur
+                    </button>
+                </div>
+
+                <div id="blur-error" class="error" hidden></div>
+            </div>
+        </div>
     </main>
 {% endblock %}
 

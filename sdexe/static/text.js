@@ -343,6 +343,212 @@ function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
 // Init color display
 setRgb(59, 130, 246, "rgb");
 
+/* ── URL Encoder/Decoder ── */
+function doUrlEncode() {
+    const input = document.getElementById("url-input").value;
+    const err = document.getElementById("url-error");
+    err.hidden = true;
+    try {
+        document.getElementById("url-output").value = encodeURIComponent(input);
+    } catch (e) {
+        err.textContent = "Encoding failed: " + e.message;
+        err.hidden = false;
+    }
+}
+
+function doUrlDecode() {
+    const input = document.getElementById("url-input").value;
+    const err = document.getElementById("url-error");
+    err.hidden = true;
+    try {
+        document.getElementById("url-output").value = decodeURIComponent(input);
+    } catch (e) {
+        err.textContent = "Decoding failed: " + e.message;
+        err.hidden = false;
+    }
+}
+
+/* ── JSON Formatter ── */
+function doJsonFormat() {
+    const input = document.getElementById("json-input").value;
+    const err = document.getElementById("json-error");
+    err.hidden = true;
+    try {
+        const obj = JSON.parse(input);
+        document.getElementById("json-output").value = JSON.stringify(obj, null, 2);
+    } catch (e) {
+        err.textContent = "Invalid JSON: " + e.message;
+        err.hidden = false;
+    }
+}
+
+function doJsonMinify() {
+    const input = document.getElementById("json-input").value;
+    const err = document.getElementById("json-error");
+    err.hidden = true;
+    try {
+        const obj = JSON.parse(input);
+        document.getElementById("json-output").value = JSON.stringify(obj);
+    } catch (e) {
+        err.textContent = "Invalid JSON: " + e.message;
+        err.hidden = false;
+    }
+}
+
+/* ── JWT Decoder ── */
+function doJwtDecode() {
+    const input = document.getElementById("jwt-input").value.trim();
+    const results = document.getElementById("jwt-results");
+    const err = document.getElementById("jwt-error");
+    err.hidden = true;
+    results.innerHTML = "";
+
+    if (!input) {
+        err.textContent = "Enter a JWT token";
+        err.hidden = false;
+        return;
+    }
+
+    const parts = input.split(".");
+    if (parts.length !== 3) {
+        err.textContent = "Invalid JWT: expected 3 parts separated by dots, got " + parts.length;
+        err.hidden = false;
+        return;
+    }
+
+    function b64decode(str) {
+        const pad = str.length % 4;
+        const padded = str + "=".repeat(pad ? 4 - pad : 0);
+        return decodeURIComponent(atob(padded.replace(/-/g, "+").replace(/_/g, "/")).split("").map(c =>
+            "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+        ).join(""));
+    }
+
+    try {
+        const header = JSON.parse(b64decode(parts[0]));
+        const payload = JSON.parse(b64decode(parts[1]));
+
+        function renderSection(title, obj) {
+            let html = `<div style="margin-bottom: 16px;">
+                <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .05em;">${title}</div>
+                <pre style="font-family: ui-monospace, monospace; font-size: 0.8rem; padding: 12px; background: var(--surface-2); border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;">${esc(JSON.stringify(obj, null, 2))}</pre>
+            </div>`;
+            return html;
+        }
+
+        results.innerHTML = renderSection("Header", header) + renderSection("Payload", payload);
+
+        if (payload.exp) {
+            const expDate = new Date(payload.exp * 1000);
+            const expired = expDate < new Date();
+            results.innerHTML += `<div style="font-size: 0.85rem; color: ${expired ? "var(--danger)" : "var(--green)"};">${expired ? "Expired" : "Expires"}: ${expDate.toLocaleString()}</div>`;
+        }
+        if (payload.iat) {
+            results.innerHTML += `<div style="font-size: 0.85rem; color: var(--text-secondary);">Issued: ${new Date(payload.iat * 1000).toLocaleString()}</div>`;
+        }
+    } catch (e) {
+        err.textContent = "Failed to decode JWT: " + e.message;
+        err.hidden = false;
+    }
+}
+
+/* ── Case Converter ── */
+function doCase(type) {
+    const input = document.getElementById("case-input").value;
+    let result;
+    switch (type) {
+        case "upper": result = input.toUpperCase(); break;
+        case "lower": result = input.toLowerCase(); break;
+        case "title": result = input.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()); break;
+        case "camel": {
+            const words = input.replace(/[^a-zA-Z0-9\s]/g, " ").trim().split(/\s+/);
+            result = words.map((w, i) => i === 0 ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("");
+            break;
+        }
+        case "snake": result = input.replace(/[^a-zA-Z0-9]/g, " ").trim().split(/\s+/).map(w => w.toLowerCase()).join("_"); break;
+        case "kebab": result = input.replace(/[^a-zA-Z0-9]/g, " ").trim().split(/\s+/).map(w => w.toLowerCase()).join("-"); break;
+        default: result = input;
+    }
+    document.getElementById("case-output").value = result;
+}
+
+/* ── UUID Generator ── */
+function doUuid() {
+    const count = Math.min(Math.max(parseInt(document.getElementById("uuid-count").value) || 1, 1), 100);
+    const uuids = [];
+    for (let i = 0; i < count; i++) uuids.push(crypto.randomUUID());
+    document.getElementById("uuid-output").value = uuids.join("\n");
+}
+
+/* ── Unix Timestamp ── */
+function tsFromUnix() {
+    const val = document.getElementById("ts-unix").value.trim();
+    const display = document.getElementById("ts-date-display");
+    if (!val) { display.textContent = ""; return; }
+    const ts = parseInt(val);
+    if (isNaN(ts)) { display.textContent = "Invalid timestamp"; return; }
+    const ms = val.length > 12 ? ts : ts * 1000;
+    const d = new Date(ms);
+    display.textContent = d.toLocaleString() + " (" + Intl.DateTimeFormat().resolvedOptions().timeZone + ")";
+    document.getElementById("ts-datetime").value = new Date(ms - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
+    document.getElementById("ts-unix-display").textContent = "";
+}
+
+function tsFromDatetime() {
+    const val = document.getElementById("ts-datetime").value;
+    const display = document.getElementById("ts-unix-display");
+    if (!val) { display.textContent = ""; return; }
+    const ts = Math.floor(new Date(val).getTime() / 1000);
+    display.textContent = ts;
+    document.getElementById("ts-unix").value = ts;
+    document.getElementById("ts-date-display").textContent = "";
+}
+
+function tsNow() {
+    const now = Math.floor(Date.now() / 1000);
+    document.getElementById("ts-unix").value = now;
+    tsFromUnix();
+}
+
+/* ── Lorem Ipsum ── */
+const _loremSentences = [
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+    "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+    "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.",
+    "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore.",
+    "Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia.",
+    "Nulla facilisi morbi tempus iaculis urna id volutpat lacus.",
+    "Viverra accumsan in nisl nisi scelerisque eu ultrices vitae.",
+    "Amet consectetur adipiscing elit pellentesque habitant morbi tristique senectus.",
+    "Egestas purus viverra accumsan in nisl nisi scelerisque eu.",
+    "Feugiat in ante metus dictum at tempor commodo ullamcorper.",
+    "Pellentesque habitant morbi tristique senectus et netus et malesuada fames.",
+    "Turpis egestas integer eget aliquet nibh praesent tristique magna.",
+    "Quis hendrerit dolor magna eget est lorem ipsum dolor.",
+    "Volutpat consequat mauris nunc congue nisi vitae suscipit tellus.",
+    "Arcu cursus vitae congue mauris rhoncus aenean vel elit.",
+    "Facilisis magna etiam tempor orci eu lobortis elementum nibh.",
+    "Id aliquet risus feugiat in ante metus dictum at.",
+    "Sagittis scelerisque purus semper eget duis at tellus at.",
+    "Bibendum at varius vel pharetra vel turpis nunc eget.",
+    "Odio morbi quis commodo odio aenean sed adipiscing diam.",
+];
+
+function doLorem() {
+    const count = Math.min(Math.max(parseInt(document.getElementById("lorem-count").value) || 3, 1), 20);
+    const paragraphs = [];
+    for (let p = 0; p < count; p++) {
+        const len = 4 + Math.floor(Math.random() * 4);
+        const sentences = [];
+        for (let s = 0; s < len; s++) {
+            sentences.push(_loremSentences[Math.floor(Math.random() * _loremSentences.length)]);
+        }
+        if (p === 0 && sentences[0] !== _loremSentences[0]) sentences[0] = _loremSentences[0];
+        paragraphs.push(sentences.join(" "));
+    }
+    document.getElementById("lorem-output").value = paragraphs.join("\n\n");
+}
+
 /* ── Helpers ── */
 function esc(s) {
     const d = document.createElement("div");
