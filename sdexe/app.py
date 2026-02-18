@@ -28,6 +28,21 @@ def inject_version():
 DOWNLOAD_DIR = Path(tempfile.mkdtemp(prefix="toolkit_"))
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
+CONFIG_DIR = Path.home() / ".config" / "sdexe"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+
+def load_config():
+    if CONFIG_FILE.exists():
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+def save_config(data):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text(json.dumps(data, indent=2))
+
 # Stores progress and file info keyed by download ID
 downloads = {}
 
@@ -85,6 +100,20 @@ def images_page():
 @app.route("/convert")
 def convert_page():
     return render_template("convert.html")
+
+
+# ── Config API ──
+
+@app.route("/api/config", methods=["GET"])
+def get_config():
+    return jsonify(load_config())
+
+@app.route("/api/config", methods=["POST"])
+def set_config_route():
+    cfg = load_config()
+    cfg.update(request.json or {})
+    save_config(cfg)
+    return jsonify({"ok": True})
 
 
 # ── Media API ──
@@ -169,6 +198,7 @@ def download():
     fmt = request.json.get("format", "mp3")
     quality = request.json.get("quality", "best")
     metadata = request.json.get("metadata") or {}
+    subtitles = request.json.get("subtitles", False)
 
     if not url:
         return jsonify({"error": "No URL provided"}), 400
@@ -184,6 +214,8 @@ def download():
         "error": None,
         "detail": "",
         "pp_step": 0,
+        "auto_saved": False,
+        "saved_path": None,
     }
 
     PP_NAMES = {
@@ -253,11 +285,15 @@ def download():
         else:
             format_str = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
 
+        mp4_postprocessors = [{"key": "EmbedThumbnail"}]
+        if subtitles:
+            mp4_postprocessors.append({"key": "FFmpegEmbedSubtitle", "already_have_subtitle": False})
         ydl_opts = {
             "format": format_str,
             "merge_output_format": "mp4",
             "outtmpl": outtmpl,
-            "postprocessors": [{"key": "EmbedThumbnail"}],
+            "postprocessors": mp4_postprocessors,
+            **({"writesubtitles": True, "writeautomaticsub": True, "subtitleslangs": ["en"]} if subtitles else {}),
             **common_hooks,
         }
     elif fmt == "flac":
@@ -323,11 +359,41 @@ def download():
                 filepath = DOWNLOAD_DIR / downloads[dl_id]["filename"]
                 set_file_metadata(filepath, meta)
 
+            # Auto-save to output folder if configured
+            cfg = load_config()
+            output_dir = cfg.get("output_folder", "").strip()
+            if output_dir and downloads[dl_id].get("filename"):
+                output_path = Path(output_dir).expanduser()
+                if output_path.is_dir():
+                    import shutil as _shutil
+                    dest = output_path / downloads[dl_id]["download_name"]
+                    _shutil.copy2(DOWNLOAD_DIR / downloads[dl_id]["filename"], dest)
+                    downloads[dl_id]["auto_saved"] = True
+                    downloads[dl_id]["saved_path"] = str(dest)
+
             downloads[dl_id]["status"] = "done"
             downloads[dl_id]["progress"] = 100
         except Exception as e:
+            err = str(e)
+            err_lower = err.lower()
+            if "private" in err_lower and "video" in err_lower:
+                friendly = "This video is private."
+            elif "age" in err_lower and any(w in err_lower for w in ("restrict", "confirm", "gate")):
+                friendly = "Age-restricted — sign in to download."
+            elif "not available in your country" in err_lower or "geo" in err_lower:
+                friendly = "Not available in your country (geo-restricted)."
+            elif "video unavailable" in err_lower:
+                friendly = "Video unavailable or deleted."
+            elif "copyright" in err_lower or "blocked" in err_lower:
+                friendly = "Blocked due to copyright."
+            elif "429" in err or "rate limit" in err_lower:
+                friendly = "Rate limited — try again in a moment."
+            elif "ffmpeg" in err_lower and ("not found" in err_lower or "no such file" in err_lower):
+                friendly = "ffmpeg not found — run `sdexe` once to install it."
+            else:
+                friendly = err
             downloads[dl_id]["status"] = "error"
-            downloads[dl_id]["error"] = str(e)
+            downloads[dl_id]["error"] = friendly
 
     thread = threading.Thread(target=do_download, daemon=True)
     thread.start()
@@ -765,11 +831,76 @@ def json_to_csv():
                      mimetype="text/csv")
 
 
+def _check_ffmpeg(console):
+    import shutil
+    import sys
+    import subprocess
+    from rich.prompt import Confirm
+
+    if shutil.which("ffmpeg"):
+        return
+
+    console.print("  [yellow]⚠[/yellow]  [bold]ffmpeg[/bold] not found — needed for media downloads.\n")
+
+    if not Confirm.ask("  Install ffmpeg now?", default=True):
+        console.print("  [dim]Skipping. Media downloads may not work.[/dim]\n")
+        return
+
+    platform = sys.platform
+    success = False
+
+    if platform == "darwin" and shutil.which("brew"):
+        with console.status("  Installing via Homebrew...", spinner="dots"):
+            r = subprocess.run(["brew", "install", "ffmpeg"], capture_output=True)
+            success = r.returncode == 0
+    elif platform == "darwin":
+        console.print("  [dim]Homebrew not found. Run:[/dim] [cyan]brew install ffmpeg[/cyan]\n")
+        return
+    elif platform.startswith("linux"):
+        with console.status("  Installing via apt...", spinner="dots"):
+            r = subprocess.run(
+                ["sudo", "apt-get", "install", "-y", "ffmpeg"],
+                capture_output=True,
+            )
+            success = r.returncode == 0
+    else:
+        console.print("  [dim]Install ffmpeg from[/dim] [cyan]https://ffmpeg.org/download.html[/cyan]\n")
+        return
+
+    if success:
+        console.print("  [green]✓[/green]  ffmpeg installed!\n")
+    else:
+        console.print("  [red]✗[/red]  Installation failed. Please install ffmpeg manually.\n")
+
+
 def main():
+    import logging
     import webbrowser
+    from rich.console import Console
+    from rich.panel import Panel
+
+    # Suppress werkzeug startup noise
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
+
+    console = Console()
     port = 5001
+
+    console.print()
+    console.print(
+        Panel.fit(
+            f"[bold blue]sdexe[/bold blue]  [dim]v{__version__}[/dim]\n"
+            "[dim]Local tools for media, PDF, images & files[/dim]",
+            border_style="blue",
+            padding=(0, 2),
+        )
+    )
+    console.print()
+
+    _check_ffmpeg(console)
+
+    console.print(f"  [dim]Starting →[/dim] [cyan]http://localhost:{port}[/cyan]\n")
     webbrowser.open(f"http://localhost:{port}")
-    app.run(port=port)
+    app.run(port=port, use_reloader=False)
 
 
 if __name__ == "__main__":

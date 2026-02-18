@@ -15,6 +15,7 @@ dependencies = [
     "pypdf",
     "Pillow",
     "markdown",
+    "rich",
 ]
 
 [project.scripts]

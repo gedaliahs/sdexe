@@ -1,6 +1,106 @@
 let currentUrl = "";
 let playlistEntries = [];
 let completedIds = [];
+let outputFolder = "";
+const downloadHistory = [];
+
+/* ── Toast ── */
+function showToast(message, type = "success") {
+    const container = document.getElementById("toast-container");
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add("toast-visible")));
+    setTimeout(() => {
+        toast.classList.remove("toast-visible");
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+/* ── Web Notifications ── */
+function sendNotification(title, body) {
+    if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, { body });
+    }
+}
+function requestNotifPermission() {
+    if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+    }
+}
+
+/* ── Download History ── */
+function addToHistory(title, format, id) {
+    downloadHistory.unshift({ title, format, id });
+    if (downloadHistory.length > 20) downloadHistory.pop();
+    renderHistory();
+}
+function renderHistory() {
+    const panel = document.getElementById("history-panel");
+    const list = document.getElementById("history-list");
+    const toggle = document.getElementById("history-toggle");
+    if (!panel || !downloadHistory.length) return;
+    panel.hidden = false;
+    if (toggle) toggle.textContent = `Recent (${downloadHistory.length})`;
+    list.innerHTML = downloadHistory.map(item => `
+        <div class="history-item">
+            <div class="history-info">
+                <span class="history-title">${esc(item.title)}</span>
+                <span class="history-fmt">${item.format.toUpperCase()}</span>
+            </div>
+            <a href="/api/file/${item.id}" class="history-save">Save</a>
+        </div>
+    `).join("");
+}
+function toggleHistory() {
+    const list = document.getElementById("history-list");
+    const chevron = document.getElementById("history-chevron");
+    if (!list) return;
+    list.hidden = !list.hidden;
+    if (chevron) chevron.classList.toggle("open", !list.hidden);
+}
+
+/* ── Config / Output Folder ── */
+async function loadConfig() {
+    try {
+        const res = await fetch("/api/config");
+        const cfg = await res.json();
+        outputFolder = cfg.output_folder || "";
+        updateFolderDisplay();
+    } catch {}
+}
+function updateFolderDisplay() {
+    const el = document.getElementById("folder-display");
+    if (!el) return;
+    el.textContent = outputFolder || "None (manual save)";
+}
+function promptSetFolder() {
+    const input = prompt("Set download folder path (leave empty to disable):", outputFolder);
+    if (input === null) return;
+    outputFolder = input.trim();
+    updateFolderDisplay();
+    fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ output_folder: outputFolder }),
+    });
+}
+
+/* ── Clipboard Auto-detect ── */
+async function tryClipboard() {
+    if (!navigator.clipboard) return;
+    try {
+        const text = await navigator.clipboard.readText();
+        if (text && (text.startsWith("http://") || text.startsWith("https://"))) {
+            const ta = document.getElementById("url");
+            if (ta && !ta.value.trim()) {
+                ta.value = text;
+                ta.dispatchEvent(new Event("input"));
+            }
+        }
+    } catch {}
+}
 
 /* ── Helpers ── */
 function esc(s) {
@@ -58,6 +158,11 @@ function updateQuality(prefix) {
     } else {
         q.innerHTML = `<option value="best">Lossless</option>`;
         q.disabled = true;
+    }
+    // Show subtitle option only for MP4 (single video)
+    if (prefix === "v") {
+        const subWrap = document.getElementById("v-subtitle-wrap");
+        if (subWrap) subWrap.style.display = fmt === "mp4" ? "block" : "none";
     }
 }
 
@@ -238,6 +343,7 @@ async function startSingleDownload() {
 
     const fmt = document.getElementById("v-format").value;
     const quality = document.getElementById("v-quality").value;
+    const subtitles = document.getElementById("v-subtitles")?.checked ?? false;
     const metadata = {
         title: document.getElementById("v-title").value.trim(),
         artist: document.getElementById("v-artist").value.trim(),
@@ -247,12 +353,13 @@ async function startSingleDownload() {
     const btn = document.getElementById("v-dl-btn");
     btn.disabled = true;
     btn.textContent = "Starting...";
+    requestNotifPermission();
 
     try {
         const res = await fetch("/api/download", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({url: currentUrl, format: fmt, quality, metadata}),
+            body: JSON.stringify({url: currentUrl, format: fmt, quality, metadata, subtitles}),
         });
         const data = await res.json();
         if (!res.ok) { showError(data.error || "Download failed"); resetBtn(btn, "Download"); return; }
@@ -292,9 +399,19 @@ function trackSingleProgress(id, hasMetadata) {
             source.close(); fill.style.width = "100%";
             const steps = (d.pp_step || 0) + (hasMetadata ? 1 : 0);
             text.textContent = `Complete` + (steps > 0 ? ` — ${steps} post-processing step${steps === 1 ? "" : "s"} finished` : "");
-            const link = document.getElementById("v-save");
-            link.href = `/api/file/${id}`;
-            link.hidden = false;
+            const title = document.getElementById("v-title").value.trim() || "Download";
+            const fmt = document.getElementById("v-format").value;
+            addToHistory(title, fmt, id);
+            if (d.auto_saved && d.saved_path) {
+                const filename = d.saved_path.split("/").pop();
+                showToast(`Saved: ${filename}`);
+            } else {
+                const link = document.getElementById("v-save");
+                link.href = `/api/file/${id}`;
+                link.hidden = false;
+                showToast(`${title} ready — click Save File`);
+            }
+            sendNotification("sdexe", `Downloaded: ${title}`);
             resetBtn(btn, "Download");
         } else if (d.status === "error") {
             source.close(); showError(d.error || "Download failed"); text.textContent = "Error";
@@ -341,6 +458,10 @@ function finishSummary(total, done, failed) {
     parts.push(`<span class="done">${done} downloaded</span>`);
     if (failed > 0) parts.push(`<span class="fail">${failed} failed</span>`);
     document.getElementById("bs-stats").innerHTML = parts.join('<span style="color:var(--border)">|</span>');
+
+    const msg = failed > 0 ? `${done} downloaded, ${failed} failed` : `${done} files downloaded`;
+    showToast(msg, failed > 0 ? "error" : "success");
+    sendNotification("sdexe", msg);
 
     // Remove any existing ZIP button
     const old = summary.querySelector(".btn-zip");
@@ -397,6 +518,7 @@ async function startPlaylistDownload() {
     const btn = document.getElementById("p-dl-btn");
     btn.disabled = true;
     completedIds = [];
+    requestNotifPermission();
 
     const total = selected.length;
     let done = 0;
@@ -461,8 +583,12 @@ async function startPlaylistDownload() {
             }
 
             const ok = await trackEntryProgress(data.id, status);
-            if (ok) { done++; el.classList.add("is-done"); completedIds.push(data.id); }
-            else { failed++; }
+            if (ok) {
+                done++;
+                el.classList.add("is-done");
+                completedIds.push(data.id);
+                addToHistory(entry.title, fmt, data.id);
+            } else { failed++; }
         } catch (e) {
             status.innerHTML = `<span class="entry-error">Failed</span>`;
             failed++;
@@ -538,3 +664,5 @@ document.getElementById("url").addEventListener("paste", () => {
 
 /* ── Init ── */
 initTextarea();
+loadConfig();
+tryClipboard();

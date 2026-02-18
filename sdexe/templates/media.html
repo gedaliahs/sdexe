@@ -23,6 +23,12 @@
             </button>
         </div>
 
+        <div class="folder-bar">
+            <span class="folder-label">Save to:</span>
+            <span id="folder-display" class="folder-path">None (manual save)</span>
+            <button class="folder-change" onclick="promptSetFolder()">Change</button>
+        </div>
+
         <div id="error" class="error" hidden></div>
 
         <!-- Loading Skeleton -->
@@ -72,6 +78,12 @@
                                 <option value="best">Best</option>
                             </select>
                         </div>
+                    </div>
+                    <div id="v-subtitle-wrap" style="display:none;">
+                        <label class="check-label">
+                            <input type="checkbox" id="v-subtitles">
+                            Download subtitles (English)
+                        </label>
                     </div>
                     <button id="v-dl-btn" class="btn-download" onclick="startSingleDownload()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
@@ -148,6 +160,14 @@
 
                 <div id="p-entries" class="entries-list"></div>
             </div>
+        </div>
+        <!-- Download History -->
+        <div id="history-panel" class="history-panel" hidden>
+            <div class="history-header" onclick="toggleHistory()">
+                <span id="history-toggle" class="history-header-title">Recent downloads</span>
+                <span id="history-chevron" class="history-chevron">▼</span>
+            </div>
+            <div id="history-list"></div>
         </div>
     </main>
 {% endblock %}
