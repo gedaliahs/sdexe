@@ -5,20 +5,6 @@
 
 {% block content %}
     <main>
-        <div class="hero">
-            <h1>Image Tools</h1>
-            <p class="subtitle">Resize, compress, and convert images — everything runs locally on your machine.</p>
-        </div>
-
-        <div class="pdf-tabs">
-            <button class="pdf-tab active" data-tab="resize">Resize</button>
-            <button class="pdf-tab" data-tab="compress">Compress</button>
-            <button class="pdf-tab" data-tab="imgconvert">Convert Format</button>
-            <button class="pdf-tab" data-tab="crop">Crop</button>
-            <button class="pdf-tab" data-tab="rotate">Rotate</button>
-            <button class="pdf-tab" data-tab="stripexif">Strip EXIF</button>
-            <button class="pdf-tab" data-tab="toico">To ICO</button>
-        </div>
 
         <!-- Resize -->
         <div id="tab-resize" class="pdf-section card active">
@@ -359,5 +345,5 @@
 {% endblock %}
 
 {% block scripts %}
-    <script src="/static/images.js"></script>
+    <script src="/static/images.js?v={{ version }}"></script>
 {% endblock %}

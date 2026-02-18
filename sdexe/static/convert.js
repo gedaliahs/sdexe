@@ -10,15 +10,14 @@ let xmlFile = null;
 let createZipFiles = [];
 let extractZipFile = null;
 
-/* ── Tab Switching ── */
-document.querySelectorAll(".pdf-tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-        document.querySelectorAll(".pdf-tab").forEach(t => t.classList.remove("active"));
-        document.querySelectorAll(".pdf-section").forEach(s => s.classList.remove("active"));
-        tab.classList.add("active");
-        document.getElementById("tab-" + tab.dataset.tab).classList.add("active");
-    });
-});
+/* ── Hash Routing ── */
+function showTab(tab) {
+    document.querySelectorAll(".pdf-section").forEach(s => s.classList.remove("active"));
+    const el = document.getElementById("tab-" + tab);
+    (el || document.querySelector(".pdf-section")).classList.add("active");
+}
+showTab(location.hash.slice(1) || "md2html");
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "md2html"));
 
 /* ── Drop Zone Setup ── */
 function setupDropZone(zoneId, inputId, handler) {

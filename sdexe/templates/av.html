@@ -5,20 +5,6 @@
 
 {% block content %}
     <main>
-        <div class="hero">
-            <h1>AV Tools</h1>
-            <p class="subtitle">Convert, trim, and process audio and video files — everything runs locally using ffmpeg.</p>
-        </div>
-
-        <div class="pdf-tabs">
-            <button class="pdf-tab active" data-tab="av-convert-audio">Convert Audio</button>
-            <button class="pdf-tab" data-tab="av-trim-audio">Trim Audio</button>
-            <button class="pdf-tab" data-tab="av-speed">Change Speed</button>
-            <button class="pdf-tab" data-tab="av-extract-audio">Extract Audio</button>
-            <button class="pdf-tab" data-tab="av-trim-video">Trim Video</button>
-            <button class="pdf-tab" data-tab="av-compress-video">Compress Video</button>
-            <button class="pdf-tab" data-tab="av-convert-video">Convert Video</button>
-        </div>
 
         <!-- Convert Audio -->
         <div id="tab-av-convert-audio" class="pdf-section card active">
@@ -353,5 +339,5 @@
 {% endblock %}
 
 {% block scripts %}
-    <script src="/static/av.js"></script>
+    <script src="/static/av.js?v={{ version }}"></script>
 {% endblock %}

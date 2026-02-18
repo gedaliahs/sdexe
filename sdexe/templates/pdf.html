@@ -5,20 +5,6 @@
 
 {% block content %}
     <main>
-        <div class="hero">
-            <h1>PDF Tools</h1>
-            <p class="subtitle">Merge, split, and convert — everything runs locally on your machine.</p>
-        </div>
-
-        <div class="pdf-tabs">
-            <button class="pdf-tab active" data-tab="merge">Merge</button>
-            <button class="pdf-tab" data-tab="split">Split</button>
-            <button class="pdf-tab" data-tab="img2pdf">Images → PDF</button>
-            <button class="pdf-tab" data-tab="compress">Compress</button>
-            <button class="pdf-tab" data-tab="totext">Extract Text</button>
-            <button class="pdf-tab" data-tab="password">Password</button>
-            <button class="pdf-tab" data-tab="rotatepages">Rotate Pages</button>
-        </div>
 
         <!-- Merge -->
         <div id="tab-merge" class="pdf-section card active">
@@ -310,5 +296,5 @@
 {% endblock %}
 
 {% block scripts %}
-    <script src="/static/pdf.js"></script>
+    <script src="/static/pdf.js?v={{ version }}"></script>
 {% endblock %}
