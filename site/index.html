@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>sdexe — Download videos, convert files, edit PDFs — all locally</title>
-    <meta name="description" content="Download YouTube videos, merge PDFs, resize images, and convert files — runs entirely on your computer. Nothing gets uploaded anywhere.">
-    <meta property="og:title" content="sdexe — Your local file toolkit">
+    <title>sdexe - Download videos, convert files, edit PDFs locally</title>
+    <meta name="description" content="Download YouTube videos, merge PDFs, resize images, and convert files. Runs entirely on your computer. Nothing gets uploaded anywhere.">
+    <meta property="og:title" content="sdexe - Your local file toolkit">
     <meta property="og:description" content="Download YouTube videos, merge PDFs, resize images, convert files. Runs locally. No uploads.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sdexe.com">
@@ -41,15 +41,15 @@
         }
 
         .container {
-            max-width: 600px;
+            max-width: 960px;
             margin: 0 auto;
-            padding: 0 24px;
+            padding: 0 32px;
         }
 
-        /* ── Header ── */
+        /* Header */
         header {
             position: sticky; top: 0; z-index: 50;
-            background: rgba(250,250,250,.88);
+            background: rgba(250,250,250,.9);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--border);
@@ -67,147 +67,173 @@
         }
         .gh-link:hover { color: var(--text); }
 
-        /* ── Hero ── */
+        /* Hero */
         .hero {
-            padding: 72px 0 56px;
+            padding: 80px 0 60px;
             text-align: center;
         }
         .hero h1 {
-            font-size: clamp(1.75rem, 5vw, 2.6rem);
+            font-size: clamp(1.8rem, 4.5vw, 2.75rem);
             font-weight: 700;
-            letter-spacing: -.035em;
-            line-height: 1.2;
-            margin-bottom: 14px;
+            letter-spacing: -.03em;
+            line-height: 1.18;
+            margin-bottom: 16px;
         }
         .hero .sub {
-            font-size: 1rem;
+            font-size: 1.05rem;
             color: var(--text-2);
-            max-width: 420px;
-            margin: 0 auto 40px;
+            max-width: 520px;
+            margin: 0 auto 48px;
             line-height: 1.65;
         }
 
-        /* ── Install block ── */
-        .install-wrap { text-align: center; }
-        .install-cmd {
-            display: inline-flex; align-items: center; gap: 12px;
-            background: var(--text); color: #e5e5e5;
-            padding: 14px 22px; border-radius: 10px;
-            font-family: "JetBrains Mono", monospace;
-            font-size: .9rem; cursor: pointer; border: none;
-            transition: background .15s; margin-bottom: 10px;
-        }
-        .install-cmd:hover { background: #2a2a2a; }
-        .install-cmd .prompt { color: var(--accent); user-select: none; }
-        .copy-icon { color: #666; transition: color .15s; flex-shrink: 0; }
-        .install-cmd:hover .copy-icon { color: #ccc; }
-        .install-cmd.copied .copy-icon { color: var(--green); }
-
-        .install-sub {
-            font-size: .8rem; color: var(--text-3);
-            margin-bottom: 8px;
-        }
-        .install-sub code {
-            font-family: "JetBrains Mono", monospace;
-            font-size: .75rem; background: var(--surface-2);
-            padding: 2px 6px; border-radius: 4px; color: var(--text-2);
-        }
-
-        /* ── Don't have pipx? ── */
-        .prereq {
-            margin-top: 20px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
+        /* Install card */
+        .install-card {
             background: var(--surface);
-            text-align: left;
+            border: 1px solid var(--border);
+            border-radius: 16px;
             overflow: hidden;
+            text-align: left;
+            max-width: 720px;
+            margin: 0 auto;
         }
-        .prereq summary {
-            padding: 13px 18px;
-            font-size: .82rem; font-weight: 500; color: var(--text-2);
-            cursor: pointer; list-style: none;
-            display: flex; align-items: center; justify-content: space-between;
-            user-select: none;
-            transition: background .15s;
+
+        /* OS tabs */
+        .os-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
         }
-        .prereq summary:hover { background: var(--surface-2); }
-        .prereq summary::after { content: "▾"; font-size: .75rem; color: var(--text-3); }
-        .prereq[open] summary::after { content: "▴"; }
-        .prereq-body {
+        .os-tab {
+            flex: 1;
+            padding: 13px 0;
+            font-size: .83rem;
+            font-weight: 600;
+            color: var(--text-3);
+            background: var(--surface-2);
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            transition: color .15s, background .15s;
+            border-right: 1px solid var(--border);
+        }
+        .os-tab:last-child { border-right: none; }
+        .os-tab:hover { color: var(--text-2); background: #eee; }
+        .os-tab.active { color: var(--text); background: var(--surface); }
+
+        /* Tab panels */
+        .os-panel { display: none; padding: 28px 32px; }
+        .os-panel.active { display: block; }
+
+        .steps { display: flex; flex-direction: column; gap: 16px; }
+        .step { display: flex; gap: 14px; align-items: flex-start; }
+        .step-num {
+            flex-shrink: 0;
+            width: 24px; height: 24px;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: .7rem; font-weight: 700;
+            margin-top: 2px;
+        }
+        .step-body { flex: 1; }
+        .step-body p { font-size: .875rem; color: var(--text-2); line-height: 1.55; margin-bottom: 8px; }
+        .step-body p:last-child { margin-bottom: 0; }
+        .step-body a { color: var(--accent); text-decoration: none; }
+        .step-body a:hover { text-decoration: underline; }
+
+        .cmd-row {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--text); color: #e5e5e5;
+            padding: 11px 16px; border-radius: 8px;
+            font-family: "JetBrains Mono", monospace;
+            font-size: .83rem; cursor: pointer; border: none;
+            transition: background .15s; width: 100%;
+            text-align: left;
+        }
+        .cmd-row:hover { background: #2a2a2a; }
+        .cmd-row .prompt { color: var(--accent); user-select: none; margin-right: 2px; }
+        .cmd-copy-icon { color: #666; transition: color .15s; flex-shrink: 0; margin-left: auto; }
+        .cmd-row:hover .cmd-copy-icon { color: #ccc; }
+        .cmd-row.copied .cmd-copy-icon { color: var(--green); }
+
+        .install-note {
+            padding: 16px 32px;
             border-top: 1px solid var(--border);
-            padding: 18px;
-            display: flex; flex-direction: column; gap: 18px;
+            background: var(--surface-2);
+            font-size: .8rem;
+            color: var(--text-2);
+            line-height: 1.6;
         }
-        .prereq-os { }
-        .prereq-os .os-label {
-            font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
-            color: var(--text-3); font-weight: 600; margin-bottom: 8px;
+        .install-note code {
+            font-family: "JetBrains Mono", monospace;
+            font-size: .78em;
+            background: var(--border);
+            padding: 1px 5px;
+            border-radius: 4px;
+            color: var(--text);
         }
-        .prereq-os ol { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
-        .prereq-os li { font-size: .82rem; color: var(--text-2); line-height: 1.5; }
-        .prereq-os code {
-            font-family: "JetBrains Mono", monospace; font-size: .75rem;
-            background: var(--surface-2); padding: 2px 6px; border-radius: 4px; color: var(--text);
-        }
-        .prereq-os a { color: var(--accent); text-decoration: none; }
-        .prereq-os a:hover { text-decoration: underline; }
-        .prereq-divider { border: none; border-top: 1px solid var(--border); }
 
-        /* ── After install note ── */
-        .after-note {
-            margin-top: 28px; padding: 14px 18px;
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius);
-            font-size: .82rem; color: var(--text-2);
-            text-align: left; line-height: 1.6;
+        /* Features */
+        .features-section {
+            padding: 64px 0 72px;
+            border-top: 1px solid var(--border);
+            margin-top: 64px;
         }
-        .after-note strong { color: var(--text); }
-
-        /* ── Section divider ── */
         .section-label {
             font-size: .68rem; text-transform: uppercase; letter-spacing: .1em;
             color: var(--text-3); font-weight: 600;
-            margin-bottom: 14px;
-        }
-
-        /* ── Feature section ── */
-        .features-section {
-            padding: 48px 0 64px;
-            border-top: 1px solid var(--border);
+            margin-bottom: 20px; text-align: center;
         }
         .features {
-            display: flex; flex-direction: column; gap: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
         }
         .feat {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius); padding: 20px 22px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px 26px;
         }
-        .feat h3 { font-size: .9rem; font-weight: 600; margin-bottom: 6px; color: var(--text); }
-        .feat ul {
-            padding-left: 0; list-style: none;
-            display: flex; flex-direction: column; gap: 3px;
+        .feat-icon {
+            width: 36px; height: 36px;
+            background: var(--surface-2);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 14px;
+            color: var(--accent);
         }
+        .feat h3 { font-size: .95rem; font-weight: 600; margin-bottom: 10px; color: var(--text); }
+        .feat ul { padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
         .feat li {
-            font-size: .8rem; color: var(--text-3); line-height: 1.5;
-            padding-left: 14px; position: relative;
+            font-size: .82rem; color: var(--text-2); line-height: 1.5;
+            padding-left: 16px; position: relative;
         }
         .feat li::before {
-            content: "·"; position: absolute; left: 0;
-            color: var(--text-3);
+            content: ""; position: absolute; left: 0; top: 9px;
+            width: 5px; height: 5px;
+            background: var(--border);
+            border-radius: 50%;
         }
 
-        /* ── Footer ── */
+        /* Footer */
         footer {
             border-top: 1px solid var(--border);
-            padding: 24px 0;
+            padding: 28px 0;
+            margin-top: auto;
             text-align: center;
         }
         footer p { font-size: .75rem; color: var(--text-3); }
         footer a { color: var(--text-3); text-decoration: none; }
         footer a:hover { color: var(--text-2); }
 
-        @media (max-width: 480px) {
-            .hero { padding: 48px 0 40px; }
+        @media (max-width: 680px) {
+            .container { padding: 0 20px; }
+            .features { grid-template-columns: 1fr; }
+            .hero { padding: 52px 0 44px; }
+            .os-panel { padding: 22px 20px; }
+            .install-note { padding: 14px 20px; }
         }
     </style>
 </head>
@@ -226,113 +252,210 @@
 <main>
     <div class="container">
 
-        <!-- Hero -->
         <div class="hero">
-            <h1>Download videos, convert files,<br>edit PDFs — on your computer.</h1>
-            <p class="sub">A small tool that runs locally in your browser. Nothing gets uploaded. No account needed. Free and open source.</p>
+            <h1>Download videos, convert files,<br>and edit PDFs. All on your computer.</h1>
+            <p class="sub">A free tool that runs locally in your browser. Nothing gets uploaded. No account needed. Open source.</p>
         </div>
 
-        <!-- Install -->
-        <div class="install-wrap">
-            <p class="install-sub" style="margin-bottom:14px; font-size:.8rem; color:var(--text-2);">Open your terminal and run:</p>
-            <button class="install-cmd" onclick="copyInstall(this)" title="Click to copy">
-                <span class="prompt">$</span>
-                <span id="cmd-text">pipx install sdexe</span>
-                <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            </button>
-            <p class="install-sub">Then launch it: <code>sdexe</code></p>
+        <!-- Install card -->
+        <div class="install-card">
+            <div class="os-tabs">
+                <button class="os-tab active" onclick="showOS('mac', this)">Mac</button>
+                <button class="os-tab" onclick="showOS('win', this)">Windows</button>
+                <button class="os-tab" onclick="showOS('linux', this)">Linux</button>
+            </div>
 
-            <details class="prereq">
-                <summary>First time? Step-by-step setup instructions</summary>
-                <div class="prereq-body">
-
-                    <div class="prereq-os">
-                        <p class="os-label">Mac</p>
-                        <ol>
-                            <li>Open the <strong>Terminal</strong> app — press <code>⌘ Space</code>, type <em>Terminal</em>, hit Enter.</li>
-                            <li>If you don't have Homebrew, paste this and press Enter:<br>
-                                <code>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</code>
-                            </li>
-                            <li>Install pipx: <code>brew install pipx</code></li>
-                            <li>Install sdexe: <code>pipx install sdexe</code></li>
-                            <li>Run it: <code>sdexe</code> — your browser opens automatically.</li>
-                        </ol>
+            <!-- Mac -->
+            <div class="os-panel active" id="panel-mac">
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <div class="step-body">
+                            <p>Open <strong>Terminal</strong> (press <kbd style="background:var(--surface-2);border:1px solid var(--border);padding:1px 5px;border-radius:4px;font-size:.8em;">Cmd Space</kbd>, type Terminal, hit Enter).</p>
+                        </div>
                     </div>
-
-                    <hr class="prereq-divider">
-
-                    <div class="prereq-os">
-                        <p class="os-label">Windows</p>
-                        <ol>
-                            <li>Download and install <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3.10+</a> from python.org. Check "Add Python to PATH" during install.</li>
-                            <li>Open <strong>Command Prompt</strong> — press <code>Win + R</code>, type <em>cmd</em>, hit Enter.</li>
-                            <li>Install pipx: <code>pip install pipx</code></li>
-                            <li>Install sdexe: <code>pipx install sdexe</code></li>
-                            <li>Run it: <code>sdexe</code> — your browser opens automatically.</li>
-                        </ol>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-body">
+                            <p>If you have Homebrew, install pipx:</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'brew install pipx')">
+                                <span class="prompt">$</span> <span>brew install pipx</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                            <p style="margin-top:8px;">No Homebrew? <a href="https://brew.sh" target="_blank" rel="noopener">Install it here</a>, or use <code style="font-family:JetBrains Mono,monospace;font-size:.8em;background:var(--surface-2);padding:1px 5px;border-radius:4px;">pip install pipx</code> instead.</p>
+                        </div>
                     </div>
-
-                    <hr class="prereq-divider">
-
-                    <div class="prereq-os">
-                        <p class="os-label">Linux</p>
-                        <ol>
-                            <li>Install pipx: <code>sudo apt install pipx</code> (Ubuntu/Debian) or <code>pip install pipx</code></li>
-                            <li>Install sdexe: <code>pipx install sdexe</code></li>
-                            <li>Run it: <code>sdexe</code></li>
-                        </ol>
+                    <div class="step">
+                        <div class="step-num">3</div>
+                        <div class="step-body">
+                            <p>Install sdexe:</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'pipx install sdexe')">
+                                <span class="prompt">$</span> <span>pipx install sdexe</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2v1"/></svg>
+                            </button>
+                        </div>
                     </div>
-
+                    <div class="step">
+                        <div class="step-num">4</div>
+                        <div class="step-body">
+                            <p>Launch it:</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'sdexe')">
+                                <span class="prompt">$</span> <span>sdexe</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2v1"/></svg>
+                            </button>
+                            <p style="margin-top:8px;">Your browser opens automatically to the app.</p>
+                        </div>
+                    </div>
                 </div>
-            </details>
+            </div>
 
-            <div class="after-note">
-                <strong>What happens after you run <code style="font-family:JetBrains Mono,monospace;font-size:.8em;">sdexe</code>:</strong> a page opens in your browser at <code style="font-family:JetBrains Mono,monospace;font-size:.8em;">localhost:5001</code>. That's the app — use it like any website, but it's running on your own machine. Close the terminal window to quit.
+            <!-- Windows -->
+            <div class="os-panel" id="panel-win">
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <div class="step-body">
+                            <p>Download and install <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3.10 or later</a> from python.org. On the installer screen, check <strong>"Add Python to PATH"</strong> before clicking Install.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-body">
+                            <p>Open <strong>Command Prompt</strong> (press <kbd style="background:var(--surface-2);border:1px solid var(--border);padding:1px 5px;border-radius:4px;font-size:.8em;">Win R</kbd>, type cmd, hit Enter). Install pipx:</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'pip install pipx')">
+                                <span class="prompt">&gt;</span> <span>pip install pipx</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2v1"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">3</div>
+                        <div class="step-body">
+                            <p>Install sdexe:</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'pipx install sdexe')">
+                                <span class="prompt">&gt;</span> <span>pipx install sdexe</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2v1"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">4</div>
+                        <div class="step-body">
+                            <p>Launch it:</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'sdexe')">
+                                <span class="prompt">&gt;</span> <span>sdexe</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2v1"/></svg>
+                            </button>
+                            <p style="margin-top:8px;">Your browser opens automatically to the app.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Linux -->
+            <div class="os-panel" id="panel-linux">
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <div class="step-body">
+                            <p>Install pipx. On Ubuntu or Debian:</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'sudo apt install pipx')">
+                                <span class="prompt">$</span> <span>sudo apt install pipx</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2v1"/></svg>
+                            </button>
+                            <p style="margin-top:8px;">On other distros: <code style="font-family:JetBrains Mono,monospace;font-size:.8em;background:var(--surface-2);padding:1px 5px;border-radius:4px;">pip install pipx</code></p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-body">
+                            <p>Install sdexe:</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'pipx install sdexe')">
+                                <span class="prompt">$</span> <span>pipx install sdexe</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2v1"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">3</div>
+                        <div class="step-body">
+                            <p>Launch it:</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'sdexe')">
+                                <span class="prompt">$</span> <span>sdexe</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2v1"/></svg>
+                            </button>
+                            <p style="margin-top:8px;">Your browser opens automatically to the app.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="install-note">
+                After running <code>sdexe</code>, a page opens at <code>localhost:5001</code>. That's the app. It runs on your machine, not on a server. Close the terminal to quit.
             </div>
         </div>
 
         <!-- Features -->
         <div class="features-section">
-            <p class="section-label">What it can do</p>
+            <p class="section-label">What it does</p>
             <div class="features">
+
                 <div class="feat">
-                    <h3>Download videos &amp; audio</h3>
+                    <div class="feat-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                    </div>
+                    <h3>Download videos and audio</h3>
                     <ul>
-                        <li>Paste any YouTube, Instagram, TikTok, SoundCloud, Twitch, or Vimeo link</li>
+                        <li>Paste any YouTube, Instagram, TikTok, SoundCloud, Twitch, Vimeo, or X link</li>
                         <li>Save as MP3, MP4, FLAC, or WAV</li>
-                        <li>Download full playlists or multiple links at once</li>
-                        <li>Pick quality: 1080p, 720p, 480p for video — 320/192/128 kbps for audio</li>
+                        <li>Download full playlists or multiple URLs at once</li>
+                        <li>Pick quality: 1080p, 720p, 480p for video; 320/192/128 kbps for audio</li>
                         <li>Thumbnail embedded as album art in audio files</li>
+                        <li>Real-time progress with speed, ETA, and cancel button</li>
                     </ul>
                 </div>
+
                 <div class="feat">
+                    <div class="feat-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    </div>
                     <h3>PDF tools</h3>
                     <ul>
-                        <li>Merge multiple PDFs into one — drag to reorder pages</li>
-                        <li>Split a PDF by page ranges (e.g. "1–3, 5, 8–10")</li>
-                        <li>Convert images (JPG, PNG, WebP) into a PDF</li>
-                        <li>Compress a PDF to reduce its file size</li>
-                        <li>Extract all text from a PDF to a .txt file</li>
+                        <li>Merge multiple PDFs into one (drag to reorder)</li>
+                        <li>Split by page ranges, for example: 1-3, 5, 8-10</li>
+                        <li>Convert images (JPG, PNG, WebP) into a single PDF</li>
+                        <li>Compress a PDF to shrink its file size</li>
+                        <li>Extract all text to a .txt file</li>
                         <li>Add or remove a password from any PDF</li>
                     </ul>
                 </div>
+
                 <div class="feat">
+                    <div class="feat-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    </div>
                     <h3>Image tools</h3>
                     <ul>
-                        <li>Resize an image by exact dimensions or percentage</li>
-                        <li>Compress images in bulk — pick High, Medium, or Low quality</li>
-                        <li>Convert between PNG, JPG, and WebP formats</li>
+                        <li>Resize images by dimensions or percentage, in batch</li>
+                        <li>Compress in bulk at High, Medium, or Low quality</li>
+                        <li>Convert between PNG, JPG, and WebP</li>
                     </ul>
                 </div>
+
                 <div class="feat">
+                    <div class="feat-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    </div>
                     <h3>File converter</h3>
                     <ul>
-                        <li>Markdown → HTML (styled, ready to publish)</li>
-                        <li>CSV ↔ JSON, CSV ↔ TSV</li>
-                        <li>JSON ↔ YAML</li>
-                        <li>XML → JSON</li>
+                        <li>Markdown to HTML (styled, ready to share)</li>
+                        <li>CSV and JSON (both directions)</li>
+                        <li>CSV and TSV (both directions)</li>
+                        <li>JSON and YAML (both directions)</li>
+                        <li>XML to JSON</li>
                     </ul>
                 </div>
+
             </div>
         </div>
 
@@ -341,20 +464,29 @@
 
 <footer>
     <div class="container">
-        <p>Free &amp; open source &middot; MIT License &middot; <a href="https://github.com/gedaliahs/sdexe" target="_blank" rel="noopener">GitHub</a> &middot; Requires Python 3.10+ &middot; Mac, Windows, Linux</p>
+        <p>Free and open source &middot; MIT License &middot; <a href="https://github.com/gedaliahs/sdexe" target="_blank" rel="noopener">GitHub</a> &middot; Requires Python 3.10+ &middot; Mac, Windows, Linux</p>
     </div>
 </footer>
 
 <script>
-function copyInstall(btn) {
-    navigator.clipboard.writeText('pipx install sdexe');
-    btn.classList.add('copied');
-    const label = document.getElementById('cmd-text');
-    label.textContent = 'copied!';
-    setTimeout(() => {
-        btn.classList.remove('copied');
-        label.textContent = 'pipx install sdexe';
-    }, 1600);
+function showOS(id, btn) {
+    document.querySelectorAll('.os-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('panel-' + id).classList.add('active');
+    btn.classList.add('active');
+}
+
+function copyCmd(btn, text) {
+    navigator.clipboard.writeText(text).then(() => {
+        btn.classList.add('copied');
+        const icon = btn.querySelector('.cmd-copy-icon');
+        const orig = icon.outerHTML;
+        icon.outerHTML = `<svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+        setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.querySelector('.cmd-copy-icon').outerHTML = orig;
+        }, 1600);
+    }).catch(() => {});
 }
 </script>
 
