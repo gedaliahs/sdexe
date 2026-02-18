@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>sdexe — Local toolkit for media, PDFs, images & files</title>
-    <meta name="description" content="Download media, manipulate PDFs, process images, and convert files — all locally. No uploads, no accounts, no tracking.">
+    <title>sdexe — Download videos, convert files, edit PDFs — all locally</title>
+    <meta name="description" content="Download YouTube videos, merge PDFs, resize images, and convert files — runs entirely on your computer. Nothing gets uploaded anywhere.">
     <meta property="og:title" content="sdexe — Your local file toolkit">
-    <meta property="og:description" content="Download media, manipulate PDFs, process images, and convert files — all locally on your machine.">
+    <meta property="og:description" content="Download YouTube videos, merge PDFs, resize images, convert files. Runs locally. No uploads.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sdexe.com">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -26,7 +26,7 @@
             --text-3: #a3a3a3;
             --accent: #3b82f6;
             --green: #10b981;
-            --radius-lg: 16px;
+            --radius: 12px;
         }
 
         body {
@@ -41,138 +41,159 @@
         }
 
         .container {
-            max-width: 640px;
+            max-width: 600px;
             margin: 0 auto;
             padding: 0 24px;
         }
 
-        /* ── Nav ── */
+        /* ── Header ── */
         header {
-            position: sticky;
-            top: 0;
-            z-index: 50;
-            background: rgba(250,250,250,.85);
+            position: sticky; top: 0; z-index: 50;
+            background: rgba(250,250,250,.88);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--border);
         }
         header .container {
-            max-width: 640px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            display: flex; align-items: center; justify-content: space-between;
             height: 56px;
         }
-        .logo {
-            font-weight: 700;
-            font-size: 1.1rem;
-            letter-spacing: -.02em;
-            color: var(--text);
-            text-decoration: none;
-        }
-        .nav-right {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-        .nav-right a {
-            font-size: .8125rem;
-            font-weight: 500;
-            color: var(--text-2);
-            text-decoration: none;
-            transition: color .15s;
-        }
-        .nav-right a:hover { color: var(--text); }
+        .logo { font-weight: 700; font-size: 1.05rem; letter-spacing: -.02em; color: var(--text); text-decoration: none; }
+        .logo span { color: var(--accent); }
         .gh-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: .8rem; font-weight: 500; color: var(--text-2);
+            text-decoration: none; transition: color .15s;
         }
+        .gh-link:hover { color: var(--text); }
 
-        /* ── Main ── */
-        main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding: 80px 0;
+        /* ── Hero ── */
+        .hero {
+            padding: 72px 0 56px;
             text-align: center;
         }
-        main h1 {
-            font-size: clamp(2rem, 5vw, 2.8rem);
+        .hero h1 {
+            font-size: clamp(1.75rem, 5vw, 2.6rem);
             font-weight: 700;
             letter-spacing: -.035em;
-            line-height: 1.15;
-            margin-bottom: 16px;
+            line-height: 1.2;
+            margin-bottom: 14px;
         }
-        main .sub {
-            font-size: 1.05rem;
+        .hero .sub {
+            font-size: 1rem;
             color: var(--text-2);
-            max-width: 460px;
-            margin: 0 auto 36px;
+            max-width: 420px;
+            margin: 0 auto 40px;
             line-height: 1.65;
         }
 
-        /* ── Install ── */
+        /* ── Install block ── */
+        .install-wrap { text-align: center; }
         .install-cmd {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            background: var(--text);
-            color: #e5e5e5;
-            padding: 14px 22px;
-            border-radius: 10px;
+            display: inline-flex; align-items: center; gap: 12px;
+            background: var(--text); color: #e5e5e5;
+            padding: 14px 22px; border-radius: 10px;
             font-family: "JetBrains Mono", monospace;
-            font-size: .9rem;
-            cursor: pointer;
-            border: none;
-            transition: background .15s;
-            margin-bottom: 12px;
+            font-size: .9rem; cursor: pointer; border: none;
+            transition: background .15s; margin-bottom: 10px;
         }
-        .install-cmd:hover { background: #333; }
+        .install-cmd:hover { background: #2a2a2a; }
         .install-cmd .prompt { color: var(--accent); user-select: none; }
-        .install-cmd .copy-icon {
-            color: var(--text-3);
-            transition: color .15s;
-            flex-shrink: 0;
-        }
-        .install-cmd:hover .copy-icon { color: #fff; }
+        .copy-icon { color: #666; transition: color .15s; flex-shrink: 0; }
+        .install-cmd:hover .copy-icon { color: #ccc; }
         .install-cmd.copied .copy-icon { color: var(--green); }
-        .hint {
-            font-size: .8125rem;
-            color: var(--text-3);
+
+        .install-sub {
+            font-size: .8rem; color: var(--text-3);
+            margin-bottom: 8px;
         }
-        .hint code {
+        .install-sub code {
             font-family: "JetBrains Mono", monospace;
-            font-size: .75rem;
-            background: var(--surface-2);
-            padding: 2px 7px;
-            border-radius: 5px;
+            font-size: .75rem; background: var(--surface-2);
+            padding: 2px 6px; border-radius: 4px; color: var(--text-2);
         }
 
-        /* ── Features ── */
-        .features {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin-top: 48px;
+        /* ── Don't have pipx? ── */
+        .prereq {
+            margin-top: 20px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
             text-align: left;
+            overflow: hidden;
+        }
+        .prereq summary {
+            padding: 13px 18px;
+            font-size: .82rem; font-weight: 500; color: var(--text-2);
+            cursor: pointer; list-style: none;
+            display: flex; align-items: center; justify-content: space-between;
+            user-select: none;
+            transition: background .15s;
+        }
+        .prereq summary:hover { background: var(--surface-2); }
+        .prereq summary::after { content: "▾"; font-size: .75rem; color: var(--text-3); }
+        .prereq[open] summary::after { content: "▴"; }
+        .prereq-body {
+            border-top: 1px solid var(--border);
+            padding: 18px;
+            display: flex; flex-direction: column; gap: 18px;
+        }
+        .prereq-os { }
+        .prereq-os .os-label {
+            font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
+            color: var(--text-3); font-weight: 600; margin-bottom: 8px;
+        }
+        .prereq-os ol { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+        .prereq-os li { font-size: .82rem; color: var(--text-2); line-height: 1.5; }
+        .prereq-os code {
+            font-family: "JetBrains Mono", monospace; font-size: .75rem;
+            background: var(--surface-2); padding: 2px 6px; border-radius: 4px; color: var(--text);
+        }
+        .prereq-os a { color: var(--accent); text-decoration: none; }
+        .prereq-os a:hover { text-decoration: underline; }
+        .prereq-divider { border: none; border-top: 1px solid var(--border); }
+
+        /* ── After install note ── */
+        .after-note {
+            margin-top: 28px; padding: 14px 18px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: .82rem; color: var(--text-2);
+            text-align: left; line-height: 1.6;
+        }
+        .after-note strong { color: var(--text); }
+
+        /* ── Section divider ── */
+        .section-label {
+            font-size: .68rem; text-transform: uppercase; letter-spacing: .1em;
+            color: var(--text-3); font-weight: 600;
+            margin-bottom: 14px;
+        }
+
+        /* ── Feature section ── */
+        .features-section {
+            padding: 48px 0 64px;
+            border-top: 1px solid var(--border);
+        }
+        .features {
+            display: flex; flex-direction: column; gap: 10px;
         }
         .feat {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 22px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 20px 22px;
         }
-        .feat h3 {
-            font-size: .875rem;
-            font-weight: 600;
-            margin-bottom: 4px;
+        .feat h3 { font-size: .9rem; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+        .feat ul {
+            padding-left: 0; list-style: none;
+            display: flex; flex-direction: column; gap: 3px;
         }
-        .feat p {
-            font-size: .8rem;
+        .feat li {
+            font-size: .8rem; color: var(--text-3); line-height: 1.5;
+            padding-left: 14px; position: relative;
+        }
+        .feat li::before {
+            content: "·"; position: absolute; left: 0;
             color: var(--text-3);
-            line-height: 1.5;
         }
 
         /* ── Footer ── */
@@ -181,19 +202,12 @@
             padding: 24px 0;
             text-align: center;
         }
-        footer p {
-            font-size: .75rem;
-            color: var(--text-3);
-        }
-        footer a {
-            color: var(--text-3);
-            text-decoration: none;
-        }
+        footer p { font-size: .75rem; color: var(--text-3); }
+        footer a { color: var(--text-3); text-decoration: none; }
         footer a:hover { color: var(--text-2); }
 
-        @media (max-width: 500px) {
-            .features { grid-template-columns: 1fr; }
-            main { padding: 56px 0; }
+        @media (max-width: 480px) {
+            .hero { padding: 48px 0 40px; }
         }
     </style>
 </head>
@@ -201,64 +215,146 @@
 
 <header>
     <div class="container">
-        <a href="/" class="logo">sdexe</a>
-        <nav class="nav-right">
-            <a href="https://github.com/gedaliahs/sdexe" class="gh-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                GitHub
-            </a>
-        </nav>
+        <a href="/" class="logo">sd<span>exe</span></a>
+        <a href="https://github.com/gedaliahs/sdexe" class="gh-link" target="_blank" rel="noopener">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            GitHub
+        </a>
     </div>
 </header>
 
 <main>
     <div class="container">
-        <h1>Local toolkit for media, PDFs, images&nbsp;&amp;&nbsp;files.</h1>
-        <p class="sub">Everything runs on your machine. No uploads, no accounts, no tracking.</p>
 
-        <button class="install-cmd" onclick="copyInstall(this)" title="Click to copy">
-            <span class="prompt">$</span>
-            <span>pipx install sdexe</span>
-            <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        </button>
-        <p class="hint">then run <code>sdexe</code> &mdash; need pipx? <code>brew install pipx</code></p>
+        <!-- Hero -->
+        <div class="hero">
+            <h1>Download videos, convert files,<br>edit PDFs — on your computer.</h1>
+            <p class="sub">A small tool that runs locally in your browser. Nothing gets uploaded. No account needed. Free and open source.</p>
+        </div>
 
-        <div class="features">
-            <div class="feat">
-                <h3>Media Downloader</h3>
-                <p>YouTube, Instagram, TikTok &amp; 1000+ sites. MP3, MP4, FLAC, WAV.</p>
-            </div>
-            <div class="feat">
-                <h3>PDF Tools</h3>
-                <p>Merge, split, and convert images to PDF.</p>
-            </div>
-            <div class="feat">
-                <h3>Image Tools</h3>
-                <p>Resize, compress, and convert between formats.</p>
-            </div>
-            <div class="feat">
-                <h3>File Converter</h3>
-                <p>Markdown to HTML, CSV to JSON, JSON to CSV.</p>
+        <!-- Install -->
+        <div class="install-wrap">
+            <p class="install-sub" style="margin-bottom:14px; font-size:.8rem; color:var(--text-2);">Open your terminal and run:</p>
+            <button class="install-cmd" onclick="copyInstall(this)" title="Click to copy">
+                <span class="prompt">$</span>
+                <span id="cmd-text">pipx install sdexe</span>
+                <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+            <p class="install-sub">Then launch it: <code>sdexe</code></p>
+
+            <details class="prereq">
+                <summary>First time? Step-by-step setup instructions</summary>
+                <div class="prereq-body">
+
+                    <div class="prereq-os">
+                        <p class="os-label">Mac</p>
+                        <ol>
+                            <li>Open the <strong>Terminal</strong> app — press <code>⌘ Space</code>, type <em>Terminal</em>, hit Enter.</li>
+                            <li>If you don't have Homebrew, paste this and press Enter:<br>
+                                <code>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</code>
+                            </li>
+                            <li>Install pipx: <code>brew install pipx</code></li>
+                            <li>Install sdexe: <code>pipx install sdexe</code></li>
+                            <li>Run it: <code>sdexe</code> — your browser opens automatically.</li>
+                        </ol>
+                    </div>
+
+                    <hr class="prereq-divider">
+
+                    <div class="prereq-os">
+                        <p class="os-label">Windows</p>
+                        <ol>
+                            <li>Download and install <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3.10+</a> from python.org. Check "Add Python to PATH" during install.</li>
+                            <li>Open <strong>Command Prompt</strong> — press <code>Win + R</code>, type <em>cmd</em>, hit Enter.</li>
+                            <li>Install pipx: <code>pip install pipx</code></li>
+                            <li>Install sdexe: <code>pipx install sdexe</code></li>
+                            <li>Run it: <code>sdexe</code> — your browser opens automatically.</li>
+                        </ol>
+                    </div>
+
+                    <hr class="prereq-divider">
+
+                    <div class="prereq-os">
+                        <p class="os-label">Linux</p>
+                        <ol>
+                            <li>Install pipx: <code>sudo apt install pipx</code> (Ubuntu/Debian) or <code>pip install pipx</code></li>
+                            <li>Install sdexe: <code>pipx install sdexe</code></li>
+                            <li>Run it: <code>sdexe</code></li>
+                        </ol>
+                    </div>
+
+                </div>
+            </details>
+
+            <div class="after-note">
+                <strong>What happens after you run <code style="font-family:JetBrains Mono,monospace;font-size:.8em;">sdexe</code>:</strong> a page opens in your browser at <code style="font-family:JetBrains Mono,monospace;font-size:.8em;">localhost:5001</code>. That's the app — use it like any website, but it's running on your own machine. Close the terminal window to quit.
             </div>
         </div>
+
+        <!-- Features -->
+        <div class="features-section">
+            <p class="section-label">What it can do</p>
+            <div class="features">
+                <div class="feat">
+                    <h3>Download videos &amp; audio</h3>
+                    <ul>
+                        <li>Paste any YouTube, Instagram, TikTok, SoundCloud, Twitch, or Vimeo link</li>
+                        <li>Save as MP3, MP4, FLAC, or WAV</li>
+                        <li>Download full playlists or multiple links at once</li>
+                        <li>Pick quality: 1080p, 720p, 480p for video — 320/192/128 kbps for audio</li>
+                        <li>Thumbnail embedded as album art in audio files</li>
+                    </ul>
+                </div>
+                <div class="feat">
+                    <h3>PDF tools</h3>
+                    <ul>
+                        <li>Merge multiple PDFs into one — drag to reorder pages</li>
+                        <li>Split a PDF by page ranges (e.g. "1–3, 5, 8–10")</li>
+                        <li>Convert images (JPG, PNG, WebP) into a PDF</li>
+                        <li>Compress a PDF to reduce its file size</li>
+                        <li>Extract all text from a PDF to a .txt file</li>
+                        <li>Add or remove a password from any PDF</li>
+                    </ul>
+                </div>
+                <div class="feat">
+                    <h3>Image tools</h3>
+                    <ul>
+                        <li>Resize an image by exact dimensions or percentage</li>
+                        <li>Compress images in bulk — pick High, Medium, or Low quality</li>
+                        <li>Convert between PNG, JPG, and WebP formats</li>
+                    </ul>
+                </div>
+                <div class="feat">
+                    <h3>File converter</h3>
+                    <ul>
+                        <li>Markdown → HTML (styled, ready to publish)</li>
+                        <li>CSV ↔ JSON, CSV ↔ TSV</li>
+                        <li>JSON ↔ YAML</li>
+                        <li>XML → JSON</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
     </div>
 </main>
 
 <footer>
-    <p>MIT License &middot; <a href="https://github.com/gedaliahs/sdexe">GitHub</a></p>
+    <div class="container">
+        <p>Free &amp; open source &middot; MIT License &middot; <a href="https://github.com/gedaliahs/sdexe" target="_blank" rel="noopener">GitHub</a> &middot; Requires Python 3.10+ &middot; Mac, Windows, Linux</p>
+    </div>
 </footer>
 
 <script>
 function copyInstall(btn) {
     navigator.clipboard.writeText('pipx install sdexe');
     btn.classList.add('copied');
-    const label = btn.querySelector('span:nth-child(2)');
-    const orig = label.textContent;
+    const label = document.getElementById('cmd-text');
     label.textContent = 'copied!';
     setTimeout(() => {
         btn.classList.remove('copied');
-        label.textContent = orig;
-    }, 1500);
+        label.textContent = 'pipx install sdexe';
+    }, 1600);
 }
 </script>
 
