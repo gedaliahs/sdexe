@@ -57,7 +57,7 @@ nav {
 }
 .nav-inner {
     display: flex; align-items: center; gap: 14px;
-    width: 100%; max-width: 800px; margin: 0 auto;
+    width: 100%; max-width: 960px; margin: 0 auto;
 }
 .logo {
     font-size: 1.1rem; font-weight: 700; letter-spacing: -.04em;
@@ -78,12 +78,12 @@ nav {
 
 /* ── Main ── */
 main {
-    flex: 1; width: 100%; max-width: 800px;
+    flex: 1; width: 100%; max-width: 960px;
     margin: 0 auto; padding: 72px 32px 120px;
 }
 
 /* ── Hero ── */
-.hero { text-align: center; margin-bottom: 56px; }
+.hero { text-align: center; margin-bottom: 32px; }
 .hero h1 {
     font-size: 2.4rem; font-weight: 700; letter-spacing: -.04em;
     line-height: 1.25; margin-bottom: 12px;
@@ -232,9 +232,9 @@ select:focus { border-color: var(--accent-dim); }
 select:disabled { opacity: .35; cursor: not-allowed; }
 
 .btn-download {
-    padding: 16px 24px; background: linear-gradient(135deg, var(--accent), var(--accent-hover)); color: #fff; border: none;
+    padding: 18px 32px; background: linear-gradient(135deg, var(--accent), var(--accent-hover)); color: #fff; border: none;
     border-radius: var(--radius-md);
-    font-size: .82rem; font-weight: 600; cursor: pointer; font-family: inherit;
+    font-size: .9rem; font-weight: 700; cursor: pointer; font-family: inherit;
     display: flex; align-items: center; justify-content: center; gap: 8px;
     transition: background .15s, transform .1s, box-shadow .15s; width: 100%;
     margin-top: 4px;
@@ -506,51 +506,82 @@ select:disabled { opacity: .35; cursor: not-allowed; }
 
 /* ── PDF Tabs ── */
 .pdf-tabs {
-    display: flex; gap: 8px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 6px;
+    display: flex; gap: 0;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--border);
+    border-radius: 0;
+    padding: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
+.pdf-tabs::-webkit-scrollbar { display: none; }
 .pdf-tab {
-    flex: 1; padding: 12px; border: none; background: transparent;
-    border-radius: var(--radius-md);
+    flex: none;
+    padding: 12px 20px;
+    border: none; background: transparent;
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
     color: var(--text-muted); font-size: .82rem; font-weight: 500;
     cursor: pointer; font-family: inherit;
-    transition: color .15s, background .15s;
+    transition: color .15s;
 }
-.pdf-tab:hover { color: var(--text-secondary); background: var(--surface); }
-.pdf-tab.active { color: #fff; background: var(--accent); box-shadow: 0 2px 8px rgba(59,130,246,.25); }
+.pdf-tab:hover { color: var(--text-secondary); background: transparent; }
+.pdf-tab.active {
+    color: var(--accent); background: transparent;
+    border-bottom-color: var(--accent);
+    box-shadow: none;
+}
 
 /* ── PDF Sections ── */
 .pdf-section { display: none; }
 .pdf-section.active { display: block; }
+.pdf-section.card {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    margin-top: 0;
+    animation: none;
+}
+.pdf-section .card-body { padding: 36px 0 0; }
+.pdf-section .card-body h2 {
+    font-size: 1.4rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 6px;
+}
+.pdf-section .card-body .meta { font-size: .9rem; margin-bottom: 0; }
 
 /* ── Drop Zone ── */
 .drop-zone {
     border: 2px dashed var(--border);
     border-radius: var(--radius-xl);
-    padding: 56px 32px;
+    padding: 0 32px;
+    min-height: 320px;
     background: var(--surface);
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
     transition: border-color .2s, background .2s;
-    margin-top: 16px;
+    margin-top: 28px;
     cursor: pointer;
 }
-.drop-zone svg { color: var(--accent); margin-bottom: 14px; width: 40px; height: 40px; }
-.drop-zone p { font-size: .82rem; color: var(--text-muted); }
-.drop-zone:hover,
-.drop-zone.drag-over {
+.drop-zone:hover, .drop-zone.drag-over {
     border-color: var(--accent-dim);
     background: var(--accent-bg);
 }
-.drop-zone.drag-over svg { color: var(--accent); }
+.drop-zone svg { color: var(--accent); width: 64px; height: 64px; opacity: .6; margin-bottom: 0; }
+.drop-zone p { font-size: .9rem; color: var(--text-muted); }
 .drop-browse {
     display: inline-block;
     background: linear-gradient(135deg, var(--accent), var(--accent-hover));
     color: #fff; cursor: pointer; font-weight: 600;
-    font-size: .85rem;
-    padding: 12px 28px;
+    font-size: .95rem;
+    padding: 14px 48px;
     border-radius: var(--radius-pill);
     transition: background .15s, transform .1s, box-shadow .15s;
     text-decoration: none;
@@ -561,9 +592,7 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     box-shadow: 0 4px 14px rgba(59,130,246,.38);
 }
 .drop-browse:active { transform: scale(.97); }
-.drop-hint {
-    font-size: .8rem; color: var(--text-muted); margin-top: 12px;
-}
+.drop-hint { font-size: .85rem; color: var(--text-muted); margin-top: 0; }
 
 /* ── File List ── */
 .file-list { margin-top: 12px; }
