@@ -1,5 +1,7 @@
 /* ── Reset ── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+[hidden] { display: none !important; }
+label input[type="file"] { display: none !important; }
 
 /* ── Tokens ── */
 :root {
@@ -45,36 +47,102 @@ body {
 nav {
     border-bottom: 1px solid var(--border);
     padding: 0 32px;
-    height: 64px;
+    height: 60px;
     display: flex;
     align-items: center;
-    background: rgba(248,249,250,.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: var(--surface);
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 200;
 }
 .nav-inner {
-    display: flex; align-items: center; gap: 14px;
-    width: 100%; max-width: 960px; margin: 0 auto;
+    display: flex; align-items: center;
+    width: 100%; max-width: 1100px; margin: 0 auto; gap: 0;
 }
 .logo {
     font-size: 1.1rem; font-weight: 700; letter-spacing: -.04em;
-    color: var(--text); text-decoration: none;
+    color: var(--text); text-decoration: none; flex-shrink: 0;
+    margin-right: 24px;
 }
 .logo span { color: var(--accent); }
-.nav-links {
-    display: flex; gap: 4px; margin-left: auto;
-}
+
+/* Direct nav link (Media only) */
+.nav-links { display: flex; align-items: center; gap: 0; }
 .nav-link {
-    font-size: .8rem; color: var(--text-muted); text-decoration: none;
-    padding: 8px 16px; border-radius: var(--radius-pill);
-    transition: color .15s, background .15s;
-    font-weight: 500; letter-spacing: .02em;
+    font-size: .8rem; font-weight: 600; color: var(--text);
+    text-decoration: none; padding: 0 14px; height: 60px;
+    display: flex; align-items: center;
+    transition: color .15s;
+    white-space: nowrap;
 }
-.nav-link:hover { color: var(--text-secondary); background: var(--surface-2); }
-.nav-link.active { color: var(--accent); background: var(--accent-bg); }
+.nav-link:hover { color: var(--accent); background: none; }
+.nav-link.active { color: var(--accent); background: none; }
+
+/* Nav Group (dropdown) */
+.nav-group { position: relative; display: flex; align-items: center; }
+.nav-group-trigger {
+    font-size: .8rem; font-weight: 600; color: var(--text);
+    text-decoration: none; padding: 0 14px; height: 60px;
+    display: flex; align-items: center; gap: 5px;
+    cursor: pointer; white-space: nowrap;
+    transition: color .15s;
+}
+.nav-group-trigger:hover,
+.nav-group:hover .nav-group-trigger { color: var(--accent); }
+.nav-group.active .nav-group-trigger { color: var(--accent); }
+.nav-group-trigger svg { transition: transform .2s; flex-shrink: 0; }
+.nav-group:hover .nav-group-trigger svg { transform: rotate(180deg); }
+
+/* Dropdown panel */
+.nav-group-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 1px);
+    left: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 32px rgba(0,0,0,.12);
+    padding: 8px;
+    min-width: 190px;
+    z-index: 300;
+    animation: dropIn .15s ease-out;
+}
+@keyframes dropIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.nav-group:hover .nav-group-menu { display: flex; flex-direction: column; }
+
+/* Multi-column dropdown */
+.nav-group-cols { flex-direction: row !important; gap: 0; padding: 12px 8px; }
+.nav-group-col { display: flex; flex-direction: column; min-width: 160px; }
+.nav-group-col + .nav-group-col {
+    border-left: 1px solid var(--border);
+    margin-left: 4px; padding-left: 4px;
+}
+.nav-group-col-head {
+    font-size: .68rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--text-muted);
+    padding: 4px 12px 8px; user-select: none;
+}
+.nav-group-item {
+    display: block; padding: 8px 12px;
+    color: var(--text); text-decoration: none;
+    font-size: .82rem; border-radius: var(--radius-sm);
+    transition: background .1s, color .1s; white-space: nowrap;
+}
+.nav-group-item:hover { background: var(--surface-2); color: var(--accent); }
+
+/* Settings gear (far right) */
+.nav-settings {
+    margin-left: auto; display: flex; align-items: center;
+    padding: 8px; color: var(--text-muted);
+    text-decoration: none; border-radius: var(--radius-sm);
+    transition: color .15s;
+}
+.nav-settings:hover { color: var(--accent); }
+.nav-settings.active { color: var(--accent); }
 
 /* ── Main ── */
 main {
@@ -504,6 +572,32 @@ select:disabled { opacity: .35; cursor: not-allowed; }
    PDF Page
    ══════════════════════════════════════════ */
 
+/* ── Tool Dropdown ── */
+.tool-dropdown-wrap {
+    position: relative; display: inline-flex; align-items: center;
+}
+.tool-dropdown {
+    appearance: none; -webkit-appearance: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font-size: .9rem; font-weight: 500; font-family: inherit;
+    padding: 10px 40px 10px 16px;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+    background-image: none;
+}
+.tool-dropdown:focus {
+    outline: none;
+    border-color: var(--accent-dim);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.tool-dropdown-chevron {
+    position: absolute; right: 12px; pointer-events: none;
+    color: var(--text-muted);
+}
+
 /* ── PDF Tabs ── */
 .pdf-tabs {
     display: flex; gap: 0;
@@ -547,11 +641,34 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     margin-top: 0;
     animation: none;
 }
-.pdf-section .card-body { padding: 36px 0 0; }
+.pdf-section .card-body { padding: 32px 0 0; }
 .pdf-section .card-body h2 {
-    font-size: 1.4rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 6px;
+    font-size: 2.2rem; font-weight: 700; letter-spacing: -0.04em; margin-bottom: 10px;
+    text-align: center;
 }
-.pdf-section .card-body .meta { font-size: .9rem; margin-bottom: 0; }
+.pdf-section .card-body .meta {
+    font-size: .95rem; margin-bottom: 0;
+    max-width: 520px; margin-left: auto; margin-right: auto;
+    text-align: center;
+}
+
+/* ── Tool Page: constrain and center post-upload form UI ── */
+.pdf-section .split-info,
+.pdf-section .file-list { max-width: 640px; margin-left: auto; margin-right: auto; }
+
+.pdf-section [id$="-options"] { max-width: 520px; margin-left: auto; margin-right: auto; }
+
+.pdf-section .pdf-actions {
+    max-width: 440px; margin: 16px auto 0;
+    display: flex; gap: 8px; flex-wrap: wrap;
+}
+.pdf-section .pdf-actions .btn-download {
+    flex: 1; min-width: 120px; width: auto;
+}
+
+.pdf-section .card-body .error {
+    max-width: 640px; margin-left: auto; margin-right: auto; text-align: left;
+}
 
 /* ── Drop Zone ── */
 .drop-zone {
@@ -576,23 +693,38 @@ select:disabled { opacity: .35; cursor: not-allowed; }
 }
 .drop-zone svg { color: var(--accent); width: 64px; height: 64px; opacity: .6; margin-bottom: 0; }
 .drop-zone p { font-size: .9rem; color: var(--text-muted); }
+
+/* ── iLovePDF-style: tool page drop zones are invisible — just the button on open page ── */
+.pdf-section .drop-zone {
+    border-color: transparent;
+    background: transparent;
+    min-height: 0;
+    margin-top: 28px;
+    gap: 18px;
+    padding: 40px 32px;
+}
+.pdf-section .drop-zone:hover { border-color: transparent; background: transparent; }
+.pdf-section .drop-zone.drag-over { border-color: var(--accent-dim); background: var(--accent-bg); }
+.pdf-section .drop-zone > svg { display: none; }
+
 .drop-browse {
     display: inline-block;
     background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-    color: #fff; cursor: pointer; font-weight: 600;
-    font-size: .95rem;
-    padding: 14px 48px;
+    color: #fff; cursor: pointer; font-weight: 700;
+    font-size: 1.05rem;
+    padding: 20px 48px;
+    min-width: 440px;
     border-radius: var(--radius-pill);
     transition: background .15s, transform .1s, box-shadow .15s;
     text-decoration: none;
-    box-shadow: 0 2px 8px rgba(59,130,246,.28);
+    box-shadow: 0 4px 16px rgba(59,130,246,.32);
 }
 .drop-browse:hover {
     background: linear-gradient(135deg, var(--accent-hover), #1d4ed8);
-    box-shadow: 0 4px 14px rgba(59,130,246,.38);
+    box-shadow: 0 6px 20px rgba(59,130,246,.42);
 }
 .drop-browse:active { transform: scale(.97); }
-.drop-hint { font-size: .85rem; color: var(--text-muted); margin-top: 0; }
+.drop-hint { font-size: .88rem; color: var(--text-muted); margin-top: 0; }
 
 /* ── File List ── */
 .file-list { margin-top: 12px; }
@@ -657,7 +789,7 @@ select:disabled { opacity: .35; cursor: not-allowed; }
 /* ── PDF Subsections (nested tabs) ── */
 .pdf-subsection { display: none; }
 .pdf-subsection.active { display: block; }
-.card-body .pdf-tabs { margin-top: 0; }
+.card-body .pdf-tabs { margin-top: 0; justify-content: center; }
 
 /* ── Markdown Preview ── */
 .md-preview {
@@ -678,6 +810,13 @@ select:disabled { opacity: .35; cursor: not-allowed; }
 .md-preview blockquote { border-left: 3px solid var(--accent-dim); margin: 10px 0; padding: 2px 14px; color: var(--text-secondary); }
 .md-preview-header { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
 .md-preview-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 500; }
+
+/* ── Inline Code ── */
+code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: .88em; background: var(--surface-3);
+    padding: 2px 6px; border-radius: 4px; color: var(--text-secondary);
+}
 
 /* ── Footer ── */
 footer {
@@ -889,4 +1028,6 @@ main { animation: fadeIn .4s ease-out; }
     .entry-thumb { width: 56px; height: 32px; }
     .tool-grid { grid-template-columns: 1fr; }
     .drop-zone { padding: 40px 20px; }
+    .drop-browse { min-width: unset; width: 100%; text-align: center; }
+    .pdf-section .card-body h2 { font-size: 1.6rem; }
 }

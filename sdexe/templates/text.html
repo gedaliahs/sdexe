@@ -5,20 +5,6 @@
 
 {% block content %}
     <main>
-        <div class="hero">
-            <h1>Text Tools</h1>
-            <p class="subtitle">Word count, find &amp; replace, regex, Base64, hashing, diff, and more — all in-browser, nothing leaves your machine.</p>
-        </div>
-
-        <div class="pdf-tabs">
-            <button class="pdf-tab active" data-tab="wordcount">Word Count</button>
-            <button class="pdf-tab" data-tab="findreplace">Find &amp; Replace</button>
-            <button class="pdf-tab" data-tab="regex">Regex Tester</button>
-            <button class="pdf-tab" data-tab="base64">Base64</button>
-            <button class="pdf-tab" data-tab="hash">Hash Generator</button>
-            <button class="pdf-tab" data-tab="diff">Text Diff</button>
-            <button class="pdf-tab" data-tab="color">Color Converter</button>
-        </div>
 
         <!-- Word Count -->
         <div id="tab-wordcount" class="pdf-section card active">
@@ -229,7 +215,7 @@
                 <h2>Color Converter</h2>
                 <p class="meta">Convert between HEX, RGB, and HSL color formats with a live preview.</p>
 
-                <div style="margin-top: 24px; display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start;">
+                <div style="margin-top: 24px; display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; justify-content: center;">
                     <div id="color-swatch" style="width: 80px; height: 80px; border-radius: 12px; border: 1px solid var(--border); background: #3b82f6; flex-shrink: 0;"></div>
 
                     <div style="flex: 1; min-width: 240px;">
@@ -270,7 +256,7 @@
                     </div>
                 </div>
 
-                <div id="color-display" style="margin-top: 20px; font-family: monospace; font-size: 0.9rem; display: flex; gap: 24px; flex-wrap: wrap; color: var(--text-secondary);">
+                <div id="color-display" style="margin-top: 20px; font-family: monospace; font-size: 0.9rem; display: flex; gap: 24px; flex-wrap: wrap; color: var(--text-secondary); justify-content: center;">
                     <span id="color-hex-display"></span>
                     <span id="color-rgb-display"></span>
                     <span id="color-hsl-display"></span>
@@ -281,5 +267,5 @@
 {% endblock %}
 
 {% block scripts %}
-    <script src="/static/text.js"></script>
+    <script src="/static/text.js?v={{ version }}"></script>
 {% endblock %}

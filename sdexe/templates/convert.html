@@ -5,22 +5,6 @@
 
 {% block content %}
     <main>
-        <div class="hero">
-            <h1>File Converter</h1>
-            <p class="subtitle">Convert between file formats — everything runs locally on your machine.</p>
-        </div>
-
-        <div class="pdf-tabs">
-            <button class="pdf-tab active" data-tab="md2html">Markdown → HTML</button>
-            <button class="pdf-tab" data-tab="csv2json">CSV → JSON</button>
-            <button class="pdf-tab" data-tab="json2csv">JSON → CSV</button>
-            <button class="pdf-tab" data-tab="yaml2json">YAML → JSON</button>
-            <button class="pdf-tab" data-tab="json2yaml">JSON → YAML</button>
-            <button class="pdf-tab" data-tab="csv2tsv">CSV ↔ TSV</button>
-            <button class="pdf-tab" data-tab="xml2json">XML → JSON</button>
-            <button class="pdf-tab" data-tab="createzip">Create ZIP</button>
-            <button class="pdf-tab" data-tab="extractzip">Extract ZIP</button>
-        </div>
 
         <!-- Markdown to HTML -->
         <div id="tab-md2html" class="pdf-section card active">
@@ -343,5 +327,5 @@
 {% endblock %}
 
 {% block scripts %}
-    <script src="/static/convert.js"></script>
+    <script src="/static/convert.js?v={{ version }}"></script>
 {% endblock %}
