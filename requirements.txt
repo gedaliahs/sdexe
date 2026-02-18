@@ -5,3 +5,4 @@ Pillow
 markdown
 rich
 pystray
+PyYAML

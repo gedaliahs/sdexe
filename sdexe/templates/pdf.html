@@ -13,7 +13,10 @@
         <div class="pdf-tabs">
             <button class="pdf-tab active" data-tab="merge">Merge</button>
             <button class="pdf-tab" data-tab="split">Split</button>
-            <button class="pdf-tab" data-tab="img2pdf">Images to PDF</button>
+            <button class="pdf-tab" data-tab="img2pdf">Images → PDF</button>
+            <button class="pdf-tab" data-tab="compress">Compress</button>
+            <button class="pdf-tab" data-tab="totext">Extract Text</button>
+            <button class="pdf-tab" data-tab="password">Password</button>
         </div>
 
         <!-- Merge -->
@@ -113,6 +116,143 @@
                 </div>
 
                 <div id="img-error" class="error" hidden></div>
+            </div>
+        </div>
+        <!-- Compress -->
+        <div id="tab-compress" class="pdf-section card">
+            <div class="card-body">
+                <h2>Compress PDF</h2>
+                <p class="meta">Reduce PDF file size by compressing content streams.</p>
+
+                <div class="drop-zone" id="compress-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="compress-pdf-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; compresses streams &middot; removes redundant data</p>
+                </div>
+
+                <div id="compress-pdf-info" class="split-info" hidden>
+                    <span id="compress-pdf-name" class="split-name"></span>
+                    <span id="compress-pdf-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearCompressPdf()">&times;</button>
+                </div>
+
+                <div id="compress-pdf-actions" class="pdf-actions" hidden>
+                    <button id="compress-pdf-btn" class="btn-download" onclick="doCompressPdf()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Compress PDF
+                    </button>
+                </div>
+                <div id="compress-pdf-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Extract Text -->
+        <div id="tab-totext" class="pdf-section card">
+            <div class="card-body">
+                <h2>Extract Text</h2>
+                <p class="meta">Pull all text content from a PDF into a plain text file.</p>
+
+                <div class="drop-zone" id="totext-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="8" y1="13" x2="16" y2="13"/>
+                        <line x1="8" y1="17" x2="16" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="totext-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; outputs a .txt file with page separators</p>
+                </div>
+
+                <div id="totext-file-info" class="split-info" hidden>
+                    <span id="totext-file-name" class="split-name"></span>
+                    <span id="totext-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearTotextFile()">&times;</button>
+                </div>
+
+                <div id="totext-actions" class="pdf-actions" hidden>
+                    <button id="totext-btn" class="btn-download" onclick="doToText()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Extract Text
+                    </button>
+                </div>
+                <div id="totext-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Password -->
+        <div id="tab-password" class="pdf-section card">
+            <div class="card-body">
+                <h2>PDF Password</h2>
+                <p class="meta">Add or remove password protection from a PDF.</p>
+
+                <div class="pdf-tabs" style="margin-top:0; margin-bottom:16px;">
+                    <button class="pdf-tab active" data-subtab="addpw">Add Password</button>
+                    <button class="pdf-tab" data-subtab="removepw">Remove Password</button>
+                </div>
+
+                <!-- Add password -->
+                <div id="subtab-addpw" class="pdf-subsection">
+                    <div class="drop-zone" id="addpw-drop">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        <label class="drop-browse">Select PDF file<input type="file" id="addpw-input" accept=".pdf" hidden></label>
+                        <p class="drop-hint">or drop a file here &middot; enter a password below to protect it</p>
+                    </div>
+                    <div id="addpw-file-info" class="split-info" hidden>
+                        <span id="addpw-file-name" class="split-name"></span>
+                        <span id="addpw-file-size" class="file-size"></span>
+                        <button class="split-remove" onclick="clearAddPwFile()">&times;</button>
+                    </div>
+                    <div id="addpw-options" hidden style="margin-top:16px;">
+                        <div class="field">
+                            <label>Password</label>
+                            <input type="password" id="addpw-password" placeholder="Enter password to set">
+                        </div>
+                    </div>
+                    <div id="addpw-actions" class="pdf-actions" hidden>
+                        <button id="addpw-btn" class="btn-download" onclick="doAddPassword()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Protect PDF
+                        </button>
+                    </div>
+                    <div id="addpw-error" class="error" hidden></div>
+                </div>
+
+                <!-- Remove password -->
+                <div id="subtab-removepw" class="pdf-subsection" hidden>
+                    <div class="drop-zone" id="removepw-drop">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        <label class="drop-browse">Select PDF file<input type="file" id="removepw-input" accept=".pdf" hidden></label>
+                        <p class="drop-hint">or drop a file here &middot; enter the current password to unlock it</p>
+                    </div>
+                    <div id="removepw-file-info" class="split-info" hidden>
+                        <span id="removepw-file-name" class="split-name"></span>
+                        <span id="removepw-file-size" class="file-size"></span>
+                        <button class="split-remove" onclick="clearRemovePwFile()">&times;</button>
+                    </div>
+                    <div id="removepw-options" hidden style="margin-top:16px;">
+                        <div class="field">
+                            <label>Current Password</label>
+                            <input type="password" id="removepw-password" placeholder="Enter the existing password">
+                        </div>
+                    </div>
+                    <div id="removepw-actions" class="pdf-actions" hidden>
+                        <button id="removepw-btn" class="btn-download" onclick="doRemovePassword()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Unlock PDF
+                        </button>
+                    </div>
+                    <div id="removepw-error" class="error" hidden></div>
+                </div>
             </div>
         </div>
     </main>

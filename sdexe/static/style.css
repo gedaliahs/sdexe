@@ -625,6 +625,31 @@ select:disabled { opacity: .35; cursor: not-allowed; }
 /* ── PDF Actions ── */
 .pdf-actions { margin-top: 16px; }
 
+/* ── PDF Subsections (nested tabs) ── */
+.pdf-subsection { display: none; }
+.pdf-subsection.active { display: block; }
+.card-body .pdf-tabs { margin-top: 0; }
+
+/* ── Markdown Preview ── */
+.md-preview {
+    margin-top: 16px; padding: 20px 24px;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface-2); font-size: .88rem; line-height: 1.7;
+    max-height: 400px; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent;
+}
+.md-preview h1, .md-preview h2, .md-preview h3 { margin: 16px 0 8px; font-weight: 600; }
+.md-preview p { margin: 8px 0; }
+.md-preview code { background: var(--surface-3); padding: 2px 5px; border-radius: 3px; font-size: .82em; }
+.md-preview pre { background: var(--surface-3); padding: 12px; border-radius: var(--radius-sm); overflow-x: auto; margin: 10px 0; }
+.md-preview pre code { background: none; padding: 0; }
+.md-preview table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+.md-preview th, .md-preview td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: .82rem; }
+.md-preview th { background: var(--surface-3); font-weight: 600; }
+.md-preview blockquote { border-left: 3px solid var(--accent-dim); margin: 10px 0; padding: 2px 14px; color: var(--text-secondary); }
+.md-preview-header { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+.md-preview-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 500; }
+
 /* ── Footer ── */
 footer {
     border-top: 1px solid var(--border); padding: 24px;
@@ -751,6 +776,23 @@ footer a:hover { color: var(--text-secondary); }
     transition: background .15s; flex-shrink: 0;
 }
 .history-save:hover { background: var(--accent-bg); }
+.history-refetch {
+    background: none; border: none; color: var(--text-muted);
+    font-size: .85rem; cursor: pointer; padding: 2px 6px;
+    transition: color .15s; flex-shrink: 0;
+}
+.history-refetch:hover { color: var(--accent); }
+
+/* ── Cancel Button ── */
+.btn-cancel {
+    display: block; margin-top: 8px; padding: 6px 14px;
+    background: none; border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted); font-size: .75rem; cursor: pointer;
+    font-family: inherit; transition: color .15s, border-color .15s;
+}
+.btn-cancel:hover { color: var(--danger); border-color: var(--danger); }
+.btn-cancel:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── Page Fade-in ── */
 @keyframes fadeIn {

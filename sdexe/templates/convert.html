@@ -11,9 +11,13 @@
         </div>
 
         <div class="pdf-tabs">
-            <button class="pdf-tab active" data-tab="md2html">Markdown to HTML</button>
-            <button class="pdf-tab" data-tab="csv2json">CSV to JSON</button>
-            <button class="pdf-tab" data-tab="json2csv">JSON to CSV</button>
+            <button class="pdf-tab active" data-tab="md2html">Markdown → HTML</button>
+            <button class="pdf-tab" data-tab="csv2json">CSV → JSON</button>
+            <button class="pdf-tab" data-tab="json2csv">JSON → CSV</button>
+            <button class="pdf-tab" data-tab="yaml2json">YAML → JSON</button>
+            <button class="pdf-tab" data-tab="json2yaml">JSON → YAML</button>
+            <button class="pdf-tab" data-tab="csv2tsv">CSV ↔ TSV</button>
+            <button class="pdf-tab" data-tab="xml2json">XML → JSON</button>
         </div>
 
         <!-- Markdown to HTML -->
@@ -44,10 +48,18 @@
                     <textarea id="md-text" class="convert-textarea" placeholder="# Hello&#10;&#10;Write your **markdown** here..." rows="8"></textarea>
                 </div>
 
-                <div class="pdf-actions" style="margin-top: 16px;">
+                <div class="md-preview-header">
+                    <span class="md-preview-label">Preview</span>
+                </div>
+                <div id="md-preview" class="md-preview" hidden></div>
+
+                <div class="pdf-actions" style="margin-top: 16px; display:flex; gap:8px;">
+                    <button id="md-preview-btn" class="btn-download" style="background: var(--surface-2); color: var(--text-secondary); box-shadow:none;" onclick="doMdPreview()">
+                        Preview
+                    </button>
                     <button id="md-btn" class="btn-download" onclick="doMdToHtml()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
-                        Convert to HTML
+                        Download HTML
                     </button>
                 </div>
 
@@ -120,6 +132,147 @@
                 </div>
 
                 <div id="json-error" class="error" hidden></div>
+            </div>
+        </div>
+        <!-- YAML to JSON -->
+        <div id="tab-yaml2json" class="pdf-section card">
+            <div class="card-body">
+                <h2>YAML to JSON</h2>
+                <p class="meta">Convert a YAML file to JSON format.</p>
+                <div class="drop-zone" id="yaml-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <label class="drop-browse">Select .yaml file<input type="file" id="yaml-input" accept=".yaml,.yml" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; outputs .json</p>
+                </div>
+                <div id="yaml-file-info" class="split-info" hidden>
+                    <span id="yaml-file-name" class="split-name"></span>
+                    <span id="yaml-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearYamlFile()">&times;</button>
+                </div>
+                <div id="yaml-actions" class="pdf-actions" hidden>
+                    <button id="yaml-btn" class="btn-download" onclick="doYamlToJson()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to JSON
+                    </button>
+                </div>
+                <div id="yaml-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- JSON to YAML -->
+        <div id="tab-json2yaml" class="pdf-section card">
+            <div class="card-body">
+                <h2>JSON to YAML</h2>
+                <p class="meta">Convert a JSON file to YAML format.</p>
+                <div class="drop-zone" id="json2yaml-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <label class="drop-browse">Select .json file<input type="file" id="json2yaml-input" accept=".json" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; outputs .yaml</p>
+                </div>
+                <div id="json2yaml-file-info" class="split-info" hidden>
+                    <span id="json2yaml-file-name" class="split-name"></span>
+                    <span id="json2yaml-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearJson2YamlFile()">&times;</button>
+                </div>
+                <div id="json2yaml-actions" class="pdf-actions" hidden>
+                    <button id="json2yaml-btn" class="btn-download" onclick="doJsonToYaml()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to YAML
+                    </button>
+                </div>
+                <div id="json2yaml-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- CSV ↔ TSV -->
+        <div id="tab-csv2tsv" class="pdf-section card">
+            <div class="card-body">
+                <h2>CSV ↔ TSV</h2>
+                <p class="meta">Convert between comma-separated and tab-separated formats.</p>
+                <div class="pdf-tabs" style="margin-top:0; margin-bottom:16px;">
+                    <button class="pdf-tab active" data-subtab="csvtotsv">CSV → TSV</button>
+                    <button class="pdf-tab" data-subtab="tsvtocsv">TSV → CSV</button>
+                </div>
+                <!-- CSV → TSV -->
+                <div id="subtab-csvtotsv" class="pdf-subsection active">
+                    <div class="drop-zone" id="csv2tsv-drop">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <label class="drop-browse">Select .csv file<input type="file" id="csv2tsv-input" accept=".csv" hidden></label>
+                        <p class="drop-hint">or drop a file here &middot; outputs .tsv</p>
+                    </div>
+                    <div id="csv2tsv-file-info" class="split-info" hidden>
+                        <span id="csv2tsv-file-name" class="split-name"></span>
+                        <span id="csv2tsv-file-size" class="file-size"></span>
+                        <button class="split-remove" onclick="clearCsv2TsvFile()">&times;</button>
+                    </div>
+                    <div id="csv2tsv-actions" class="pdf-actions" hidden>
+                        <button id="csv2tsv-btn" class="btn-download" onclick="doCsvToTsv()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Convert to TSV
+                        </button>
+                    </div>
+                    <div id="csv2tsv-error" class="error" hidden></div>
+                </div>
+                <!-- TSV → CSV -->
+                <div id="subtab-tsvtocsv" class="pdf-subsection" hidden>
+                    <div class="drop-zone" id="tsv2csv-drop">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <label class="drop-browse">Select .tsv file<input type="file" id="tsv2csv-input" accept=".tsv,.txt" hidden></label>
+                        <p class="drop-hint">or drop a file here &middot; outputs .csv</p>
+                    </div>
+                    <div id="tsv2csv-file-info" class="split-info" hidden>
+                        <span id="tsv2csv-file-name" class="split-name"></span>
+                        <span id="tsv2csv-file-size" class="file-size"></span>
+                        <button class="split-remove" onclick="clearTsv2CsvFile()">&times;</button>
+                    </div>
+                    <div id="tsv2csv-actions" class="pdf-actions" hidden>
+                        <button id="tsv2csv-btn" class="btn-download" onclick="doTsvToCsv()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Convert to CSV
+                        </button>
+                    </div>
+                    <div id="tsv2csv-error" class="error" hidden></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- XML to JSON -->
+        <div id="tab-xml2json" class="pdf-section card">
+            <div class="card-body">
+                <h2>XML to JSON</h2>
+                <p class="meta">Convert an XML file to JSON format.</p>
+                <div class="drop-zone" id="xml-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <label class="drop-browse">Select .xml file<input type="file" id="xml-input" accept=".xml" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; outputs .json</p>
+                </div>
+                <div id="xml-file-info" class="split-info" hidden>
+                    <span id="xml-file-name" class="split-name"></span>
+                    <span id="xml-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearXmlFile()">&times;</button>
+                </div>
+                <div id="xml-actions" class="pdf-actions" hidden>
+                    <button id="xml-btn" class="btn-download" onclick="doXmlToJson()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to JSON
+                    </button>
+                </div>
+                <div id="xml-error" class="error" hidden></div>
             </div>
         </div>
     </main>

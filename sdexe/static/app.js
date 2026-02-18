@@ -42,10 +42,18 @@ function requestNotifPermission() {
 }
 
 /* ── Download History ── */
-function addToHistory(title, format, id) {
-    downloadHistory.unshift({ title, format, id });
+function addToHistory(title, format, id, url) {
+    downloadHistory.unshift({ title, format, id, url: url || currentUrl });
     if (downloadHistory.length > 20) downloadHistory.pop();
     renderHistory();
+}
+
+function refetchUrl(url) {
+    const ta = document.getElementById("url");
+    if (!ta) return;
+    ta.value = url;
+    ta.dispatchEvent(new Event("input"));
+    fetchInfo();
 }
 function renderHistory() {
     const panel = document.getElementById("history-panel");
@@ -60,6 +68,7 @@ function renderHistory() {
                 <span class="history-title">${esc(item.title)}</span>
                 <span class="history-fmt">${item.format.toUpperCase()}</span>
             </div>
+            ${item.url ? `<button class="history-refetch" title="Re-fetch this URL" onclick="refetchUrl(${JSON.stringify(item.url)})">↩</button>` : ""}
             <a href="/api/file/${item.id}" class="history-save">Save</a>
         </div>
     `).join("");
@@ -87,10 +96,13 @@ function updateFolderDisplay() {
     el.textContent = outputFolder || "None (manual save)";
 }
 function promptSetFolder() {
-    const input = prompt("Set download folder path (leave empty to disable):", outputFolder);
+    const recents = getRecentFolders();
+    const hint = recents.length ? `\nRecent: ${recents.slice(0,3).join(", ")}` : "";
+    const input = prompt(`Set download folder path (leave empty to disable):${hint}`, outputFolder);
     if (input === null) return;
     outputFolder = input.trim();
     updateFolderDisplay();
+    if (outputFolder) addRecentFolder(outputFolder);
     fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -164,8 +176,8 @@ function updateQuality(prefix) {
         q.innerHTML = `<option value="best">Best</option><option value="1080p">1080p</option><option value="720p">720p</option><option value="480p">480p</option>`;
         q.disabled = false;
     } else if (fmt === "mp3") {
-        q.innerHTML = `<option value="best">Best (320kbps)</option>`;
-        q.disabled = true;
+        q.innerHTML = `<option value="320">Best (320kbps)</option><option value="192">Medium (192kbps)</option><option value="128">Small (128kbps)</option>`;
+        q.disabled = false;
     } else {
         q.innerHTML = `<option value="best">Lossless</option>`;
         q.disabled = true;
@@ -203,6 +215,7 @@ async function fetchInfo() {
     const btn = document.getElementById("fetch-btn");
     btn.disabled = true;
     btn.querySelector(".btn-text").textContent = "Loading";
+    document.title = "Fetching… — sdexe";
 
     try {
         if (urls.length > 1) {
@@ -232,6 +245,7 @@ async function fetchInfo() {
         hideSkeleton();
         btn.disabled = false;
         btn.querySelector(".btn-text").textContent = "Fetch";
+        document.title = "Media Downloader — sdexe";
     }
 }
 
@@ -298,6 +312,17 @@ function restoreFormatPrefs(prefix) {
         const qEl = document.getElementById(prefix + "-quality");
         if (qEl && qEl.querySelector(`option[value="${savedQ}"]`)) qEl.value = savedQ;
     }
+}
+
+/* ── Recently used folders ── */
+function getRecentFolders() {
+    try { return JSON.parse(localStorage.getItem("sdexe_recent_folders") || "[]"); } catch { return []; }
+}
+function addRecentFolder(path) {
+    if (!path) return;
+    const recents = getRecentFolders().filter(f => f !== path);
+    recents.unshift(path);
+    localStorage.setItem("sdexe_recent_folders", JSON.stringify(recents.slice(0, 5)));
 }
 
 /* ── Render Single Video ── */
@@ -393,6 +418,7 @@ async function startSingleDownload() {
         if (!res.ok) { showError(data.error || "Download failed"); resetBtn(btn, "Download"); return; }
 
         document.getElementById("v-progress").hidden = false;
+        showCancelBtn(data.id);
         const hasMetadata = !!(metadata.title || metadata.artist || metadata.album);
         trackSingleProgress(data.id, hasMetadata);
     } catch (e) {
@@ -401,7 +427,30 @@ async function startSingleDownload() {
     }
 }
 
-function trackSingleProgress(id, hasMetadata) {
+function showCancelBtn(dlId) {
+    let cancelBtn = document.getElementById("v-cancel-btn");
+    if (!cancelBtn) {
+        cancelBtn = document.createElement("button");
+        cancelBtn.id = "v-cancel-btn";
+        cancelBtn.className = "btn-cancel";
+        cancelBtn.textContent = "Cancel";
+        const progressPanel = document.getElementById("v-progress");
+        progressPanel.appendChild(cancelBtn);
+    }
+    cancelBtn.hidden = false;
+    cancelBtn.onclick = async () => {
+        cancelBtn.disabled = true;
+        cancelBtn.textContent = "Cancelling...";
+        await fetch(`/api/cancel/${dlId}`, { method: "POST" });
+    };
+}
+
+function hideCancelBtn() {
+    const btn = document.getElementById("v-cancel-btn");
+    if (btn) btn.hidden = true;
+}
+
+function trackSingleProgress(id, hasMetadata, retries = 0) {
     const fill = document.getElementById("v-progress-fill");
     const text = document.getElementById("v-progress-text");
     const btn = document.getElementById("v-dl-btn");
@@ -409,9 +458,6 @@ function trackSingleProgress(id, hasMetadata) {
 
     source.onmessage = (ev) => {
         const d = JSON.parse(ev.data);
-        if (d.error && !["done","error","downloading","processing","starting","metadata"].includes(d.status)) {
-            source.close(); showError(d.error); resetBtn(btn, "Download"); return;
-        }
         fill.style.width = d.progress + "%";
         const detail = d.detail || "";
         if (d.status === "downloading") {
@@ -424,7 +470,7 @@ function trackSingleProgress(id, hasMetadata) {
             const step = (d.pp_step || 0) + 1;
             text.textContent = `Post-processing ${step}: Embedding metadata...`;
         } else if (d.status === "done") {
-            source.close(); fill.style.width = "100%";
+            source.close(); fill.style.width = "100%"; hideCancelBtn();
             const steps = (d.pp_step || 0) + (hasMetadata ? 1 : 0);
             text.textContent = `Complete` + (steps > 0 ? ` — ${steps} post-processing step${steps === 1 ? "" : "s"} finished` : "");
             const title = document.getElementById("v-title").value.trim() || "Download";
@@ -444,11 +490,22 @@ function trackSingleProgress(id, hasMetadata) {
             sendNotification("sdexe", `Downloaded: ${title}`);
             resetBtn(btn, "Download");
         } else if (d.status === "error") {
-            source.close(); showError(d.error || "Download failed"); text.textContent = "Error";
+            source.close(); hideCancelBtn();
+            showError(d.error || "Download failed"); text.textContent = "";
             resetBtn(btn, "Download");
         }
     };
-    source.onerror = () => { source.close(); text.textContent = "Connection lost"; resetBtn(btn, "Download"); };
+    source.onerror = () => {
+        source.close();
+        if (retries < 3) {
+            text.textContent = `Connection lost — retrying (${retries + 1}/3)...`;
+            setTimeout(() => trackSingleProgress(id, hasMetadata, retries + 1), 1500);
+        } else {
+            text.textContent = "Connection lost — check download history";
+            hideCancelBtn();
+            resetBtn(btn, "Download");
+        }
+    };
 }
 
 function resetBtn(btn, label) {
@@ -531,7 +588,7 @@ function finishSummary(total, done, failed) {
     }
 }
 
-/* ── Playlist Download ── */
+/* ── Playlist Download (concurrent) ── */
 async function startPlaylistDownload() {
     hideError();
     const entries = document.querySelectorAll("#p-entries .entry");
@@ -553,6 +610,7 @@ async function startPlaylistDownload() {
     const total = selected.length;
     let done = 0;
     let failed = 0;
+    let queued = 0; // next index to pick up
 
     // Reset summary banner
     const summary = document.getElementById("p-summary");
@@ -567,90 +625,91 @@ async function startPlaylistDownload() {
         }
     });
 
-    for (let i = 0; i < selected.length; i++) {
-        const el = selected[i];
-        const idx = parseInt(el.dataset.index);
-        const entry = playlistEntries[idx];
-        const status = el.querySelector(".entry-status");
+    const CONCURRENCY = Math.min(3, selected.length);
 
-        // Skip already-downloaded entries
-        if (status.querySelector(".entry-save")) {
-            done++;
-            updateSummary(i + 1, total, done, failed, null);
-            continue;
-        }
+    async function worker() {
+        while (queued < selected.length) {
+            const i = queued++;
+            const el = selected[i];
+            const idx = parseInt(el.dataset.index);
+            const entry = playlistEntries[idx];
+            const status = el.querySelector(".entry-status");
 
-        // Highlight current
-        el.classList.add("is-active");
-        updateSummary(i + 1, total, done, failed, entry.title);
-
-        // Scroll entry into view
-        el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-
-        status.innerHTML = `
-            <span class="entry-pct">0%</span>
-            <div class="entry-progress"><div class="entry-progress-fill"></div></div>
-        `;
-
-        try {
-            const res = await fetch("/api/download", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    url: entry.url,
-                    format: fmt,
-                    quality,
-                    metadata: {title: entry.title, artist, album},
-                }),
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                status.innerHTML = `<span class="entry-error">Error</span>`;
-                failed++;
-                el.classList.remove("is-active");
-                updateSummary(i + 1, total, done, failed, null);
+            // Skip already-downloaded entries
+            if (status.querySelector(".entry-save")) {
+                done++;
+                updateSummary(done + failed, total, done, failed, null);
                 continue;
             }
 
-            const ok = await trackEntryProgress(data.id, status);
-            if (ok) {
-                done++;
-                el.classList.add("is-done");
-                completedIds.push(data.id);
-                addToHistory(entry.title, fmt, data.id);
-            } else { failed++; }
-        } catch (e) {
-            status.innerHTML = `<span class="entry-error">Failed</span>`;
-            failed++;
-        }
+            el.classList.add("is-active");
+            el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            updateSummary(done + failed + 1, total, done, failed, entry.title);
 
-        el.classList.remove("is-active");
-        updateSummary(i + 1, total, done, failed, null);
+            status.innerHTML = `
+                <span class="entry-pct">0%</span>
+                <div class="entry-progress"><div class="entry-progress-fill"></div></div>
+            `;
+
+            try {
+                const res = await fetch("/api/download", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        url: entry.url,
+                        format: fmt,
+                        quality,
+                        metadata: {title: entry.title, artist, album},
+                    }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    status.innerHTML = `<span class="entry-error">Error</span>`;
+                    failed++;
+                } else {
+                    const ok = await trackEntryProgress(data.id, status);
+                    if (ok) {
+                        done++;
+                        el.classList.add("is-done");
+                        completedIds.push(data.id);
+                        addToHistory(entry.title, fmt, data.id);
+                    } else { failed++; }
+                }
+            } catch {
+                status.innerHTML = `<span class="entry-error">Failed</span>`;
+                failed++;
+            }
+
+            el.classList.remove("is-active");
+            updateSummary(done + failed, total, done, failed, null);
+        }
     }
+
+    const workers = Array.from({length: CONCURRENCY}, worker);
+    await Promise.all(workers);
 
     finishSummary(total, done, failed);
     resetBtn(btn, "Download Selected");
 }
 
-function trackEntryProgress(id, statusEl) {
+function trackEntryProgress(id, statusEl, retries = 0) {
     return new Promise(resolve => {
-        const fill = statusEl.querySelector(".entry-progress-fill");
-        const pct = statusEl.querySelector(".entry-pct");
+        const fill = () => statusEl.querySelector(".entry-progress-fill");
+        const pct = () => statusEl.querySelector(".entry-pct");
         const source = new EventSource(`/api/progress/${id}`);
 
         source.onmessage = (ev) => {
             const d = JSON.parse(ev.data);
-            if (fill) fill.style.width = d.progress + "%";
+            if (fill()) fill().style.width = d.progress + "%";
 
-            if (d.status === "downloading" && pct) {
-                pct.textContent = d.progress + "%";
-            } else if (d.status === "processing" && pct) {
-                const label = d.detail || "Processing";
-                pct.textContent = label;
-                pct.classList.add("entry-processing");
-            } else if (d.status === "metadata" && pct) {
-                pct.textContent = "Embedding metadata";
-                pct.classList.add("entry-processing");
+            if (d.status === "downloading" && pct()) {
+                pct().textContent = d.progress + "%";
+            } else if (d.status === "processing" && pct()) {
+                pct().textContent = d.detail || "Processing";
+                pct().classList.add("entry-processing");
+            } else if (d.status === "metadata" && pct()) {
+                pct().textContent = "Embedding metadata";
+                pct().classList.add("entry-processing");
             } else if (d.status === "done") {
                 source.close();
                 statusEl.innerHTML = `<a href="/api/file/${id}" class="entry-save">Save</a>`;
@@ -663,11 +722,24 @@ function trackEntryProgress(id, statusEl) {
         };
         source.onerror = () => {
             source.close();
-            statusEl.innerHTML = `<span class="entry-error">Failed</span>`;
-            resolve(false);
+            if (retries < 2) {
+                setTimeout(() => trackEntryProgress(id, statusEl, retries + 1).then(resolve), 1200);
+            } else {
+                statusEl.innerHTML = `<span class="entry-error">Failed</span>`;
+                resolve(false);
+            }
         };
     });
 }
+
+/* ── Keyboard: "/" to focus URL bar ── */
+document.addEventListener("keydown", e => {
+    if (e.key === "/" && !["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        const ta = document.getElementById("url");
+        if (ta) { ta.focus(); ta.select(); }
+    }
+});
 
 /* ── Enter key (Ctrl/Cmd+Enter for multi-line, Enter for single-line) ── */
 document.getElementById("url").addEventListener("keydown", e => {

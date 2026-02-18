@@ -8,8 +8,16 @@ import threading
 import json
 import subprocess
 import zipfile
+import atexit
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+try:
+    import yaml as _yaml
+    _YAML_AVAILABLE = True
+except ImportError:
+    _YAML_AVAILABLE = False
 
 from flask import Flask, render_template, request, jsonify, send_file, Response
 import yt_dlp
@@ -33,6 +41,26 @@ def add_cache_headers(response):
 
 DOWNLOAD_DIR = Path(tempfile.mkdtemp(prefix="toolkit_"))
 DOWNLOAD_DIR.mkdir(exist_ok=True)
+
+def _cleanup_on_exit():
+    import shutil
+    shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
+
+atexit.register(_cleanup_on_exit)
+
+# Simple rate limiting for /api/download
+_download_timestamps: list = []
+_DOWNLOAD_RATE_LIMIT = 12
+_DOWNLOAD_RATE_WINDOW = 10.0
+
+def _check_download_rate() -> bool:
+    global _download_timestamps
+    now = time.time()
+    _download_timestamps = [t for t in _download_timestamps if now - t < _DOWNLOAD_RATE_WINDOW]
+    if len(_download_timestamps) >= _DOWNLOAD_RATE_LIMIT:
+        return False
+    _download_timestamps.append(now)
+    return True
 
 CONFIG_DIR = Path.home() / ".config" / "sdexe"
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -194,6 +222,7 @@ def info():
         "quiet": True,
         "no_warnings": True,
         "extract_flat": True,
+        "socket_timeout": 12,
     }
 
     try:
@@ -262,6 +291,9 @@ def download():
     if not url:
         return jsonify({"error": "No URL provided"}), 400
 
+    if not _check_download_rate():
+        return jsonify({"error": "Too many downloads — slow down a bit."}), 429
+
     cleanup_old_files()
 
     dl_id = str(uuid.uuid4())
@@ -275,6 +307,7 @@ def download():
         "pp_step": 0,
         "auto_saved": False,
         "saved_path": None,
+        "cancelled": False,
     }
 
     PP_NAMES = {
@@ -293,6 +326,8 @@ def download():
     }
 
     def progress_hook(d):
+        if downloads[dl_id].get("cancelled"):
+            raise Exception("Cancelled by user")
         if d["status"] == "downloading":
             total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
             downloaded = d.get("downloaded_bytes", 0)
@@ -374,12 +409,13 @@ def download():
             ],
             **common_hooks,
         }
-    else:  # mp3 — 320kbps CBR
+    else:  # mp3
+        bitrate = quality if quality in ("128", "192", "320") else "320"
         ydl_opts = {
             "format": "bestaudio/best",
             "outtmpl": outtmpl,
             "postprocessors": [
-                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "320"},
+                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": bitrate},
                 {"key": "EmbedThumbnail"},
             ],
             **common_hooks,
@@ -435,7 +471,9 @@ def download():
         except Exception as e:
             err = str(e)
             err_lower = err.lower()
-            if "private" in err_lower and "video" in err_lower:
+            if downloads[dl_id].get("cancelled") or "cancelled by user" in err_lower:
+                friendly = "Download cancelled."
+            elif "private" in err_lower and "video" in err_lower:
                 friendly = "This video is private."
             elif "age" in err_lower and any(w in err_lower for w in ("restrict", "confirm", "gate")):
                 friendly = "Age-restricted — sign in to download."
@@ -477,6 +515,15 @@ def progress(dl_id):
             time.sleep(0.5)
 
     return Response(stream(), mimetype="text/event-stream")
+
+
+@app.route("/api/cancel/<dl_id>", methods=["POST"])
+def cancel_download(dl_id):
+    info = downloads.get(dl_id)
+    if not info:
+        return jsonify({"error": "Unknown download"}), 404
+    downloads[dl_id]["cancelled"] = True
+    return jsonify({"ok": True})
 
 
 @app.route("/api/file/<dl_id>")
@@ -640,6 +687,99 @@ def pdf_page_count():
         return jsonify({"error": str(e)}), 400
 
 
+@app.route("/api/pdf/compress", methods=["POST"])
+def pdf_compress():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    try:
+        reader = PdfReader(f.stream)
+        writer = PdfWriter()
+        for page in reader.pages:
+            page.compress_content_streams()
+            writer.add_page(page)
+        buf = io.BytesIO()
+        writer.write(buf)
+        buf.seek(0)
+        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "document"
+        return send_file(buf, as_attachment=True, download_name=f"{base}_compressed.pdf",
+                         mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/pdf/to-text", methods=["POST"])
+def pdf_to_text():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    try:
+        reader = PdfReader(f.stream)
+        parts = []
+        for i, page in enumerate(reader.pages, 1):
+            text = page.extract_text() or ""
+            if text.strip():
+                parts.append(f"--- Page {i} ---\n{text.strip()}")
+        combined = "\n\n".join(parts)
+        if not combined:
+            return jsonify({"error": "No extractable text found in this PDF"}), 400
+        buf = io.BytesIO(combined.encode("utf-8"))
+        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "document"
+        return send_file(buf, as_attachment=True, download_name=f"{base}.txt",
+                         mimetype="text/plain")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/pdf/add-password", methods=["POST"])
+def pdf_add_password():
+    f = request.files.get("file")
+    password = request.form.get("password", "").strip()
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    if not password:
+        return jsonify({"error": "No password provided"}), 400
+    try:
+        reader = PdfReader(f.stream)
+        writer = PdfWriter()
+        for page in reader.pages:
+            writer.add_page(page)
+        writer.encrypt(password)
+        buf = io.BytesIO()
+        writer.write(buf)
+        buf.seek(0)
+        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "document"
+        return send_file(buf, as_attachment=True, download_name=f"{base}_protected.pdf",
+                         mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/pdf/remove-password", methods=["POST"])
+def pdf_remove_password():
+    f = request.files.get("file")
+    password = request.form.get("password", "").strip()
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    try:
+        reader = PdfReader(f.stream)
+        if reader.is_encrypted:
+            result = reader.decrypt(password)
+            if not result:
+                return jsonify({"error": "Incorrect password"}), 400
+        writer = PdfWriter()
+        for page in reader.pages:
+            writer.add_page(page)
+        buf = io.BytesIO()
+        writer.write(buf)
+        buf.seek(0)
+        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "document"
+        return send_file(buf, as_attachment=True, download_name=f"{base}_unlocked.pdf",
+                         mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 # ── Image API ──
 
 @app.route("/api/images/resize", methods=["POST"])
@@ -729,12 +869,16 @@ def image_compress():
         except Exception as e:
             return jsonify({"error": f"Error processing {f.filename}: {e}"}), 400
 
+    original_size = sum(f.seek(0, 2) or f.tell() for f in files)
     if len(results) == 1:
         name, buf = results[0]
         fmt = name.rsplit(".", 1)[-1]
         mime_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}
-        return send_file(buf, as_attachment=True, download_name=name,
+        resp = send_file(buf, as_attachment=True, download_name=name,
                          mimetype=f"image/{mime_map.get(fmt, 'png')}")
+        resp.headers["X-Original-Size"] = str(original_size)
+        resp.headers["X-Compressed-Size"] = str(buf.getbuffer().nbytes)
+        return resp
     else:
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -888,6 +1032,130 @@ def json_to_csv():
     base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
     return send_file(buf, as_attachment=True, download_name=f"{base}.csv",
                      mimetype="text/csv")
+
+
+@app.route("/api/convert/md-preview", methods=["POST"])
+def md_preview():
+    text = request.form.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+    html = md_lib.markdown(text, extensions=["tables", "fenced_code"])
+    return jsonify({"html": html})
+
+
+@app.route("/api/convert/yaml-to-json", methods=["POST"])
+def yaml_to_json():
+    if not _YAML_AVAILABLE:
+        return jsonify({"error": "PyYAML not installed — run: pip install PyYAML"}), 501
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No YAML file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        data = _yaml.safe_load(text)
+        result = json.dumps(data, indent=2, ensure_ascii=False)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
+        return send_file(buf, as_attachment=True, download_name=f"{base}.json",
+                         mimetype="application/json")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/convert/json-to-yaml", methods=["POST"])
+def json_to_yaml():
+    if not _YAML_AVAILABLE:
+        return jsonify({"error": "PyYAML not installed — run: pip install PyYAML"}), 501
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No JSON file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        data = json.loads(text)
+        result = _yaml.dump(data, default_flow_style=False, allow_unicode=True)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
+        return send_file(buf, as_attachment=True, download_name=f"{base}.yaml",
+                         mimetype="text/yaml")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/convert/csv-to-tsv", methods=["POST"])
+def csv_to_tsv():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No CSV file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        rows = list(csv.reader(io.StringIO(text)))
+        output = io.StringIO()
+        csv.writer(output, delimiter="\t").writerows(rows)
+        buf = io.BytesIO(output.getvalue().encode("utf-8"))
+        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
+        return send_file(buf, as_attachment=True, download_name=f"{base}.tsv",
+                         mimetype="text/tab-separated-values")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/convert/tsv-to-csv", methods=["POST"])
+def tsv_to_csv():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No TSV file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        rows = list(csv.reader(io.StringIO(text), delimiter="\t"))
+        output = io.StringIO()
+        csv.writer(output).writerows(rows)
+        buf = io.BytesIO(output.getvalue().encode("utf-8"))
+        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
+        return send_file(buf, as_attachment=True, download_name=f"{base}.csv",
+                         mimetype="text/csv")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+def _xml_to_dict(el):
+    result = {}
+    if el.attrib:
+        result.update({f"@{k}": v for k, v in el.attrib.items()})
+    children = list(el)
+    if children:
+        child_map = {}
+        for child in children:
+            cd = _xml_to_dict(child)
+            if child.tag in child_map:
+                existing = child_map[child.tag]
+                if not isinstance(existing, list):
+                    child_map[child.tag] = [existing]
+                child_map[child.tag].append(cd)
+            else:
+                child_map[child.tag] = cd
+        result.update(child_map)
+    text = (el.text or "").strip()
+    if text:
+        result["_text"] = text if result else text
+    return result or {}
+
+
+@app.route("/api/convert/xml-to-json", methods=["POST"])
+def xml_to_json():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No XML file provided"}), 400
+    try:
+        text = f.stream.read().decode("utf-8", errors="replace")
+        root = ET.fromstring(text)
+        data = {root.tag: _xml_to_dict(root)}
+        result = json.dumps(data, indent=2, ensure_ascii=False)
+        buf = io.BytesIO(result.encode("utf-8"))
+        base = f.filename.rsplit(".", 1)[0] if "." in f.filename else "data"
+        return send_file(buf, as_attachment=True, download_name=f"{base}.json",
+                         mimetype="application/json")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
 def _check_ffmpeg(console):

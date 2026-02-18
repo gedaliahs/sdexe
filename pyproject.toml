@@ -17,6 +17,7 @@ dependencies = [
     "markdown",
     "rich",
     "pystray",
+    "PyYAML",
 ]
 
 [project.scripts]
