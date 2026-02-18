@@ -28,9 +28,11 @@
                         <circle cx="8.5" cy="8.5" r="1.5"/>
                         <polyline points="21 15 16 10 5 21"/>
                     </svg>
-                    <label class="drop-browse">Select image<input type="file" id="resize-input" accept="image/*" hidden></label>
-                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP, GIF &middot; resize by dimensions or %</p>
+                    <label class="drop-browse">Select images<input type="file" id="resize-input" accept="image/*" multiple hidden></label>
+                    <p class="drop-hint">or drop files here &middot; PNG, JPG, WebP, GIF &middot; batch supported &middot; resize by dimensions or %</p>
                 </div>
+
+                <div id="resize-file-list" class="file-list"></div>
 
                 <div id="resize-file-info" class="split-info" hidden>
                     <img id="resize-thumb" class="img-thumb" src="" alt="">

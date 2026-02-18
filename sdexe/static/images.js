@@ -1,5 +1,5 @@
 /* ── State ── */
-let resizeFile = null;
+let resizeFiles = [];
 let compressFiles = [];
 let iconvertFiles = [];
 
@@ -33,32 +33,54 @@ function setupDropZone(zoneId, inputId, handler) {
 
 /* ── Resize ── */
 setupDropZone("resize-drop", "resize-input", files => {
-    const f = files[0];
-    if (!f || !f.type.startsWith("image/")) return;
-    resizeFile = f;
-
-    document.getElementById("resize-file-name").textContent = f.name;
-    document.getElementById("resize-file-size").textContent = formatSize(f.size);
-    document.getElementById("resize-file-info").hidden = false;
-    document.getElementById("resize-options").hidden = false;
-    document.getElementById("resize-actions").hidden = false;
-
-    const thumb = document.getElementById("resize-thumb");
-    thumb.src = URL.createObjectURL(f);
-
-    // Read original dimensions
-    const img = new window.Image();
-    img.onload = () => {
-        document.getElementById("resize-dimensions").textContent = `${img.width} × ${img.height}`;
-    };
-    img.src = URL.createObjectURL(f);
+    for (const f of files) {
+        if (f.type.startsWith("image/")) resizeFiles.push(f);
+    }
+    renderResizeList();
 });
 
+function renderResizeList() {
+    const list = document.getElementById("resize-file-list");
+    list.innerHTML = "";
+    resizeFiles.forEach((f, i) => {
+        const div = document.createElement("div");
+        div.className = "file-item";
+        const thumb = URL.createObjectURL(f);
+        div.innerHTML = `
+            <img class="img-thumb" src="${thumb}" alt="">
+            <span class="file-name">${esc(f.name)}</span>
+            <span class="file-size">${formatSize(f.size)}</span>
+            <button class="file-remove" onclick="removeResizeFile(${i})">&times;</button>
+        `;
+        list.appendChild(div);
+    });
+    const hasFiles = resizeFiles.length > 0;
+    document.getElementById("resize-file-info").hidden = !hasFiles;
+    document.getElementById("resize-options").hidden = !hasFiles;
+    document.getElementById("resize-actions").hidden = !hasFiles;
+    if (resizeFiles.length === 1) {
+        document.getElementById("resize-file-name").textContent = resizeFiles[0].name;
+        document.getElementById("resize-file-size").textContent = formatSize(resizeFiles[0].size);
+        const img = new window.Image();
+        img.onload = () => {
+            document.getElementById("resize-dimensions").textContent = `${img.width} × ${img.height}`;
+        };
+        img.src = URL.createObjectURL(resizeFiles[0]);
+    } else if (resizeFiles.length > 1) {
+        document.getElementById("resize-file-name").textContent = `${resizeFiles.length} images`;
+        document.getElementById("resize-file-size").textContent = formatSize(resizeFiles.reduce((s, f) => s + f.size, 0));
+        document.getElementById("resize-dimensions").textContent = "";
+    }
+}
+
+function removeResizeFile(i) {
+    resizeFiles.splice(i, 1);
+    renderResizeList();
+}
+
 function clearResizeFile() {
-    resizeFile = null;
-    document.getElementById("resize-file-info").hidden = true;
-    document.getElementById("resize-options").hidden = true;
-    document.getElementById("resize-actions").hidden = true;
+    resizeFiles = [];
+    renderResizeList();
 }
 
 function toggleResizeMode() {
@@ -68,7 +90,7 @@ function toggleResizeMode() {
 }
 
 async function doResize() {
-    if (!resizeFile) return;
+    if (!resizeFiles.length) return;
     const btn = document.getElementById("resize-btn");
     const err = document.getElementById("resize-error");
     err.hidden = true;
@@ -76,7 +98,7 @@ async function doResize() {
     btn.textContent = "Resizing...";
 
     const form = new FormData();
-    form.append("file", resizeFile);
+    resizeFiles.forEach(f => form.append("files", f));
     form.append("mode", document.getElementById("resize-mode").value);
     form.append("width", document.getElementById("resize-width").value);
     form.append("height", document.getElementById("resize-height").value);
@@ -90,17 +112,19 @@ async function doResize() {
             err.textContent = data.error || "Resize failed";
             err.hidden = false;
         } else {
+            const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
             const match = cd.match(/filename="?(.+?)"?$/);
-            downloadBlob(blob, match ? match[1] : "resized.png");
+            const name = ct.includes("zip") ? "resized_images.zip" : (match ? match[1] : "resized.png");
+            downloadBlob(blob, name);
         }
     } catch {
         err.textContent = "Network error";
         err.hidden = false;
     }
     btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Resize Image`;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Resize Images`;
 }
 
 /* ── Compress ── */

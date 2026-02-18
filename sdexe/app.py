@@ -77,6 +77,20 @@ def save_config(data):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text(json.dumps(data, indent=2))
 
+HISTORY_FILE = CONFIG_DIR / "history.json"
+
+def load_history():
+    if HISTORY_FILE.exists():
+        try:
+            return json.loads(HISTORY_FILE.read_text())
+        except Exception:
+            pass
+    return []
+
+def save_history(items):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    HISTORY_FILE.write_text(json.dumps(items, indent=2))
+
 # Stores progress and file info keyed by download ID
 downloads = {}
 
@@ -184,6 +198,28 @@ def set_config_route():
     return jsonify({"ok": True})
 
 
+@app.route("/api/history", methods=["GET"])
+def get_history():
+    return jsonify(load_history())
+
+@app.route("/api/history", methods=["POST"])
+def add_history():
+    item = request.json or {}
+    if not item.get("title"):
+        return jsonify({"error": "title required"}), 400
+    items = load_history()
+    items.insert(0, {
+        "title": item.get("title", ""),
+        "format": item.get("format", ""),
+        "id": item.get("id", ""),
+        "url": item.get("url", ""),
+        "ts": time.time(),
+    })
+    items = items[:50]
+    save_history(items)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/open-folder", methods=["POST"])
 def open_folder():
     cfg = load_config()
@@ -201,6 +237,102 @@ def open_folder():
     elif _sys.platform == "win32":
         subprocess.Popen(["explorer", str(path)])
     return jsonify({"ok": True})
+
+
+@app.route("/api/open-file", methods=["POST"])
+def open_file():
+    path = (request.json or {}).get("path", "").strip()
+    if not path:
+        return jsonify({"error": "No path provided"}), 400
+    p = Path(path).expanduser()
+    if not p.exists():
+        return jsonify({"error": "File not found"}), 404
+    import sys as _sys
+    if _sys.platform == "darwin":
+        subprocess.Popen(["open", str(p)])
+    elif _sys.platform.startswith("linux"):
+        subprocess.Popen(["xdg-open", str(p)])
+    elif _sys.platform == "win32":
+        subprocess.Popen(["explorer", str(p)])
+    return jsonify({"ok": True})
+
+
+@app.route("/api/browse-folder", methods=["POST"])
+def browse_folder():
+    import sys as _sys
+    try:
+        if _sys.platform == "darwin":
+            result = subprocess.run(
+                ["osascript", "-e", "POSIX path of (choose folder)"],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode != 0:
+                return jsonify({"cancelled": True})
+            path = result.stdout.strip()
+        elif _sys.platform.startswith("linux"):
+            try:
+                result = subprocess.run(
+                    ["zenity", "--file-selection", "--directory", "--title=Choose folder"],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if result.returncode != 0:
+                    return jsonify({"cancelled": True})
+                path = result.stdout.strip()
+            except FileNotFoundError:
+                result = subprocess.run(
+                    ["kdialog", "--getexistingdirectory", str(Path.home())],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if result.returncode != 0:
+                    return jsonify({"cancelled": True})
+                path = result.stdout.strip()
+        elif _sys.platform == "win32":
+            script = (
+                "Add-Type -AssemblyName System.Windows.Forms;"
+                "$f = New-Object System.Windows.Forms.FolderBrowserDialog;"
+                "$f.ShowDialog() | Out-Null;"
+                "Write-Output $f.SelectedPath"
+            )
+            result = subprocess.run(
+                ["powershell", "-Command", script],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode != 0:
+                return jsonify({"cancelled": True})
+            path = result.stdout.strip()
+        else:
+            return jsonify({"error": "Native folder picker not supported on this platform"}), 501
+
+        if not path:
+            return jsonify({"cancelled": True})
+
+        resolved, err = _validate_folder(path)
+        if err:
+            return jsonify({"error": err}), 400
+        return jsonify({"path": resolved})
+    except subprocess.TimeoutExpired:
+        return jsonify({"cancelled": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/update", methods=["POST"])
+def run_update():
+    try:
+        result = subprocess.run(
+            ["pipx", "upgrade", "sdexe"],
+            capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode == 0:
+            return jsonify({"ok": True, "output": result.stdout.strip()})
+        else:
+            return jsonify({"error": result.stderr.strip() or result.stdout.strip()}), 500
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Update timed out"}), 504
+    except FileNotFoundError:
+        return jsonify({"error": "pipx not found — install sdexe via pipx to use auto-update"}), 501
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Media API ──
@@ -432,8 +564,23 @@ def download():
                 if f.stem == dl_id and f.suffix.lower() not in thumb_exts:
                     downloads[dl_id]["filename"] = f.name
                     title = metadata.get("title") or vid_info.get("title") or "download"
+                    artist = metadata.get("artist") or vid_info.get("uploader") or ""
+                    album = metadata.get("album") or vid_info.get("album") or ""
+                    uploader = vid_info.get("uploader") or vid_info.get("channel") or ""
                     ext = f.suffix.lstrip(".")
-                    downloads[dl_id]["download_name"] = f"{title}.{ext}"
+                    tmpl = load_config().get("output_template", "") or ""
+                    if tmpl:
+                        import re as _re
+                        try:
+                            base_name = tmpl.format(title=title, artist=artist, album=album, uploader=uploader)
+                        except (KeyError, ValueError):
+                            base_name = title
+                        base_name = _re.sub(r'[<>:"/\\|?*]', "_", base_name).strip(" .")
+                        if not base_name:
+                            base_name = "download"
+                    else:
+                        base_name = title
+                    downloads[dl_id]["download_name"] = f"{base_name}.{ext}"
                     break
 
             # Clean up leftover thumbnail files
@@ -784,58 +931,72 @@ def pdf_remove_password():
 
 @app.route("/api/images/resize", methods=["POST"])
 def image_resize():
-    f = request.files.get("file")
-    if not f:
+    files = request.files.getlist("files")
+    if not files:
+        f = request.files.get("file")
+        if f:
+            files = [f]
+    if not files:
         return jsonify({"error": "No image provided"}), 400
-
-    try:
-        img = Image.open(f.stream)
-    except Exception as e:
-        return jsonify({"error": f"Invalid image: {e}"}), 400
 
     mode = request.form.get("mode", "dimensions")
     maintain = request.form.get("maintain_aspect", "true") == "true"
 
-    try:
-        if mode == "percentage":
-            pct = float(request.form.get("percentage", 100)) / 100
-            new_w = max(1, int(img.width * pct))
-            new_h = max(1, int(img.height * pct))
-        else:
-            new_w = request.form.get("width", "")
-            new_h = request.form.get("height", "")
+    results = []
+    for f in files:
+        try:
+            img = Image.open(f.stream)
+        except Exception as e:
+            return jsonify({"error": f"Invalid image {f.filename}: {e}"}), 400
 
-            if new_w and new_h:
-                new_w, new_h = int(new_w), int(new_h)
-                if maintain:
-                    ratio = min(new_w / img.width, new_h / img.height)
-                    new_w = max(1, int(img.width * ratio))
-                    new_h = max(1, int(img.height * ratio))
-            elif new_w:
-                new_w = int(new_w)
-                new_h = max(1, int(img.height * (new_w / img.width))) if maintain else img.height
-            elif new_h:
-                new_h = int(new_h)
-                new_w = max(1, int(img.width * (new_h / img.height))) if maintain else img.width
+        try:
+            if mode == "percentage":
+                pct = float(request.form.get("percentage", 100)) / 100
+                new_w = max(1, int(img.width * pct))
+                new_h = max(1, int(img.height * pct))
             else:
-                return jsonify({"error": "Provide width, height, or percentage"}), 400
+                new_w = request.form.get("width", "")
+                new_h = request.form.get("height", "")
+                if new_w and new_h:
+                    new_w, new_h = int(new_w), int(new_h)
+                    if maintain:
+                        ratio = min(new_w / img.width, new_h / img.height)
+                        new_w = max(1, int(img.width * ratio))
+                        new_h = max(1, int(img.height * ratio))
+                elif new_w:
+                    new_w = int(new_w)
+                    new_h = max(1, int(img.height * (new_w / img.width))) if maintain else img.height
+                elif new_h:
+                    new_h = int(new_h)
+                    new_w = max(1, int(img.width * (new_h / img.height))) if maintain else img.width
+                else:
+                    return jsonify({"error": "Provide width, height, or percentage"}), 400
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
 
-        img = img.resize((new_w, new_h), Image.LANCZOS)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        fmt = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "png"
+        mime_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}
+        pil_fmt = mime_map.get(fmt, "png")
+        buf = io.BytesIO()
+        save_img = img.convert("RGB") if pil_fmt == "jpeg" and img.mode == "RGBA" else img
+        save_img.save(buf, pil_fmt.upper())
+        buf.seek(0)
+        out_name = f.filename.rsplit(".", 1)[0] + f"_resized.{fmt}" if "." in f.filename else "resized.png"
+        results.append((out_name, buf, pil_fmt))
 
-    fmt = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "png"
-    mime_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}
-    pil_fmt = mime_map.get(fmt, "png")
-
-    buf = io.BytesIO()
-    save_img = img.convert("RGB") if pil_fmt == "jpeg" and img.mode == "RGBA" else img
-    save_img.save(buf, pil_fmt.upper())
-    buf.seek(0)
-
-    out_name = f.filename.rsplit(".", 1)[0] + f"_resized.{fmt}" if "." in f.filename else "resized.png"
-    return send_file(buf, as_attachment=True, download_name=out_name,
-                     mimetype=f"image/{pil_fmt}")
+    if len(results) == 1:
+        out_name, buf, pil_fmt = results[0]
+        return send_file(buf, as_attachment=True, download_name=out_name,
+                         mimetype=f"image/{pil_fmt}")
+    else:
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for out_name, buf, _ in results:
+                zf.writestr(out_name, buf.getvalue())
+        zip_buf.seek(0)
+        return send_file(zip_buf, as_attachment=True, download_name="resized_images.zip",
+                         mimetype="application/zip")
 
 
 @app.route("/api/images/compress", methods=["POST"])
@@ -1218,13 +1379,43 @@ def _check_for_updates(console):
 def _run_tray(port):
     try:
         import pystray
-        from PIL import Image as _Image, ImageDraw as _ImageDraw
+        from PIL import Image as _Image, ImageDraw as _ImageDraw, ImageFont as _ImageFont
         import webbrowser as _wb
 
         size = 64
         img = _Image.new("RGBA", (size, size), (0, 0, 0, 0))
         draw = _ImageDraw.Draw(img)
-        draw.ellipse([2, 2, size - 2, size - 2], fill=(59, 130, 246))
+        draw.ellipse([2, 2, size - 2, size - 2], fill=(30, 30, 40, 255))
+
+        # Try to load a system font for "sd" text
+        font = None
+        for font_path in [
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/System/Library/Fonts/SFNSText.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "C:/Windows/Fonts/arialbd.ttf",
+        ]:
+            try:
+                font = _ImageFont.truetype(font_path, 26)
+                break
+            except Exception:
+                continue
+        if font is None:
+            font = _ImageFont.load_default()
+
+        text = "sd"
+        try:
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+            tx = (size - tw) / 2 - bbox[0]
+            ty = (size - th) / 2 - bbox[1]
+        except AttributeError:
+            tw, th = draw.textsize(text, font=font)
+            tx = (size - tw) / 2
+            ty = (size - th) / 2
+        draw.text((tx, ty), text, fill=(255, 255, 255, 255), font=font)
 
         def open_app(icon, item):
             _wb.open(f"http://127.0.0.1:{port}")

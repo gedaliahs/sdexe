@@ -20,6 +20,7 @@
                     <label>Output folder</label>
                     <div class="folder-input-row">
                         <input type="text" id="output-folder" placeholder="/Users/you/Downloads — leave empty to save manually">
+                        <button class="btn-settings-browse" onclick="browseFolder()">Browse…</button>
                         <button class="btn-settings-save" onclick="saveSettings()">Save</button>
                     </div>
                     <span id="folder-status" class="settings-status"></span>
@@ -41,6 +42,11 @@
                             <option value="best">Best</option>
                         </select>
                     </div>
+                </div>
+                <div class="field" style="margin-top: 16px;">
+                    <label>Output filename template</label>
+                    <input type="text" id="output-template" placeholder="{title}" style="font-family: monospace;">
+                    <p class="meta" style="margin-top:6px;">Tokens: <code>{title}</code> <code>{artist}</code> <code>{album}</code> <code>{uploader}</code> — leave empty to use title only</p>
                 </div>
             </div>
         </div>
@@ -66,6 +72,10 @@
                 <h2>About</h2>
                 <p class="meta">sdexe v{{ version }} &middot; <a href="https://github.com/gedaliahs/sdexe" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">GitHub</a></p>
                 <p class="meta" style="margin-top:6px;">Config file: <code style="font-size:.75rem; color:var(--text-secondary);">~/.config/sdexe/config.json</code></p>
+                <div style="margin-top: 16px;">
+                    <button id="update-btn" class="btn-settings-save" onclick="runUpdate()">Check for updates</button>
+                    <p id="update-status" class="settings-status" style="margin-top:8px;"></p>
+                </div>
             </div>
         </div>
     </main>
@@ -90,11 +100,52 @@ function updateDefaultQuality() {
     if (savedQ && q.querySelector(`option[value="${savedQ}"]`)) q.value = savedQ;
 }
 
+async function browseFolder() {
+    const btn = document.querySelector(".btn-settings-browse");
+    btn.disabled = true;
+    btn.textContent = "Picking…";
+    try {
+        const res = await fetch("/api/browse-folder", { method: "POST" });
+        const data = await res.json();
+        if (!data.cancelled && !data.error && data.path) {
+            document.getElementById("output-folder").value = data.path;
+        }
+    } catch {}
+    btn.disabled = false;
+    btn.textContent = "Browse…";
+}
+
+async function runUpdate() {
+    const btn = document.getElementById("update-btn");
+    const status = document.getElementById("update-status");
+    btn.disabled = true;
+    btn.textContent = "Updating…";
+    status.textContent = "Running pipx upgrade sdexe…";
+    status.className = "settings-status";
+    try {
+        const res = await fetch("/api/update", { method: "POST" });
+        const data = await res.json();
+        if (data.ok) {
+            status.textContent = "✓ Updated! Restart sdexe to apply.";
+            status.className = "settings-status saved";
+        } else {
+            status.textContent = "✗ " + (data.error || "Update failed");
+            status.className = "settings-status error";
+        }
+    } catch {
+        status.textContent = "✗ Network error";
+        status.className = "settings-status error";
+    }
+    btn.disabled = false;
+    btn.textContent = "Check for updates";
+}
+
 async function loadSettings() {
     const res = await fetch("/api/config");
     const cfg = await res.json();
 
     document.getElementById("output-folder").value = cfg.output_folder || "";
+    document.getElementById("output-template").value = cfg.output_template || "";
 
     const fmt = localStorage.getItem("sdexe_format") || cfg.default_format || "mp3";
     const fmtEl = document.getElementById("default-format");
@@ -131,7 +182,7 @@ async function saveSettings() {
     const res = await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ output_folder: folder, default_format: fmt, default_quality: quality }),
+        body: JSON.stringify({ output_folder: folder, default_format: fmt, default_quality: quality, output_template: document.getElementById("output-template").value.trim() }),
     });
     const data = await res.json();
 

@@ -5,21 +5,25 @@ let outputFolder = "";
 const downloadHistory = [];
 
 /* ── Toast ── */
-function showToast(message, type = "success", actionLabel = null, actionFn = null) {
+function showToast(message, type = "success", actions = null) {
     const container = document.getElementById("toast-container");
     const toast = document.createElement("div");
     toast.className = `toast toast-${type}`;
-    if (actionLabel && actionFn) {
-        const span = document.createElement("span");
-        span.textContent = message;
-        const btn = document.createElement("button");
-        btn.className = "toast-action";
-        btn.textContent = actionLabel;
-        btn.onclick = actionFn;
-        toast.appendChild(span);
-        toast.appendChild(btn);
-    } else {
-        toast.textContent = message;
+    const span = document.createElement("span");
+    span.textContent = message;
+    toast.appendChild(span);
+    // actions: array of {label, fn} objects, or single {label, fn}, or legacy (actionLabel, actionFn) via compat
+    const actionList = Array.isArray(actions) ? actions :
+        (actions && actions.label ? [actions] :
+        (typeof actions === "string" ? [{ label: actions, fn: arguments[3] }] : null));
+    if (actionList) {
+        actionList.forEach(({ label, fn }) => {
+            const btn = document.createElement("button");
+            btn.className = "toast-action";
+            btn.textContent = label;
+            btn.onclick = fn;
+            toast.appendChild(btn);
+        });
     }
     container.appendChild(toast);
     requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add("toast-visible")));
@@ -42,10 +46,18 @@ function requestNotifPermission() {
 }
 
 /* ── Download History ── */
-function addToHistory(title, format, id, url) {
-    downloadHistory.unshift({ title, format, id, url: url || currentUrl });
-    if (downloadHistory.length > 20) downloadHistory.pop();
+async function addToHistory(title, format, id, url) {
+    const item = { title, format, id, url: url || currentUrl };
+    downloadHistory.unshift(item);
+    if (downloadHistory.length > 50) downloadHistory.pop();
     renderHistory();
+    try {
+        await fetch("/api/history", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(item),
+        });
+    } catch {}
 }
 
 function refetchUrl(url) {
@@ -88,6 +100,15 @@ async function loadConfig() {
         const cfg = await res.json();
         outputFolder = cfg.output_folder || "";
         updateFolderDisplay();
+    } catch {}
+    try {
+        const res = await fetch("/api/history");
+        const items = await res.json();
+        if (Array.isArray(items) && items.length) {
+            downloadHistory.length = 0;
+            items.forEach(i => downloadHistory.push(i));
+            renderHistory();
+        }
     } catch {}
 }
 function updateFolderDisplay() {
@@ -478,9 +499,15 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
             addToHistory(title, fmt, id);
             if (d.auto_saved && d.saved_path) {
                 const filename = d.saved_path.split("/").pop();
-                showToast(`Saved: ${filename}`, "success", "Open folder", () => {
-                    fetch("/api/open-folder", { method: "POST" });
-                });
+                const savedPath = d.saved_path;
+                showToast(`Saved: ${filename}`, "success", [
+                    { label: "Open file", fn: () => fetch("/api/open-file", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ path: savedPath }),
+                    })},
+                    { label: "Open folder", fn: () => fetch("/api/open-folder", { method: "POST" }) },
+                ]);
             } else {
                 const link = document.getElementById("v-save");
                 link.href = `/api/file/${id}`;

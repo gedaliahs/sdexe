@@ -714,6 +714,13 @@ footer a:hover { color: var(--text-secondary); }
     box-shadow: 0 2px 8px rgba(59,130,246,.25);
 }
 .btn-settings-save:hover { box-shadow: 0 4px 12px rgba(59,130,246,.35); }
+.btn-settings-browse {
+    padding: 10px 16px; background: var(--card-bg); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: .82rem; font-weight: 600; cursor: pointer; font-family: inherit;
+    transition: border-color .15s, background .15s; flex-shrink: 0;
+}
+.btn-settings-browse:hover { border-color: var(--accent); }
 .settings-status {
     display: block; margin-top: 6px; font-size: .75rem;
     color: var(--text-muted); min-height: 18px;
