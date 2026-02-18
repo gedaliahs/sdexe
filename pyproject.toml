@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sdexe"
-version = "0.1.5"
+version = "0.1.6"
 description = "Local tools for media downloads, PDF manipulation, image processing, and file conversion"
 readme = "README.md"
 license = "MIT"
