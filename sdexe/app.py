@@ -19,6 +19,12 @@ from PIL import Image
 
 app = Flask(__name__)
 
+from sdexe import __version__
+
+@app.context_processor
+def inject_version():
+    return {"version": __version__}
+
 DOWNLOAD_DIR = Path(tempfile.mkdtemp(prefix="toolkit_"))
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
