@@ -154,16 +154,25 @@ main {
 }
 
 /* ── Hero ── */
-.hero { text-align: center; margin-bottom: 32px; }
+.hero { text-align: center; margin-bottom: 48px; padding-top: 20px; }
 .hero h1 {
-    font-size: 28px; font-weight: 700; letter-spacing: -.04em;
-    line-height: 1.25; margin-bottom: 12px;
+    font-size: 36px; font-weight: 800; letter-spacing: -.04em;
+    line-height: 1.2; margin-bottom: 14px;
     color: var(--text);
 }
 .hero-accent { color: var(--accent); }
+.hero-tagline {
+    color: var(--text-muted); font-size: .88rem; margin-top: 10px;
+    min-height: 1.4em;
+}
+.hero-word {
+    display: inline-block;
+    transition: opacity .3s, transform .3s;
+}
+.hero-word-out { opacity: 0; transform: translateY(6px); }
 .subtitle {
-    color: var(--text-muted); font-size: .95rem; line-height: 1.5;
-    max-width: 440px; margin: 0 auto;
+    color: var(--text-secondary); font-size: 1.05rem; line-height: 1.5;
+    max-width: 500px; margin: 0 auto;
 }
 
 /* ── Search Bar ── */
@@ -509,11 +518,11 @@ select:disabled { opacity: .35; cursor: not-allowed; }
    Home Page — Tool Grid
    ══════════════════════════════════════════ */
 
-.home-main { max-width: 1200px; }
+.home-main { max-width: 960px; }
 
 /* ── Search ── */
 .tool-search-wrap {
-    position: relative; max-width: 480px; margin: 0 auto 36px;
+    position: relative; max-width: 420px; margin: 0 auto 52px;
 }
 .tool-search-icon {
     position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
@@ -537,10 +546,10 @@ select:disabled { opacity: .35; cursor: not-allowed; }
 }
 
 /* ── Category sections ── */
-.tool-category { margin-bottom: 40px; }
+.tool-category { margin-bottom: 52px; }
 .tool-category-header {
-    font-size: 1.15rem; font-weight: 700; color: var(--text);
-    margin-bottom: 18px;
+    font-size: 1.3rem; font-weight: 700; color: var(--text);
+    margin-bottom: 12px; letter-spacing: -.02em;
 }
 
 /* ── Tool grid ── */
@@ -550,15 +559,14 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     gap: 0;
 }
 .tool-link {
-    display: flex; align-items: center; gap: 12px;
-    padding: 11px 8px;
+    display: flex; align-items: center; gap: 14px;
+    padding: 13px 4px;
     text-decoration: none; color: var(--text);
-    font-size: .9rem; font-weight: 400;
-    border-radius: var(--radius-sm);
+    font-size: .93rem; font-weight: 400;
     transition: color .15s;
 }
 .tool-link svg {
-    flex-shrink: 0; color: var(--text-secondary);
+    flex-shrink: 0; color: #9ca3af;
     transition: color .15s;
 }
 .tool-link:hover { color: var(--accent); }
@@ -890,7 +898,26 @@ footer a:hover { color: var(--text); }
 .toast-action:hover { color: var(--accent-hover); }
 
 /* ── Settings Page ── */
+.settings-grid { display: flex; flex-direction: column; gap: 16px; }
 .settings-section { margin-bottom: 0; }
+.settings-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.settings-header svg { color: var(--text-secondary); }
+.settings-header h2 { font-size: 1rem; font-weight: 600; margin: 0; }
+
+.sys-info-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin-top: 14px;
+}
+.sys-info-item {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 12px; background: var(--surface-2);
+    border-radius: var(--radius-sm);
+}
+.sys-info-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 500; }
+.sys-info-value { font-size: .85rem; font-weight: 500; color: var(--text); }
+
 .folder-input-row { display: flex; gap: 8px; margin-top: 6px; }
 .folder-input-row input { flex: 1; }
 .btn-settings-save {
@@ -909,8 +936,7 @@ footer a:hover { color: var(--text); }
 }
 .btn-settings-browse:hover { border-color: var(--accent); }
 .settings-status {
-    display: block; margin-top: 6px; font-size: .75rem;
-    color: var(--text-muted); min-height: 18px;
+    font-size: .78rem; color: var(--text-muted); min-height: 18px;
 }
 .settings-status.saved { color: var(--green); }
 .settings-status.error { color: var(--danger); }

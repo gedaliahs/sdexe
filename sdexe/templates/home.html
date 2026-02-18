@@ -6,7 +6,8 @@
     <main class="home-main">
         <div class="hero">
             <h1>Your local <span class="hero-accent">sdexe</span></h1>
-            <p class="subtitle">Local tools for media, PDF, images, and file conversion</p>
+            <p class="subtitle">Tools for video, audio, PDF, images, and file conversion</p>
+            <p class="hero-tagline"><span id="hero-word" class="hero-word">Download media from 1000+ sites</span></p>
         </div>
 
         <div class="tool-search-wrap">
@@ -297,6 +298,32 @@
         });
         noResults.hidden = anyVisible;
     });
+})();
+
+// Hero word cycling
+(function() {
+    var words = [
+        'Download media from 1000+ sites',
+        'Merge, split, and compress PDFs',
+        'Resize, crop, and convert images',
+        'Convert between file formats',
+        'Trim, convert, and process audio',
+        'Edit and compress video files',
+        'Hash, encode, and generate text',
+        'Everything runs 100% locally',
+        'No uploads, no accounts needed',
+        'Fast, private, and offline'
+    ];
+    var el = document.getElementById('hero-word');
+    var i = 0;
+    setInterval(function() {
+        el.classList.add('hero-word-out');
+        setTimeout(function() {
+            i = (i + 1) % words.length;
+            el.textContent = words[i];
+            el.classList.remove('hero-word-out');
+        }, 300);
+    }, 2500);
 })();
 </script>
 {% endblock %}

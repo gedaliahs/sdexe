@@ -175,7 +175,24 @@ def text_page():
 
 @app.route("/settings")
 def settings_page():
-    return render_template("settings.html")
+    import sys as _sys
+    info = {
+        "python_ver": f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}",
+        "ffmpeg_ver": "not found",
+        "ytdlp_ver": "unknown",
+        "tool_count": sum(1 for r in app.url_map.iter_rules() if r.endpoint != "static"),
+        "config_dir": str(CONFIG_DIR),
+    }
+    try:
+        out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
+        info["ffmpeg_ver"] = out.stdout.split("\n")[0].split("version ")[-1].split(" ")[0] if out.returncode == 0 else "not found"
+    except Exception:
+        pass
+    try:
+        info["ytdlp_ver"] = yt_dlp.version.__version__
+    except Exception:
+        pass
+    return render_template("settings.html", info=info)
 
 
 # ── Config API ──

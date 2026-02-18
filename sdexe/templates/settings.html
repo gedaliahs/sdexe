@@ -10,71 +10,121 @@
             <p class="subtitle">Preferences saved locally to your machine.</p>
         </div>
 
-        <!-- Downloads -->
-        <div class="card">
-            <div class="card-body settings-section">
-                <h2>Downloads</h2>
-                <p class="meta">Where files land after downloading.</p>
-
-                <div class="field" style="margin-top: 20px;">
-                    <label>Output folder</label>
-                    <div class="folder-input-row">
-                        <input type="text" id="output-folder" placeholder="/Users/you/Downloads — leave empty to save manually">
-                        <button class="btn-settings-browse" onclick="browseFolder()">Browse…</button>
-                        <button class="btn-settings-save" onclick="saveSettings()">Save</button>
+        <div class="settings-grid">
+            <!-- System Info -->
+            <div class="card">
+                <div class="card-body settings-section">
+                    <div class="settings-header">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        <h2>System</h2>
                     </div>
-                    <span id="folder-status" class="settings-status"></span>
-                </div>
-
-                <div class="field-row" style="margin-top: 16px;">
-                    <div class="field">
-                        <label>Default format</label>
-                        <select id="default-format" onchange="updateDefaultQuality()">
-                            <option value="mp3">MP3 — Audio</option>
-                            <option value="mp4">MP4 — Video</option>
-                            <option value="flac">FLAC — Audio</option>
-                            <option value="wav">WAV — Audio</option>
-                        </select>
+                    <div class="sys-info-grid">
+                        <div class="sys-info-item">
+                            <span class="sys-info-label">Python</span>
+                            <span class="sys-info-value">{{ info.python_ver }}</span>
+                        </div>
+                        <div class="sys-info-item">
+                            <span class="sys-info-label">ffmpeg</span>
+                            <span class="sys-info-value">{{ info.ffmpeg_ver }}</span>
+                        </div>
+                        <div class="sys-info-item">
+                            <span class="sys-info-label">yt-dlp</span>
+                            <span class="sys-info-value">{{ info.ytdlp_ver }}</span>
+                        </div>
+                        <div class="sys-info-item">
+                            <span class="sys-info-label">Tools</span>
+                            <span class="sys-info-value">{{ info.tool_count }}</span>
+                        </div>
+                        <div class="sys-info-item">
+                            <span class="sys-info-label">Version</span>
+                            <span class="sys-info-value">{{ version }}</span>
+                        </div>
+                        <div class="sys-info-item">
+                            <span class="sys-info-label">Config</span>
+                            <span class="sys-info-value" style="font-family:monospace; font-size:.75rem;">{{ info.config_dir }}</span>
+                        </div>
                     </div>
-                    <div class="field">
-                        <label>Default quality</label>
-                        <select id="default-quality">
-                            <option value="best">Best</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="field" style="margin-top: 16px;">
-                    <label>Output filename template</label>
-                    <input type="text" id="output-template" placeholder="{title}" style="font-family: monospace;">
-                    <p class="meta" style="margin-top:6px;">Tokens: <code>{title}</code> <code>{artist}</code> <code>{album}</code> <code>{uploader}</code> — leave empty to use title only</p>
                 </div>
             </div>
-        </div>
 
-        <!-- Notifications -->
-        <div class="card">
-            <div class="card-body settings-section">
-                <h2>Notifications</h2>
-                <p class="meta">Desktop alerts when downloads complete.</p>
-                <div style="margin-top: 16px;">
-                    <label class="check-label">
-                        <input type="checkbox" id="notif-enabled">
-                        Enable desktop notifications
-                    </label>
-                    <p id="notif-status" style="font-size:.75rem; color:var(--text-muted); margin-top:8px; margin-left:24px;"></p>
+            <!-- Downloads -->
+            <div class="card">
+                <div class="card-body settings-section">
+                    <div class="settings-header">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <h2>Downloads</h2>
+                    </div>
+                    <p class="meta">Where files land after downloading.</p>
+
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Output folder</label>
+                        <div class="folder-input-row">
+                            <input type="text" id="output-folder" placeholder="Leave empty to save manually">
+                            <button class="btn-settings-browse" onclick="browseFolder()">Browse</button>
+                        </div>
+                    </div>
+
+                    <div class="field-row" style="margin-top: 14px;">
+                        <div class="field">
+                            <label>Default format</label>
+                            <select id="default-format" onchange="updateDefaultQuality()">
+                                <option value="mp3">MP3 — Audio</option>
+                                <option value="mp4">MP4 — Video</option>
+                                <option value="flac">FLAC — Audio</option>
+                                <option value="wav">WAV — Audio</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Default quality</label>
+                            <select id="default-quality">
+                                <option value="best">Best</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="field" style="margin-top: 14px;">
+                        <label>Filename template</label>
+                        <input type="text" id="output-template" placeholder="{title}" style="font-family: monospace;">
+                        <p class="meta" style="margin-top:4px;">Tokens: <code>{title}</code> <code>{artist}</code> <code>{album}</code> <code>{uploader}</code></p>
+                    </div>
+
+                    <div style="margin-top: 18px; display: flex; align-items: center; gap: 12px;">
+                        <button class="btn-settings-save" onclick="saveSettings()">Save settings</button>
+                        <span id="folder-status" class="settings-status"></span>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- About -->
-        <div class="card">
-            <div class="card-body settings-section">
-                <h2>About</h2>
-                <p class="meta">sdexe v{{ version }} &middot; <a href="https://github.com/gedaliahs/sdexe" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">GitHub</a></p>
-                <p class="meta" style="margin-top:6px;">Config file: <code style="font-size:.75rem; color:var(--text-secondary);">~/.config/sdexe/config.json</code></p>
-                <div style="margin-top: 16px;">
-                    <button id="update-btn" class="btn-settings-save" onclick="runUpdate()">Check for updates</button>
-                    <p id="update-status" class="settings-status" style="margin-top:8px;"></p>
+            <!-- Notifications -->
+            <div class="card">
+                <div class="card-body settings-section">
+                    <div class="settings-header">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                        <h2>Notifications</h2>
+                    </div>
+                    <p class="meta">Desktop alerts when downloads complete.</p>
+                    <div style="margin-top: 14px;">
+                        <label class="check-label">
+                            <input type="checkbox" id="notif-enabled">
+                            Enable desktop notifications
+                        </label>
+                        <p id="notif-status" style="font-size:.75rem; color:var(--text-muted); margin-top:6px; margin-left:24px;"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- About & Updates -->
+            <div class="card">
+                <div class="card-body settings-section">
+                    <div class="settings-header">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        <h2>About</h2>
+                    </div>
+                    <p class="meta">sdexe v{{ version }} &middot; <a href="https://github.com/gedaliahs/sdexe" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">GitHub</a></p>
+                    <div style="margin-top: 14px; display: flex; align-items: center; gap: 12px;">
+                        <button id="update-btn" class="btn-settings-save" onclick="runUpdate()">Check for updates</button>
+                        <span id="update-status" class="settings-status"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -112,7 +162,7 @@ async function browseFolder() {
         }
     } catch {}
     btn.disabled = false;
-    btn.textContent = "Browse…";
+    btn.textContent = "Browse";
 }
 
 async function runUpdate() {
@@ -126,14 +176,14 @@ async function runUpdate() {
         const res = await fetch("/api/update", { method: "POST" });
         const data = await res.json();
         if (data.ok) {
-            status.textContent = "✓ Updated! Restart sdexe to apply.";
+            status.textContent = "Updated! Restart sdexe to apply.";
             status.className = "settings-status saved";
         } else {
-            status.textContent = "✗ " + (data.error || "Update failed");
+            status.textContent = data.error || "Update failed";
             status.className = "settings-status error";
         }
     } catch {
-        status.textContent = "✗ Network error";
+        status.textContent = "Network error";
         status.className = "settings-status error";
     }
     btn.disabled = false;
@@ -156,7 +206,6 @@ async function loadSettings() {
     const qEl = document.getElementById("default-quality");
     if (qEl.querySelector(`option[value="${quality}"]`)) qEl.value = quality;
 
-    // Notification state
     const notifEl = document.getElementById("notif-enabled");
     const statusEl = document.getElementById("notif-status");
     if (!("Notification" in window)) {
@@ -187,12 +236,12 @@ async function saveSettings() {
     const data = await res.json();
 
     if (data.error) {
-        status.textContent = "✗ " + data.error;
+        status.textContent = data.error;
         status.className = "settings-status error";
     } else {
         localStorage.setItem("sdexe_format", fmt);
         localStorage.setItem("sdexe_quality", quality);
-        status.textContent = "✓ Saved";
+        status.textContent = "Saved";
         status.className = "settings-status saved";
         setTimeout(() => { status.textContent = ""; }, 2500);
     }
