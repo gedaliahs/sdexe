@@ -60,7 +60,7 @@ nav {
 }
 .nav-inner {
     display: flex; align-items: center;
-    width: 100%; max-width: 1100px; margin: 0 auto; gap: 0;
+    width: 100%; max-width: 1400px; margin: 0 auto; gap: 0;
 }
 .logo {
     font-size: 1.1rem; font-weight: 700; letter-spacing: -.04em;
@@ -149,8 +149,8 @@ nav {
 
 /* ── Main ── */
 main {
-    flex: 1; width: 100%; max-width: 960px;
-    margin: 0 auto; padding: 64px 32px 96px;
+    flex: 1; width: 100%; max-width: 1200px;
+    margin: 0 auto; padding: 64px 48px 96px;
 }
 
 /* ── Hero ── */
@@ -509,66 +509,80 @@ select:disabled { opacity: .35; cursor: not-allowed; }
    Home Page — Tool Grid
    ══════════════════════════════════════════ */
 
-.home-main { max-width: 800px; }
+.home-main { max-width: 1200px; }
 
+/* ── Search ── */
+.tool-search-wrap {
+    position: relative; max-width: 480px; margin: 0 auto 36px;
+}
+.tool-search-icon {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); pointer-events: none;
+}
+.tool-search {
+    width: 100%; padding: 11px 14px 11px 40px;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface); color: var(--text);
+    font-size: .9rem; font-family: inherit;
+    transition: border-color .2s, box-shadow .2s;
+}
+.tool-search:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(66,133,244,.15);
+}
+.tool-search::placeholder { color: var(--text-muted); }
+.no-results {
+    text-align: center; color: var(--text-muted); font-size: .95rem;
+    padding: 40px 0;
+}
+
+/* ── Category sections ── */
+.tool-category { margin-bottom: 32px; }
+.tool-category-header {
+    font-size: .85rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 14px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+}
+.tool-category[data-category="media"]  .tool-category-header { border-bottom-color: #ff5b29; color: #ff5b29; }
+.tool-category[data-category="pdf"]    .tool-category-header { border-bottom-color: #e65156; color: #e65156; }
+.tool-category[data-category="images"] .tool-category-header { border-bottom-color: #00a7f5; color: #00a7f5; }
+.tool-category[data-category="convert"] .tool-category-header { border-bottom-color: #ffd000; color: #b89600; }
+.tool-category[data-category="av"]     .tool-category-header { border-bottom-color: #8b5cf6; color: #8b5cf6; }
+.tool-category[data-category="text"]   .tool-category-header { border-bottom-color: #10b981; color: #10b981; }
+
+/* ── Tool grid ── */
 .tool-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
 }
 .tool-card {
-    display: flex; flex-direction: column; gap: 10px;
-    padding: 36px 28px;
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 16px 18px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     text-decoration: none; color: var(--text);
     position: relative; overflow: hidden;
     transition: border-color .2s, box-shadow .2s, transform .15s;
-    border-left: 3px solid var(--border);
 }
-.tool-card[data-category="media"]  { border-left-color: #ff5b29; }
-.tool-card[data-category="pdf"]    { border-left-color: #e65156; }
-.tool-card[data-category="images"] { border-left-color: #00a7f5; }
-.tool-card[data-category="convert"]{ border-left-color: #ffd000; }
-.tool-card[data-category="av"]     { border-left-color: #8b5cf6; }
-.tool-card[data-category="text"]   { border-left-color: #10b981; }
-
 .tool-card::after {
     content: "\2192";
     position: absolute;
-    top: 28px;
-    right: 26px;
-    font-size: .9rem;
-    color: var(--accent);
-    opacity: 0;
-    transform: translateX(-6px);
-    transition: opacity .2s ease, transform .2s ease;
+    top: 16px; right: 16px;
+    font-size: .8rem; color: var(--accent);
+    opacity: 0; transform: translateX(-4px);
+    transition: opacity .15s, transform .15s;
 }
 .tool-card:hover {
     border-color: var(--border-hover);
-    box-shadow: 0 4px 16px rgba(0,0,0,.08);
-    transform: translateY(-2px);
+    box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    transform: translateY(-1px);
 }
-.tool-card[data-category="media"]:hover  { border-left-color: #ff5b29; }
-.tool-card[data-category="pdf"]:hover    { border-left-color: #e65156; }
-.tool-card[data-category="images"]:hover { border-left-color: #00a7f5; }
-.tool-card[data-category="convert"]:hover{ border-left-color: #ffd000; }
-.tool-card[data-category="av"]:hover     { border-left-color: #8b5cf6; }
-.tool-card[data-category="text"]:hover   { border-left-color: #10b981; }
+.tool-card:hover::after { opacity: 1; transform: translateX(0); }
 
-.tool-card:hover::after {
-    opacity: 1;
-    transform: translateX(0);
-}
-.tool-card h2 {
-    font-size: .95rem; font-weight: 600; letter-spacing: -.02em;
-}
-.tool-card p {
-    font-size: .8rem; color: var(--text-secondary); line-height: 1.55;
-}
 .tool-icon {
-    color: var(--accent); margin-bottom: 8px;
+    flex-shrink: 0; margin-top: 1px;
 }
 .tool-card[data-category="media"]  .tool-icon { color: #ff5b29; }
 .tool-card[data-category="pdf"]    .tool-icon { color: #e65156; }
@@ -577,13 +591,14 @@ select:disabled { opacity: .35; cursor: not-allowed; }
 .tool-card[data-category="av"]     .tool-icon { color: #8b5cf6; }
 .tool-card[data-category="text"]   .tool-icon { color: #10b981; }
 
-.tool-card.disabled {
-    opacity: .4; pointer-events: none; cursor: default;
-    position: relative;
+.tool-info { min-width: 0; }
+.tool-card h3 {
+    font-size: .85rem; font-weight: 600; letter-spacing: -.01em;
+    margin-bottom: 2px;
 }
-.coming-soon {
-    font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
-    color: var(--text-muted); font-weight: 500; margin-top: 4px;
+.tool-card p {
+    font-size: .78rem; color: var(--text-secondary); line-height: 1.45;
+    margin: 0;
 }
 
 /* ══════════════════════════════════════════
@@ -1126,6 +1141,9 @@ main { animation: fadeIn .4s ease-out; }
 @keyframes bounceIn { 0% { transform: scale(0.8); opacity: 0; } 60% { transform: scale(1.04); } 100% { transform: scale(1); opacity: 1; } }
 
 /* ── Responsive ── */
+@media (max-width: 900px) {
+    .tool-grid { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 600px) {
     main { padding: 36px 16px 60px; }
     .hero h1 { font-size: 1.7rem; }

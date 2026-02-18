@@ -292,6 +292,87 @@
                 <div id="rotatepages-error" class="error" hidden></div>
             </div>
         </div>
+
+        <!-- Extract Images -->
+        <div id="tab-extractimages" class="pdf-section card">
+            <div class="card-body">
+                <h2>Extract Images</h2>
+                <p class="meta">Pull all embedded images out of a PDF.</p>
+
+                <div class="drop-zone" id="extractimages-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="extractimages-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; extracts all embedded images as PNG/JPG</p>
+                </div>
+
+                <div id="extractimages-file-info" class="split-info" hidden>
+                    <span id="extractimages-file-name" class="split-name"></span>
+                    <span id="extractimages-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearExtractImagesFile()">&times;</button>
+                </div>
+
+                <div id="extractimages-actions" class="pdf-actions" hidden>
+                    <button id="extractimages-btn" class="btn-download" onclick="doExtractImages()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Extract Images
+                    </button>
+                </div>
+                <div id="extractimages-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Number Pages -->
+        <div id="tab-numberpages" class="pdf-section card">
+            <div class="card-body">
+                <h2>Number Pages</h2>
+                <p class="meta">Add page numbers to every page of a PDF.</p>
+
+                <div class="drop-zone" id="numberpages-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="9" y1="15" x2="15" y2="15"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="numberpages-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; adds page numbers to the footer</p>
+                </div>
+
+                <div id="numberpages-file-info" class="split-info" hidden>
+                    <span id="numberpages-file-name" class="split-name"></span>
+                    <span id="numberpages-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearNumberPagesFile()">&times;</button>
+                </div>
+
+                <div id="numberpages-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Position</label>
+                            <select id="numberpages-position">
+                                <option value="bottom-center">Bottom Center</option>
+                                <option value="bottom-left">Bottom Left</option>
+                                <option value="bottom-right">Bottom Right</option>
+                            </select>
+                        </div>
+                        <div class="field" style="max-width: 120px;">
+                            <label>Start at</label>
+                            <input type="number" id="numberpages-start" value="1" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="numberpages-actions" class="pdf-actions" hidden>
+                    <button id="numberpages-btn" class="btn-download" onclick="doNumberPages()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Number Pages
+                    </button>
+                </div>
+                <div id="numberpages-error" class="error" hidden></div>
+            </div>
+        </div>
     </main>
 {% endblock %}
 

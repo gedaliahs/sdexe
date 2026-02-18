@@ -254,6 +254,99 @@ async function doAvConvertVideo() {
     );
 }
 
+/* ── Merge Audio ── */
+let mergeAudioFiles = [];
+
+setupDropZone("av-merge-audio-drop", "av-merge-audio-input", files => {
+    for (const f of files) {
+        if (f.type.startsWith("audio/") || /\.(mp3|wav|ogg|flac|aac|m4a)$/i.test(f.name)) {
+            mergeAudioFiles.push(f);
+        }
+    }
+    renderMergeAudioList();
+});
+
+function renderMergeAudioList() {
+    const list = document.getElementById("av-merge-audio-list");
+    list.innerHTML = "";
+    mergeAudioFiles.forEach((f, i) => {
+        const item = document.createElement("div");
+        item.className = "file-item";
+        item.innerHTML = `<span class="file-name">${f.name}</span><span class="file-size">${formatSize(f.size)}</span><button class="file-remove" onclick="removeMergeAudio(${i})">&times;</button>`;
+        list.appendChild(item);
+    });
+    const show = mergeAudioFiles.length >= 2;
+    document.getElementById("av-merge-audio-options").hidden = !show;
+    document.getElementById("av-merge-audio-actions").hidden = !show;
+}
+
+function removeMergeAudio(i) {
+    mergeAudioFiles.splice(i, 1);
+    renderMergeAudioList();
+}
+
+async function doAvMergeAudio() {
+    if (mergeAudioFiles.length < 2) return;
+    const btn = document.getElementById("av-merge-audio-btn");
+    const err = document.getElementById("av-merge-audio-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Merging...";
+
+    const fmt = document.getElementById("av-merge-audio-format").value;
+    const fd = new FormData();
+    mergeAudioFiles.forEach(f => fd.append("files", f));
+    fd.append("format", fmt);
+
+    try {
+        const res = await fetch("/api/av/merge-audio", { method: "POST", body: fd });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Merge failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            downloadBlob(blob, `merged.${fmt}`);
+            showToast("Saved: merged." + fmt);
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Merge Audio';
+}
+
+/* ── Normalize Volume ── */
+setupDropZone("av-normalize-drop", "av-normalize-input", files => loadAvFile("av-normalize", files, "audio/"));
+
+document.getElementById("av-normalize-btn").dataset.label = "Normalize Volume";
+
+async function doAvNormalize() {
+    await avFetch("av-normalize", "/api/av/normalize-volume",
+        file => { const fd = new FormData(); fd.append("file", file); return fd; },
+        file => file.name.replace(/\.[^.]+$/, "") + "_normalized." + file.name.split(".").pop(),
+        "Normalizing..."
+    );
+}
+
+/* ── Video to GIF ── */
+setupDropZone("av-video-to-gif-drop", "av-video-to-gif-input", files => loadAvFile("av-video-to-gif", files, "video/"));
+
+document.getElementById("av-video-to-gif-btn").dataset.label = "Convert to GIF";
+
+async function doAvVideoToGif() {
+    const f = avFiles["av-video-to-gif"];
+    if (!f) return;
+    const fps = document.getElementById("av-video-to-gif-fps").value;
+    const width = document.getElementById("av-video-to-gif-width").value;
+    await avFetch("av-video-to-gif", "/api/av/video-to-gif",
+        file => { const fd = new FormData(); fd.append("file", file); fd.append("fps", fps); fd.append("width", width); return fd; },
+        file => file.name.replace(/\.[^.]+$/, "") + ".gif",
+        "Converting..."
+    );
+}
+
 /* ── Helpers ── */
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + " B";

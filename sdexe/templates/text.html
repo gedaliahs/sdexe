@@ -444,6 +444,39 @@
             </div>
         </div>
 
+        <!-- Password Generator -->
+        <div id="tab-password" class="pdf-section card">
+            <div class="card-body">
+                <h2>Password Generator</h2>
+                <p class="meta">Generate secure random passwords with customizable options.</p>
+
+                <div style="margin-top: 16px; display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                    <div class="field" style="width: 120px;">
+                        <label>Length</label>
+                        <input type="number" id="pw-length" value="20" min="4" max="128">
+                    </div>
+                    <button class="btn-download" onclick="doPassword()" style="height: 42px; padding: 0 24px; width: auto;">Generate</button>
+                </div>
+
+                <div style="margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;">
+                    <label class="check-label"><input type="checkbox" id="pw-upper" checked> Uppercase (A-Z)</label>
+                    <label class="check-label"><input type="checkbox" id="pw-lower" checked> Lowercase (a-z)</label>
+                    <label class="check-label"><input type="checkbox" id="pw-digits" checked> Digits (0-9)</label>
+                    <label class="check-label"><input type="checkbox" id="pw-symbols" checked> Symbols (!@#$...)</label>
+                </div>
+
+                <div class="field" style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Password</label>
+                        <button onclick="copyText('pw-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                    </div>
+                    <input type="text" id="pw-output" readonly style="font-family: ui-monospace, monospace; font-size: 1.1rem; letter-spacing: .05em; padding: 14px;">
+                </div>
+
+                <div id="pw-strength" style="margin-top: 8px; font-size: .82rem; color: var(--text-secondary);"></div>
+            </div>
+        </div>
+
     </main>
 {% endblock %}
 

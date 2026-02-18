@@ -7,6 +7,8 @@ let totextFile = null;
 let addPwFile = null;
 let removePwFile = null;
 let rotatePagesFile = null;
+let extractImagesFile = null;
+let numberPagesFile = null;
 
 /* ── Hash Routing ── */
 function showTab(tab) {
@@ -574,6 +576,106 @@ async function doRotatePages() {
     }
     btn.disabled = false;
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Rotate Pages`;
+}
+
+/* ── Extract Images ── */
+setupDropZone("extractimages-drop", "extractimages-input", files => {
+    const f = files[0];
+    if (!f || (!f.type.includes("pdf") && !f.name.endsWith(".pdf"))) return;
+    extractImagesFile = f;
+    document.getElementById("extractimages-file-name").textContent = f.name;
+    document.getElementById("extractimages-file-size").textContent = formatSize(f.size);
+    document.getElementById("extractimages-file-info").hidden = false;
+    document.getElementById("extractimages-actions").hidden = false;
+});
+
+function clearExtractImagesFile() {
+    extractImagesFile = null;
+    document.getElementById("extractimages-file-info").hidden = true;
+    document.getElementById("extractimages-actions").hidden = true;
+}
+
+async function doExtractImages() {
+    if (!extractImagesFile) return;
+    const btn = document.getElementById("extractimages-btn");
+    const err = document.getElementById("extractimages-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Extracting...";
+
+    const fd = new FormData();
+    fd.append("file", extractImagesFile);
+    try {
+        const res = await fetch("/api/pdf/extract-images", { method: "POST", body: fd });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Extraction failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const cd = res.headers.get("content-disposition") || "";
+            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const name = match ? match[1] : "images.zip";
+            downloadBlob(blob, name);
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Extract Images';
+}
+
+/* ── Number Pages ── */
+setupDropZone("numberpages-drop", "numberpages-input", files => {
+    const f = files[0];
+    if (!f || (!f.type.includes("pdf") && !f.name.endsWith(".pdf"))) return;
+    numberPagesFile = f;
+    document.getElementById("numberpages-file-name").textContent = f.name;
+    document.getElementById("numberpages-file-size").textContent = formatSize(f.size);
+    document.getElementById("numberpages-file-info").hidden = false;
+    document.getElementById("numberpages-options").hidden = false;
+    document.getElementById("numberpages-actions").hidden = false;
+});
+
+function clearNumberPagesFile() {
+    numberPagesFile = null;
+    document.getElementById("numberpages-file-info").hidden = true;
+    document.getElementById("numberpages-options").hidden = true;
+    document.getElementById("numberpages-actions").hidden = true;
+}
+
+async function doNumberPages() {
+    if (!numberPagesFile) return;
+    const btn = document.getElementById("numberpages-btn");
+    const err = document.getElementById("numberpages-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Processing...";
+
+    const fd = new FormData();
+    fd.append("file", numberPagesFile);
+    fd.append("position", document.getElementById("numberpages-position").value);
+    fd.append("start", document.getElementById("numberpages-start").value);
+    try {
+        const res = await fetch("/api/pdf/number-pages", { method: "POST", body: fd });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Processing failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const cd = res.headers.get("content-disposition") || "";
+            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const name = match ? match[1] : "numbered.pdf";
+            downloadBlob(blob, name);
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Number Pages';
 }
 
 /* ── Helpers ── */

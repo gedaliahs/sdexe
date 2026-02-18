@@ -912,6 +912,44 @@ def pdf_metadata():
             return jsonify({"error": str(e)}), 400
 
 
+@app.route("/api/pdf/extract-images", methods=["POST"])
+def pdf_extract_images():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    try:
+        images = tools.extract_images_from_pdf(f.stream)
+        if not images:
+            return jsonify({"error": "No images found in this PDF"}), 400
+        if len(images) == 1:
+            name, data = images[0]
+            mime = "image/jpeg" if name.endswith(".jpg") else "image/png"
+            return send_file(io.BytesIO(data), as_attachment=True, download_name=name, mimetype=mime)
+        else:
+            zip_data = tools.create_zip(images)
+            base = tools._base_from_filename(f.filename, "document")
+            return send_file(io.BytesIO(zip_data), as_attachment=True,
+                             download_name=f"{base}_images.zip", mimetype="application/zip")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/pdf/number-pages", methods=["POST"])
+def pdf_number_pages():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No PDF file provided"}), 400
+    try:
+        start = int(request.form.get("start", 1))
+        position = request.form.get("position", "bottom-center")
+        result = tools.number_pdf_pages(f.stream, start=start, position=position)
+        base = tools._base_from_filename(f.filename, "document")
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_numbered.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @app.route("/api/pdf/watermark", methods=["POST"])
 def pdf_watermark():
     f = request.files.get("file")
@@ -1502,6 +1540,56 @@ def av_convert_video():
         result = tools.convert_video(f.stream.read(), ext, fmt)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}.{fmt}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/merge-audio", methods=["POST"])
+def av_merge_audio():
+    files = request.files.getlist("files")
+    if len(files) < 2:
+        return jsonify({"error": "Need at least 2 audio files"}), 400
+    fmt = request.form.get("format", "mp3").lower()
+    try:
+        files_data = [(tools._ext_from_filename(f.filename, "mp3"), f.stream.read()) for f in files]
+        result = tools.merge_audio_files(files_data, fmt)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"merged.{fmt}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/normalize-volume", methods=["POST"])
+def av_normalize_volume():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No audio file provided"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp3")
+    base = tools._base_from_filename(f.filename, "audio")
+    try:
+        result = tools.normalize_volume(f.stream.read(), ext)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_normalized.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/video-to-gif", methods=["POST"])
+def av_video_to_gif():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    try:
+        fps = int(request.form.get("fps", 10))
+        width = int(request.form.get("width", 480))
+    except ValueError:
+        return jsonify({"error": "Invalid parameters"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.video_to_gif(f.stream.read(), ext, fps=fps, width=width)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}.gif", mimetype="image/gif")
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 

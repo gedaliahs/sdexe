@@ -718,3 +718,139 @@ def extract_zip(data: bytes) -> list[tuple[str, bytes]]:
     zf = zipfile.ZipFile(io.BytesIO(data))
     members = [m for m in zf.namelist() if not m.endswith("/")]
     return [(Path(m).name, zf.read(m)) for m in members]
+
+
+# ── Additional PDF Tools ──
+
+def extract_images_from_pdf(stream: BinaryIO) -> list[tuple[str, bytes]]:
+    """Extract all embedded images from a PDF. Returns list of (filename, image_bytes)."""
+    reader = PdfReader(stream)
+    results = []
+    img_num = 0
+    for page_num, page in enumerate(reader.pages, 1):
+        try:
+            for img in page.images:
+                img_num += 1
+                data = img.data
+                name = img.name or f"image_{img_num}"
+                # Clean name for filesystem
+                name = name.replace("/", "_").replace("\\", "_")
+                if data[:2] == b'\xff\xd8':
+                    ext = "jpg"
+                elif data[:8] == b'\x89PNG\r\n\x1a\n':
+                    ext = "png"
+                else:
+                    ext = "png"
+                results.append((f"page{page_num}_{name}.{ext}", data))
+        except Exception:
+            continue
+    return results
+
+
+def number_pdf_pages(stream: BinaryIO, start: int = 1,
+                     position: str = "bottom-center", font_size: int = 11) -> bytes:
+    """Add page numbers to every page of a PDF."""
+    reader = PdfReader(stream)
+    writer = PdfWriter()
+
+    for i, page in enumerate(reader.pages):
+        page_num = start + i
+        box = page.mediabox
+        w = float(box.width)
+        h = float(box.height)
+
+        stamp_img = Image.new("RGBA", (int(w), int(h)), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(stamp_img)
+
+        font = None
+        for fp in [
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "C:/Windows/Fonts/arial.ttf",
+        ]:
+            try:
+                font = ImageFont.truetype(fp, font_size)
+                break
+            except Exception:
+                continue
+        if font is None:
+            font = ImageFont.load_default()
+
+        text = str(page_num)
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+
+        if position == "bottom-center":
+            x, y = (w - tw) / 2, h - 36
+        elif position == "bottom-right":
+            x, y = w - tw - 40, h - 36
+        elif position == "bottom-left":
+            x, y = 40, h - 36
+        else:
+            x, y = (w - tw) / 2, h - 36
+
+        draw.text((x, y), text, fill=(0, 0, 0, 200), font=font)
+
+        stamp_rgb = Image.new("RGB", stamp_img.size, (255, 255, 255))
+        stamp_rgb.paste(stamp_img, mask=stamp_img.split()[3])
+        stamp_buf = io.BytesIO()
+        stamp_rgb.save(stamp_buf, "PDF")
+        stamp_buf.seek(0)
+        stamp_page = PdfReader(stamp_buf).pages[0]
+
+        page.merge_page(stamp_page)
+        writer.add_page(page)
+
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+# ── Additional AV Tools ──
+
+def merge_audio_files(files_data: list[tuple[str, bytes]], out_fmt: str = "mp3") -> bytes:
+    """Merge multiple audio files into one using ffmpeg concat filter."""
+    if out_fmt not in AUDIO_CODEC_MAP:
+        raise ValueError(f"Unsupported audio format: {out_fmt}")
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        input_paths = []
+        for i, (ext, data) in enumerate(files_data):
+            path = Path(tmpdir) / f"input_{i}.{ext}"
+            path.write_bytes(data)
+            input_paths.append(str(path))
+
+        out_path = str(Path(tmpdir) / f"output.{out_fmt}")
+
+        cmd = ["ffmpeg", "-y"]
+        for p in input_paths:
+            cmd += ["-i", p]
+
+        n = len(input_paths)
+        filter_str = "".join(f"[{i}:a]" for i in range(n)) + f"concat=n={n}:v=0:a=1[out]"
+        cmd += ["-filter_complex", filter_str, "-map", "[out]"]
+        cmd += AUDIO_CODEC_MAP[out_fmt] + [out_path]
+
+        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
+
+        return Path(out_path).read_bytes()
+    finally:
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def normalize_volume(data: bytes, ext: str) -> bytes:
+    """Normalize audio volume using ffmpeg loudnorm filter."""
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-map", "0:a"])
+
+
+def video_to_gif(data: bytes, ext: str, fps: int = 10, width: int = 480) -> bytes:
+    """Convert a video to animated GIF."""
+    return run_ffmpeg(data, f".{ext}", ".gif",
+                      ["-vf", f"fps={fps},scale={width}:-1:flags=lanczos", "-loop", "0"],
+                      timeout=300)

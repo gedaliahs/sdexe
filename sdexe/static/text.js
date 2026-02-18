@@ -563,3 +563,41 @@ function copyText(id) {
         document.execCommand("copy");
     });
 }
+
+/* ── Password Generator ── */
+function doPassword() {
+    const len = Math.min(128, Math.max(4, parseInt(document.getElementById("pw-length").value) || 20));
+    const upper = document.getElementById("pw-upper").checked;
+    const lower = document.getElementById("pw-lower").checked;
+    const digits = document.getElementById("pw-digits").checked;
+    const symbols = document.getElementById("pw-symbols").checked;
+
+    let chars = "";
+    if (upper) chars += "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    if (lower) chars += "abcdefghijklmnopqrstuvwxyz";
+    if (digits) chars += "0123456789";
+    if (symbols) chars += "!@#$%^&*()_+-=[]{}|;:,.<>?";
+
+    if (!chars) {
+        chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    }
+
+    const arr = new Uint32Array(len);
+    crypto.getRandomValues(arr);
+    let password = "";
+    for (let i = 0; i < len; i++) {
+        password += chars[arr[i] % chars.length];
+    }
+
+    document.getElementById("pw-output").value = password;
+
+    // Strength estimation
+    const poolSize = (upper ? 26 : 0) + (lower ? 26 : 0) + (digits ? 10 : 0) + (symbols ? 27 : 0);
+    const entropy = Math.floor(len * Math.log2(poolSize || 36));
+    let strength = "Weak";
+    if (entropy >= 128) strength = "Very Strong";
+    else if (entropy >= 80) strength = "Strong";
+    else if (entropy >= 60) strength = "Good";
+    else if (entropy >= 40) strength = "Fair";
+    document.getElementById("pw-strength").textContent = `${entropy} bits of entropy — ${strength}`;
+}
