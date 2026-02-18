@@ -5,17 +5,28 @@ let outputFolder = "";
 const downloadHistory = [];
 
 /* ── Toast ── */
-function showToast(message, type = "success") {
+function showToast(message, type = "success", actionLabel = null, actionFn = null) {
     const container = document.getElementById("toast-container");
     const toast = document.createElement("div");
     toast.className = `toast toast-${type}`;
-    toast.textContent = message;
+    if (actionLabel && actionFn) {
+        const span = document.createElement("span");
+        span.textContent = message;
+        const btn = document.createElement("button");
+        btn.className = "toast-action";
+        btn.textContent = actionLabel;
+        btn.onclick = actionFn;
+        toast.appendChild(span);
+        toast.appendChild(btn);
+    } else {
+        toast.textContent = message;
+    }
     container.appendChild(toast);
     requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add("toast-visible")));
     setTimeout(() => {
         toast.classList.remove("toast-visible");
         setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    }, 5000);
 }
 
 /* ── Web Notifications ── */
@@ -164,6 +175,8 @@ function updateQuality(prefix) {
         const subWrap = document.getElementById("v-subtitle-wrap");
         if (subWrap) subWrap.style.display = fmt === "mp4" ? "block" : "none";
     }
+    // Persist format choice
+    localStorage.setItem("sdexe_format", fmt);
 }
 
 /* ── Skeleton Loader ── */
@@ -272,6 +285,21 @@ async function fetchMultipleUrls(urls) {
     });
 }
 
+/* ── Restore saved format/quality ── */
+function restoreFormatPrefs(prefix) {
+    const savedFmt = localStorage.getItem("sdexe_format");
+    if (savedFmt) {
+        const fmtEl = document.getElementById(prefix + "-format");
+        if (fmtEl && fmtEl.querySelector(`option[value="${savedFmt}"]`)) fmtEl.value = savedFmt;
+    }
+    updateQuality(prefix);
+    const savedQ = localStorage.getItem("sdexe_quality");
+    if (savedQ) {
+        const qEl = document.getElementById(prefix + "-quality");
+        if (qEl && qEl.querySelector(`option[value="${savedQ}"]`)) qEl.value = savedQ;
+    }
+}
+
 /* ── Render Single Video ── */
 function renderVideo(data) {
     document.getElementById("v-thumb").src = data.thumbnail || "";
@@ -280,7 +308,7 @@ function renderVideo(data) {
     document.getElementById("v-artist").value = data.uploader || "";
     document.getElementById("v-album").value = "";
     document.getElementById("video-card").hidden = false;
-    updateQuality("v");
+    restoreFormatPrefs("v");
 }
 
 /* ── Render Playlist ── */
@@ -319,7 +347,7 @@ function renderPlaylist(data) {
 
     document.getElementById("p-select-all").checked = true;
     updateCount();
-    updateQuality("p");
+    restoreFormatPrefs("p");
     document.getElementById("playlist-panel").hidden = false;
 }
 
@@ -404,7 +432,9 @@ function trackSingleProgress(id, hasMetadata) {
             addToHistory(title, fmt, id);
             if (d.auto_saved && d.saved_path) {
                 const filename = d.saved_path.split("/").pop();
-                showToast(`Saved: ${filename}`);
+                showToast(`Saved: ${filename}`, "success", "Open folder", () => {
+                    fetch("/api/open-folder", { method: "POST" });
+                });
             } else {
                 const link = document.getElementById("v-save");
                 link.href = `/api/file/${id}`;
@@ -660,6 +690,13 @@ document.getElementById("url").addEventListener("paste", () => {
             fetchInfo();
         }
     }, 0);
+});
+
+/* ── Persist quality selection ── */
+document.addEventListener("change", e => {
+    if (e.target.id === "v-quality" || e.target.id === "p-quality") {
+        localStorage.setItem("sdexe_quality", e.target.value);
+    }
 });
 
 /* ── Init ── */

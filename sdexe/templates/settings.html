@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Settings — sdexe{% endblock %}
+{% block nav_settings %}active{% endblock %}
+
+{% block content %}
+    <main>
+        <div class="hero">
+            <h1>Settings</h1>
+            <p class="subtitle">Preferences saved locally to your machine.</p>
+        </div>
+
+        <!-- Downloads -->
+        <div class="card">
+            <div class="card-body settings-section">
+                <h2>Downloads</h2>
+                <p class="meta">Where files land after downloading.</p>
+
+                <div class="field" style="margin-top: 20px;">
+                    <label>Output folder</label>
+                    <div class="folder-input-row">
+                        <input type="text" id="output-folder" placeholder="/Users/you/Downloads — leave empty to save manually">
+                        <button class="btn-settings-save" onclick="saveSettings()">Save</button>
+                    </div>
+                    <span id="folder-status" class="settings-status"></span>
+                </div>
+
+                <div class="field-row" style="margin-top: 16px;">
+                    <div class="field">
+                        <label>Default format</label>
+                        <select id="default-format" onchange="updateDefaultQuality()">
+                            <option value="mp3">MP3 — Audio</option>
+                            <option value="mp4">MP4 — Video</option>
+                            <option value="flac">FLAC — Audio</option>
+                            <option value="wav">WAV — Audio</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Default quality</label>
+                        <select id="default-quality">
+                            <option value="best">Best</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="card">
+            <div class="card-body settings-section">
+                <h2>Notifications</h2>
+                <p class="meta">Desktop alerts when downloads complete.</p>
+                <div style="margin-top: 16px;">
+                    <label class="check-label">
+                        <input type="checkbox" id="notif-enabled">
+                        Enable desktop notifications
+                    </label>
+                    <p id="notif-status" style="font-size:.75rem; color:var(--text-muted); margin-top:8px; margin-left:24px;"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- About -->
+        <div class="card">
+            <div class="card-body settings-section">
+                <h2>About</h2>
+                <p class="meta">sdexe v{{ version }} &middot; <a href="https://github.com/gedaliahs/sdexe" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">GitHub</a></p>
+                <p class="meta" style="margin-top:6px;">Config file: <code style="font-size:.75rem; color:var(--text-secondary);">~/.config/sdexe/config.json</code></p>
+            </div>
+        </div>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateDefaultQuality() {
+    const fmt = document.getElementById("default-format").value;
+    const q = document.getElementById("default-quality");
+    if (fmt === "mp4") {
+        q.innerHTML = `<option value="best">Best</option><option value="1080p">1080p</option><option value="720p">720p</option><option value="480p">480p</option>`;
+        q.disabled = false;
+    } else if (fmt === "mp3") {
+        q.innerHTML = `<option value="best">Best (320kbps)</option>`;
+        q.disabled = true;
+    } else {
+        q.innerHTML = `<option value="best">Lossless</option>`;
+        q.disabled = true;
+    }
+    const savedQ = localStorage.getItem("sdexe_quality");
+    if (savedQ && q.querySelector(`option[value="${savedQ}"]`)) q.value = savedQ;
+}
+
+async function loadSettings() {
+    const res = await fetch("/api/config");
+    const cfg = await res.json();
+
+    document.getElementById("output-folder").value = cfg.output_folder || "";
+
+    const fmt = localStorage.getItem("sdexe_format") || cfg.default_format || "mp3";
+    const fmtEl = document.getElementById("default-format");
+    if (fmtEl.querySelector(`option[value="${fmt}"]`)) fmtEl.value = fmt;
+    updateDefaultQuality();
+
+    const quality = localStorage.getItem("sdexe_quality") || cfg.default_quality || "best";
+    const qEl = document.getElementById("default-quality");
+    if (qEl.querySelector(`option[value="${quality}"]`)) qEl.value = quality;
+
+    // Notification state
+    const notifEl = document.getElementById("notif-enabled");
+    const statusEl = document.getElementById("notif-status");
+    if (!("Notification" in window)) {
+        notifEl.disabled = true;
+        statusEl.textContent = "Notifications not supported in this browser.";
+    } else if (Notification.permission === "granted") {
+        notifEl.checked = true;
+    } else if (Notification.permission === "denied") {
+        notifEl.disabled = true;
+        statusEl.textContent = "Notifications blocked — enable in browser/system settings.";
+    }
+}
+
+async function saveSettings() {
+    const folder = document.getElementById("output-folder").value.trim();
+    const fmt = document.getElementById("default-format").value;
+    const quality = document.getElementById("default-quality").value;
+    const status = document.getElementById("folder-status");
+
+    status.textContent = "Saving...";
+    status.className = "settings-status";
+
+    const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ output_folder: folder, default_format: fmt, default_quality: quality }),
+    });
+    const data = await res.json();
+
+    if (data.error) {
+        status.textContent = "✗ " + data.error;
+        status.className = "settings-status error";
+    } else {
+        localStorage.setItem("sdexe_format", fmt);
+        localStorage.setItem("sdexe_quality", quality);
+        status.textContent = "✓ Saved";
+        status.className = "settings-status saved";
+        setTimeout(() => { status.textContent = ""; }, 2500);
+    }
+}
+
+document.getElementById("notif-enabled").addEventListener("change", async (e) => {
+    const statusEl = document.getElementById("notif-status");
+    if (e.target.checked) {
+        const perm = await Notification.requestPermission();
+        e.target.checked = perm === "granted";
+        if (perm === "denied") {
+            statusEl.textContent = "Notifications blocked — enable in system settings.";
+            e.target.disabled = true;
+        }
+    }
+});
+
+loadSettings();
+</script>
+{% endblock %}

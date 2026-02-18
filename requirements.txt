@@ -4,3 +4,4 @@ pypdf
 Pillow
 markdown
 rich
+pystray

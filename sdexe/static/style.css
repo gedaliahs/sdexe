@@ -669,6 +669,32 @@ footer a:hover { color: var(--text-secondary); }
 }
 .toast-visible { opacity: 1; transform: translateY(0); }
 .toast-error { border-left-color: var(--danger); }
+.toast { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.toast-action {
+    background: none; border: none; cursor: pointer; color: var(--accent);
+    font-size: .75rem; font-weight: 600; padding: 0; font-family: inherit;
+    flex-shrink: 0; transition: color .15s;
+}
+.toast-action:hover { color: var(--accent-hover); }
+
+/* ── Settings Page ── */
+.settings-section { margin-bottom: 0; }
+.folder-input-row { display: flex; gap: 8px; margin-top: 6px; }
+.folder-input-row input { flex: 1; }
+.btn-settings-save {
+    padding: 10px 20px; background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: #fff; border: none; border-radius: var(--radius-sm);
+    font-size: .82rem; font-weight: 600; cursor: pointer; font-family: inherit;
+    transition: background .15s, box-shadow .15s; flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(59,130,246,.25);
+}
+.btn-settings-save:hover { box-shadow: 0 4px 12px rgba(59,130,246,.35); }
+.settings-status {
+    display: block; margin-top: 6px; font-size: .75rem;
+    color: var(--text-muted); min-height: 18px;
+}
+.settings-status.saved { color: var(--green); }
+.settings-status.error { color: var(--danger); }
 
 /* ── Folder Bar ── */
 .folder-bar {

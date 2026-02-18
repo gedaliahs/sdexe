@@ -25,6 +25,12 @@ from sdexe import __version__
 def inject_version():
     return {"version": __version__}
 
+@app.after_request
+def add_cache_headers(response):
+    if request.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
 DOWNLOAD_DIR = Path(tempfile.mkdtemp(prefix="toolkit_"))
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
@@ -48,11 +54,35 @@ downloads = {}
 
 
 def cleanup_old_files(max_age_seconds=3600):
-    """Delete downloaded files older than max_age_seconds."""
+    """Delete downloaded files older than max_age_seconds and prune stale dict entries."""
     now = time.time()
     for f in DOWNLOAD_DIR.iterdir():
         if f.is_file() and now - f.stat().st_mtime > max_age_seconds:
             f.unlink(missing_ok=True)
+    stale = [
+        k for k, v in downloads.items()
+        if v.get("status") in ("done", "error")
+        and v.get("filename")
+        and not (DOWNLOAD_DIR / v["filename"]).exists()
+    ]
+    for k in stale:
+        downloads.pop(k, None)
+
+
+def _validate_folder(path: str):
+    """Return (resolved_path_str, error_str). error_str is empty on success."""
+    if not path:
+        return "", ""
+    p = Path(path).expanduser().resolve()
+    if not p.exists():
+        return "", f"Directory does not exist: {p}"
+    if not p.is_dir():
+        return "", f"Path is not a directory: {p}"
+    sensitive = {Path("/"), Path("/etc"), Path("/usr"), Path("/bin"),
+                 Path("/sys"), Path("/dev"), Path("/proc")}
+    if p in sensitive:
+        return "", f"Cannot use system directory: {p}"
+    return str(p), ""
 
 
 def set_file_metadata(filepath, metadata):
@@ -101,6 +131,10 @@ def images_page():
 def convert_page():
     return render_template("convert.html")
 
+@app.route("/settings")
+def settings_page():
+    return render_template("settings.html")
+
 
 # ── Config API ──
 
@@ -110,9 +144,34 @@ def get_config():
 
 @app.route("/api/config", methods=["POST"])
 def set_config_route():
+    updates = request.json or {}
+    if "output_folder" in updates and updates["output_folder"]:
+        resolved, err = _validate_folder(updates["output_folder"])
+        if err:
+            return jsonify({"error": err}), 400
+        updates["output_folder"] = resolved
     cfg = load_config()
-    cfg.update(request.json or {})
+    cfg.update(updates)
     save_config(cfg)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/open-folder", methods=["POST"])
+def open_folder():
+    cfg = load_config()
+    folder = cfg.get("output_folder", "").strip()
+    if not folder:
+        return jsonify({"error": "No output folder configured"}), 400
+    path = Path(folder).expanduser()
+    if not path.is_dir():
+        return jsonify({"error": "Folder not found"}), 404
+    import subprocess, sys as _sys
+    if _sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    elif _sys.platform.startswith("linux"):
+        subprocess.Popen(["xdg-open", str(path)])
+    elif _sys.platform == "win32":
+        subprocess.Popen(["explorer", str(path)])
     return jsonify({"ok": True})
 
 
@@ -873,13 +932,58 @@ def _check_ffmpeg(console):
         console.print("  [red]✗[/red]  Installation failed. Please install ffmpeg manually.\n")
 
 
+def _check_for_updates(console):
+    import urllib.request
+    try:
+        with urllib.request.urlopen("https://pypi.org/pypi/sdexe/json", timeout=3) as r:
+            data = json.loads(r.read())
+        latest = data["info"]["version"]
+        if latest != __version__:
+            console.print(
+                f"  [yellow]↑[/yellow]  Update available: [dim]v{__version__}[/dim] → "
+                f"[bold]v{latest}[/bold]  [dim]Run:[/dim] [cyan]pipx upgrade sdexe[/cyan]\n"
+            )
+    except Exception:
+        pass
+
+
+def _run_tray(port):
+    try:
+        import pystray
+        from PIL import Image as _Image, ImageDraw as _ImageDraw
+        import webbrowser as _wb
+
+        size = 64
+        img = _Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        draw = _ImageDraw.Draw(img)
+        draw.ellipse([2, 2, size - 2, size - 2], fill=(59, 130, 246))
+
+        def open_app(icon, item):
+            _wb.open(f"http://127.0.0.1:{port}")
+
+        def quit_app(icon, item):
+            icon.stop()
+            import os
+            os._exit(0)
+
+        menu = pystray.Menu(
+            pystray.MenuItem("Open sdexe", open_app, default=True),
+            pystray.MenuItem("Quit", quit_app),
+        )
+        icon = pystray.Icon("sdexe", img, "sdexe", menu)
+        icon.run()
+        return True
+    except Exception:
+        return False
+
+
 def main():
     import logging
+    import threading
     import webbrowser
     from rich.console import Console
     from rich.panel import Panel
 
-    # Suppress werkzeug startup noise
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
     console = Console()
@@ -897,10 +1001,22 @@ def main():
     console.print()
 
     _check_ffmpeg(console)
+    _check_for_updates(console)
 
-    console.print(f"  [dim]Starting →[/dim] [cyan]http://localhost:{port}[/cyan]\n")
-    webbrowser.open(f"http://localhost:{port}")
-    app.run(port=port, use_reloader=False)
+    console.print(f"  [dim]Starting →[/dim] [cyan]http://127.0.0.1:{port}[/cyan]\n")
+    webbrowser.open(f"http://127.0.0.1:{port}")
+
+    # Try to run Flask in a thread + system tray on main thread
+    try:
+        import pystray  # noqa: F401 — just checking availability
+        flask_thread = threading.Thread(
+            target=lambda: app.run(host="127.0.0.1", port=port, use_reloader=False),
+            daemon=True,
+        )
+        flask_thread.start()
+        _run_tray(port)
+    except ImportError:
+        app.run(host="127.0.0.1", port=port, use_reloader=False)
 
 
 if __name__ == "__main__":
