@@ -223,6 +223,7 @@ main {
     border-left: 3px solid var(--danger);
     border-radius: var(--radius-md);
     color: var(--danger); font-size: .82rem; line-height: 1.5;
+    display: flex; align-items: center; gap: 12px;
 }
 
 /* ── Card ── */
@@ -332,11 +333,6 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
 }
-#v-progress-text {
-    margin-top: 10px; font-size: .78rem; color: var(--text-muted);
-    text-align: center; font-variant-numeric: tabular-nums;
-}
-
 /* ── Save Button ── */
 .btn-save {
     display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -346,7 +342,7 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     color: #fff; text-decoration: none; font-size: .82rem; font-weight: 600;
     transition: background .15s, box-shadow .15s, transform .1s; cursor: pointer;
     box-shadow: 0 2px 8px rgba(16,185,129,.25);
-    animation: cardIn .3s ease-out;
+    animation: bounceIn .3s ease-out;
 }
 .btn-save:hover { background: #059669; box-shadow: 0 4px 16px rgba(16,185,129,.35); }
 .btn-save:active { transform: scale(.98); }
@@ -878,11 +874,11 @@ footer a:hover { color: var(--text-secondary); }
     border-radius: var(--radius-md);
     font-size: .82rem; font-weight: 500; color: var(--text);
     box-shadow: 0 4px 20px rgba(0,0,0,.1);
-    opacity: 0; transform: translateY(8px);
+    opacity: 0; transform: translateX(100%);
     transition: opacity .25s ease, transform .25s ease;
     pointer-events: auto; max-width: 320px;
 }
-.toast-visible { opacity: 1; transform: translateY(0); }
+.toast-visible { opacity: 1; transform: translateX(0); }
 .toast-error { border-left-color: var(--danger); }
 .toast { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .toast-action {
@@ -1013,11 +1009,87 @@ main { animation: fadeIn .4s ease-out; }
 .skeleton-block {
     flex: 1; height: 40px; border-radius: var(--radius-sm); background: var(--surface-3);
 }
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .4; }
+@keyframes skeletonWave {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
 }
-.skeleton-pulse { animation: pulse 1.5s ease-in-out infinite; }
+.skeleton-pulse {
+    animation: skeletonWave 1.8s ease-in-out infinite;
+    background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 50%, var(--surface-3) 75%);
+    background-size: 200% 100%;
+}
+
+/* ── Empty State ── */
+.empty-state { text-align: center; margin-top: 48px; animation: fadeIn .5s ease-out; }
+.empty-state p { font-size: .82rem; color: var(--text-muted); margin-bottom: 12px; }
+.empty-examples { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.empty-examples code { font-size: .78rem; color: var(--text-secondary); background: var(--surface-2); padding: 6px 14px; border-radius: var(--radius-sm); }
+.empty-hint { margin-top: 20px; font-size: .72rem; color: var(--text-muted); }
+.empty-hint kbd { background: var(--surface-3); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-size: .7rem; font-family: inherit; }
+
+/* ── Search Bar Loading ── */
+.search-bar.is-loading { border-color: var(--accent-dim); animation: searchPulse 1.5s ease-in-out infinite; }
+@keyframes searchPulse {
+    0%, 100% { box-shadow: 0 0 0 3px var(--accent-glow); }
+    50% { box-shadow: 0 0 0 6px rgba(59,130,246,.08); }
+}
+
+/* ── Format Pills ── */
+.format-pills { display: flex; flex-direction: column; gap: 14px; }
+.pill-group { display: flex; flex-direction: column; gap: 6px; }
+.pill-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 500; }
+.pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill {
+    padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+    background: var(--surface); color: var(--text-secondary);
+    font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit;
+    transition: all .15s ease; user-select: none;
+}
+.pill:hover { border-color: var(--accent-dim); color: var(--text); }
+.pill.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(59,130,246,.25); }
+.pill-divider { width: 1px; background: var(--border); align-self: stretch; margin: 0 4px; }
+
+/* ── Card Media Gradient ── */
+.card-media::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(transparent, rgba(0,0,0,.25));
+    pointer-events: none;
+}
+
+/* ── Larger Title Input ── */
+.meta-fields .field:first-child input { font-size: 1rem; font-weight: 600; }
+
+/* ── Progress Details ── */
+.progress-details { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+.progress-status { font-size: .78rem; color: var(--text-secondary); font-weight: 500; }
+.progress-pct { font-size: .78rem; color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.progress-detail-text { font-size: .72rem; color: var(--text-muted); margin-top: 4px; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* ── Progress Completion ── */
+@keyframes checkDraw { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+@keyframes checkScale { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.progress-complete-icon { display: inline-flex; animation: checkScale .35s ease-out; }
+.progress-complete-icon svg { stroke-dasharray: 20; animation: checkDraw .3s ease-out .15s both; }
+.progress-fill.is-complete { background: var(--green); animation: none; }
+.progress-fill.is-error { background: var(--danger); animation: none; }
+
+/* ── Entry Done Flash ── */
+@keyframes entryDone { 0% { background: var(--green-bg); } 100% { background: transparent; } }
+.entry.is-done { animation: entryDone .6s ease-out; }
+
+/* ── History Time ── */
+.history-time { font-size: .68rem; color: var(--text-muted); flex-shrink: 0; }
+
+/* ── Error Dismiss ── */
+.error-dismiss { background: none; border: none; color: var(--danger); font-size: 1.1rem; cursor: pointer; padding: 0 4px; margin-left: auto; opacity: .6; transition: opacity .15s; }
+.error-dismiss:hover { opacity: 1; }
+
+/* ── Error Shake ── */
+@keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-4px); } 40%,80% { transform: translateX(4px); } }
+.error:not([hidden]) { animation: shake .4s ease-out, fadeIn .2s ease-out; }
+
+/* ── Save Button Bounce ── */
+@keyframes bounceIn { 0% { transform: scale(0.8); opacity: 0; } 60% { transform: scale(1.04); } 100% { transform: scale(1); opacity: 1; } }
 
 /* ── Responsive ── */
 @media (max-width: 600px) {
@@ -1030,6 +1102,10 @@ main { animation: fadeIn .4s ease-out; }
     .drop-zone { padding: 40px 20px; }
     .drop-browse { min-width: unset; width: 100%; text-align: center; }
     .pdf-section .card-body h2 { font-size: 1.6rem; }
+    .pills { gap: 4px; }
+    .pill { padding: 6px 12px; font-size: .72rem; }
+    .pill-divider { margin: 0 2px; }
+    .format-pills { gap: 10px; }
 }
 
 /* ── Button loading spinner ── */

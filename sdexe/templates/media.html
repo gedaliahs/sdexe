@@ -29,7 +29,19 @@
             <button class="folder-change" onclick="promptSetFolder()">Change</button>
         </div>
 
-        <div id="error" class="error" hidden></div>
+        <div id="error" class="error" hidden>
+            <span id="error-text"></span>
+            <button class="error-dismiss" onclick="hideError()">&times;</button>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+            <p>Try pasting a URL like:</p>
+            <div class="empty-examples">
+                <code>https://youtube.com/watch?v=...</code>
+                <code>https://soundcloud.com/artist/track</code>
+            </div>
+            <p class="empty-hint">Press <kbd>/</kbd> to focus &middot; Paste auto-fetches</p>
+        </div>
 
         <!-- Loading Skeleton -->
         <div id="skeleton-card" class="card skeleton-card" hidden>
@@ -62,7 +74,23 @@
                     </div>
                 </div>
                 <div class="controls">
-                    <div class="control-row">
+                    <div class="format-pills">
+                        <div class="pill-group" data-target="v-format">
+                            <span class="pill-label">Format</span>
+                            <div class="pills">
+                                <button class="pill active" data-value="mp3">MP3</button>
+                                <button class="pill" data-value="flac">FLAC</button>
+                                <button class="pill" data-value="wav">WAV</button>
+                                <span class="pill-divider"></span>
+                                <button class="pill" data-value="mp4">MP4</button>
+                            </div>
+                        </div>
+                        <div class="pill-group quality-pills" data-target="v-quality">
+                            <span class="pill-label">Quality</span>
+                            <div class="pills" id="v-quality-pills"></div>
+                        </div>
+                    </div>
+                    <div class="control-row" hidden>
                         <div class="select-wrap">
                             <label>Format</label>
                             <select id="v-format" onchange="updateQuality('v')">
@@ -92,7 +120,11 @@
                 </div>
                 <div id="v-progress" class="progress-panel" hidden>
                     <div class="progress-track"><div id="v-progress-fill" class="progress-fill"></div></div>
-                    <p id="v-progress-text">Starting...</p>
+                    <div class="progress-details">
+                        <span id="v-progress-status" class="progress-status">Starting...</span>
+                        <span id="v-progress-pct" class="progress-pct"></span>
+                    </div>
+                    <p id="v-progress-text" class="progress-detail-text"></p>
                 </div>
                 <a id="v-save" class="btn-save" hidden>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
@@ -118,7 +150,23 @@
                 </div>
 
                 <div class="controls">
-                    <div class="control-row">
+                    <div class="format-pills">
+                        <div class="pill-group" data-target="p-format">
+                            <span class="pill-label">Format</span>
+                            <div class="pills">
+                                <button class="pill active" data-value="mp3">MP3</button>
+                                <button class="pill" data-value="flac">FLAC</button>
+                                <button class="pill" data-value="wav">WAV</button>
+                                <span class="pill-divider"></span>
+                                <button class="pill" data-value="mp4">MP4</button>
+                            </div>
+                        </div>
+                        <div class="pill-group quality-pills" data-target="p-quality">
+                            <span class="pill-label">Quality</span>
+                            <div class="pills" id="p-quality-pills"></div>
+                        </div>
+                    </div>
+                    <div class="control-row" hidden>
                         <div class="select-wrap">
                             <label>Format</label>
                             <select id="p-format" onchange="updateQuality('p')">
@@ -165,7 +213,7 @@
         <div id="history-panel" class="history-panel" hidden>
             <div class="history-header" onclick="toggleHistory()">
                 <span id="history-toggle" class="history-header-title">Recent downloads</span>
-                <span id="history-chevron" class="history-chevron">▼</span>
+                <span id="history-chevron" class="history-chevron">&#x25BC;</span>
             </div>
             <div id="history-list"></div>
         </div>

@@ -12,7 +12,6 @@ function showToast(message, type = "success", actions = null) {
     const span = document.createElement("span");
     span.textContent = message;
     toast.appendChild(span);
-    // actions: array of {label, fn} objects, or single {label, fn}, or legacy (actionLabel, actionFn) via compat
     const actionList = Array.isArray(actions) ? actions :
         (actions && actions.label ? [actions] :
         (typeof actions === "string" ? [{ label: actions, fn: arguments[3] }] : null));
@@ -26,6 +25,9 @@ function showToast(message, type = "success", actions = null) {
         });
     }
     container.appendChild(toast);
+    // Trim excess toasts (keep max 4)
+    const toasts = container.querySelectorAll('.toast');
+    if (toasts.length > 4) toasts[0].remove();
     requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add("toast-visible")));
     setTimeout(() => {
         toast.classList.remove("toast-visible");
@@ -45,9 +47,56 @@ function requestNotifPermission() {
     }
 }
 
+/* ── Helpers ── */
+function timeAgo(ts) {
+    const diff = (Date.now() - ts) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+
+function scrollIfNeeded(el) {
+    const rect = el.getBoundingClientRect();
+    const container = el.closest('.entries-list');
+    if (!container) return;
+    const cRect = container.getBoundingClientRect();
+    if (rect.bottom > cRect.bottom || rect.top < cRect.top) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+function esc(s) {
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+}
+function formatDuration(sec) {
+    if (!sec) return "";
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    return `${m}:${String(s).padStart(2,"0")}`;
+}
+function showError(msg) {
+    const el = document.getElementById("error");
+    document.getElementById("error-text").textContent = msg;
+    el.hidden = false;
+}
+function hideError() { document.getElementById("error").hidden = true; }
+
+function hideAll() {
+    document.getElementById("video-card").hidden = true;
+    document.getElementById("playlist-panel").hidden = true;
+    document.getElementById("v-progress").hidden = true;
+    document.getElementById("v-save").hidden = true;
+    document.getElementById("empty-state").hidden = false;
+}
+
 /* ── Download History ── */
 async function addToHistory(title, format, id, url) {
-    const item = { title, format, id, url: url || currentUrl };
+    const item = { title, format, id, url: url || currentUrl, ts: Date.now() };
     downloadHistory.unshift(item);
     if (downloadHistory.length > 50) downloadHistory.pop();
     renderHistory();
@@ -85,7 +134,8 @@ function renderHistory() {
                 <span class="history-title">${esc(item.title)}</span>
                 <span class="history-fmt">${item.format.toUpperCase()}</span>
             </div>
-            ${item.url ? `<button class="history-refetch" title="Re-fetch this URL" onclick="refetchUrl(${JSON.stringify(item.url)})">↩</button>` : ""}
+            ${item.ts ? `<span class="history-time">${timeAgo(item.ts)}</span>` : ""}
+            ${item.url ? `<button class="history-refetch" title="Re-fetch this URL" onclick="refetchUrl(${JSON.stringify(item.url)})">&#x21A9;</button>` : ""}
             <a href="/api/file/${item.id}" class="history-save">Save</a>
         </div>
     `).join("");
@@ -151,30 +201,6 @@ async function tryClipboard() {
     } catch {}
 }
 
-/* ── Helpers ── */
-function esc(s) {
-    const d = document.createElement("div");
-    d.textContent = s;
-    return d.innerHTML;
-}
-function formatDuration(sec) {
-    if (!sec) return "";
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const s = sec % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-    return `${m}:${String(s).padStart(2,"0")}`;
-}
-function showError(msg) { const el = document.getElementById("error"); el.textContent = msg; el.hidden = false; }
-function hideError() { document.getElementById("error").hidden = true; }
-
-function hideAll() {
-    document.getElementById("video-card").hidden = true;
-    document.getElementById("playlist-panel").hidden = true;
-    document.getElementById("v-progress").hidden = true;
-    document.getElementById("v-save").hidden = true;
-}
-
 /* ── Textarea Auto-resize ── */
 function initTextarea() {
     const ta = document.getElementById("url");
@@ -208,13 +234,65 @@ function updateQuality(prefix) {
         q.innerHTML = `<option value="best">Lossless</option>`;
         q.disabled = true;
     }
-    // Show subtitle option only for MP4 (single video)
     if (prefix === "v") {
         const subWrap = document.getElementById("v-subtitle-wrap");
         if (subWrap) subWrap.style.display = fmt === "mp4" ? "block" : "none";
     }
-    // Persist format choice
     localStorage.setItem("sdexe_format", fmt);
+    // Rebuild quality pills
+    const pillContainer = document.getElementById(prefix + '-quality-pills');
+    if (pillContainer) {
+        const options = [...document.getElementById(prefix + '-quality').options];
+        pillContainer.innerHTML = options.map((opt, i) =>
+            `<button class="pill${i === 0 ? ' active' : ''}" data-value="${opt.value}">${opt.textContent}</button>`
+        ).join('');
+        pillContainer.querySelectorAll('.pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                pillContainer.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                const qEl = document.getElementById(prefix + '-quality');
+                qEl.value = pill.dataset.value;
+                qEl.dispatchEvent(new Event('change'));
+            });
+        });
+    }
+}
+
+/* ── Format Pills ── */
+function initPills() {
+    document.querySelectorAll('.pill-group').forEach(group => {
+        const targetId = group.dataset.target;
+        const select = document.getElementById(targetId);
+        group.querySelectorAll('.pill[data-value]').forEach(pill => {
+            pill.addEventListener('click', () => {
+                group.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                if (select) {
+                    select.value = pill.dataset.value;
+                    select.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+    });
+}
+
+function syncPillsToSelect(prefix) {
+    const fmtSelect = document.getElementById(prefix + '-format');
+    if (fmtSelect) {
+        const group = document.querySelector(`.pill-group[data-target="${prefix}-format"]`);
+        if (group) {
+            group.querySelectorAll('.pill').forEach(p => {
+                p.classList.toggle('active', p.dataset.value === fmtSelect.value);
+            });
+        }
+    }
+    const qSelect = document.getElementById(prefix + '-quality');
+    const qPills = document.getElementById(prefix + '-quality-pills');
+    if (qSelect && qPills) {
+        qPills.querySelectorAll('.pill').forEach(p => {
+            p.classList.toggle('active', p.dataset.value === qSelect.value);
+        });
+    }
 }
 
 /* ── Skeleton Loader ── */
@@ -234,20 +312,21 @@ async function fetchInfo() {
 
     hideError();
     hideAll();
+    document.getElementById("empty-state").hidden = true;
     showSkeleton();
+    document.querySelector(".search-bar").classList.add("is-loading");
 
     const urls = parseUrls(text);
 
     const btn = document.getElementById("fetch-btn");
     btn.disabled = true;
     btn.querySelector(".btn-text").textContent = "Loading";
-    document.title = "Fetching… — sdexe";
+    document.title = "Fetching\u2026 \u2014 sdexe";
 
     try {
         if (urls.length > 1) {
             await fetchMultipleUrls(urls);
         } else {
-            // Single URL — original behavior
             const url = urls[0] || text;
             const res = await fetch("/api/info", {
                 method: "POST",
@@ -266,12 +345,13 @@ async function fetchInfo() {
             }
         }
     } catch (e) {
-        showError("Network error — is the server running?");
+        showError("Network error \u2014 is the server running?");
     } finally {
         hideSkeleton();
         btn.disabled = false;
         btn.querySelector(".btn-text").textContent = "Fetch";
-        document.title = "Media Downloader — sdexe";
+        document.title = "Media Downloader \u2014 sdexe";
+        document.querySelector(".search-bar").classList.remove("is-loading");
     }
 }
 
@@ -293,7 +373,6 @@ async function fetchMultipleUrls(urls) {
             if (!res.ok) { errors++; continue; }
 
             if (data.type === "playlist") {
-                // Flatten playlist entries
                 for (const entry of data.entries) {
                     entries.push(entry);
                 }
@@ -316,7 +395,6 @@ async function fetchMultipleUrls(urls) {
         return;
     }
 
-    // Show as a virtual playlist
     renderPlaylist({
         title: `${entries.length} items from ${urls.length} links`,
         uploader: errors > 0 ? `${errors} link(s) failed` : null,
@@ -338,6 +416,7 @@ function restoreFormatPrefs(prefix) {
         const qEl = document.getElementById(prefix + "-quality");
         if (qEl && qEl.querySelector(`option[value="${savedQ}"]`)) qEl.value = savedQ;
     }
+    syncPillsToSelect(prefix);
 }
 
 /* ── Recently used folders ── */
@@ -368,11 +447,10 @@ function renderPlaylist(data) {
 
     document.getElementById("p-title").textContent = data.title;
     document.getElementById("p-meta").textContent =
-        [data.uploader, `${data.count} videos`].filter(Boolean).join(" · ");
+        [data.uploader, `${data.count} videos`].filter(Boolean).join(" \u00B7 ");
     document.getElementById("p-artist").value = data.uploader || "";
     document.getElementById("p-album").value = data.title || "";
 
-    // Reset summary
     const summary = document.getElementById("p-summary");
     summary.hidden = true;
     summary.className = "batch-summary";
@@ -434,6 +512,17 @@ async function startSingleDownload() {
     btn.textContent = "Starting...";
     requestNotifPermission();
 
+    // Reset progress state
+    const fill = document.getElementById("v-progress-fill");
+    fill.style.width = "0%";
+    fill.className = "progress-fill";
+    const statusEl = document.getElementById("v-progress-status");
+    const pctEl = document.getElementById("v-progress-pct");
+    const detailEl = document.getElementById("v-progress-text");
+    if (statusEl) statusEl.textContent = "Starting...";
+    if (pctEl) pctEl.textContent = "";
+    if (detailEl) detailEl.textContent = "";
+
     try {
         const res = await fetch("/api/download", {
             method: "POST",
@@ -478,7 +567,9 @@ function hideCancelBtn() {
 
 function trackSingleProgress(id, hasMetadata, retries = 0) {
     const fill = document.getElementById("v-progress-fill");
-    const text = document.getElementById("v-progress-text");
+    const statusEl = document.getElementById("v-progress-status");
+    const pctEl = document.getElementById("v-progress-pct");
+    const detailEl = document.getElementById("v-progress-text");
     const btn = document.getElementById("v-dl-btn");
     const source = new EventSource(`/api/progress/${id}`);
 
@@ -487,18 +578,31 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
         fill.style.width = d.progress + "%";
         const detail = d.detail || "";
         if (d.status === "downloading") {
-            text.textContent = `Downloading... ${d.progress}%` + (detail ? `  ·  ${detail}` : "");
+            if (statusEl) statusEl.textContent = "Downloading...";
+            if (pctEl) pctEl.textContent = d.progress + "%";
+            if (detailEl) detailEl.textContent = detail;
         } else if (d.status === "processing") {
             const ppLabel = detail || "Processing";
             const step = d.pp_step || 1;
-            text.textContent = `Post-processing ${step}: ${ppLabel}...`;
+            if (statusEl) statusEl.textContent = `Post-processing ${step}: ${ppLabel}...`;
+            if (pctEl) pctEl.textContent = "";
+            if (detailEl) detailEl.textContent = "";
         } else if (d.status === "metadata") {
             const step = (d.pp_step || 0) + 1;
-            text.textContent = `Post-processing ${step}: Embedding metadata...`;
+            if (statusEl) statusEl.textContent = `Post-processing ${step}: Embedding metadata...`;
+            if (pctEl) pctEl.textContent = "";
+            if (detailEl) detailEl.textContent = "";
         } else if (d.status === "done") {
-            source.close(); fill.style.width = "100%"; hideCancelBtn();
+            source.close();
+            fill.style.width = "100%";
+            fill.classList.add("is-complete");
+            hideCancelBtn();
             const steps = (d.pp_step || 0) + (hasMetadata ? 1 : 0);
-            text.textContent = `Complete` + (steps > 0 ? ` — ${steps} post-processing step${steps === 1 ? "" : "s"} finished` : "");
+            if (statusEl) {
+                statusEl.innerHTML = '<span class="progress-complete-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span> Complete' + (steps > 0 ? ` \u2014 ${steps} post-processing step${steps === 1 ? "" : "s"}` : "");
+            }
+            if (pctEl) pctEl.textContent = "";
+            if (detailEl) detailEl.textContent = "";
             const title = document.getElementById("v-title").value.trim() || "Download";
             const fmt = document.getElementById("v-format").value;
             addToHistory(title, fmt, id);
@@ -517,23 +621,30 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
                 const link = document.getElementById("v-save");
                 link.href = `/api/file/${id}`;
                 link.hidden = false;
-                showToast(`${title} ready — click Save File`);
+                showToast(`${title} ready \u2014 click Save File`);
             }
             sendNotification("sdexe", `Downloaded: ${title}`);
             resetBtn(btn, "Download");
         } else if (d.status === "error") {
-            source.close(); hideCancelBtn();
-            showError(d.error || "Download failed"); text.textContent = "";
+            source.close();
+            fill.classList.add("is-error");
+            hideCancelBtn();
+            showError(d.error || "Download failed");
+            if (statusEl) statusEl.textContent = "Failed";
+            if (pctEl) pctEl.textContent = "";
+            if (detailEl) detailEl.textContent = "";
             resetBtn(btn, "Download");
         }
     };
     source.onerror = () => {
         source.close();
         if (retries < 3) {
-            text.textContent = `Connection lost — retrying (${retries + 1}/3)...`;
+            if (statusEl) statusEl.textContent = `Connection lost \u2014 retrying (${retries + 1}/3)...`;
+            if (pctEl) pctEl.textContent = "";
             setTimeout(() => trackSingleProgress(id, hasMetadata, retries + 1), 1500);
         } else {
-            text.textContent = "Connection lost — check download history";
+            if (statusEl) statusEl.textContent = "Connection lost \u2014 check download history";
+            if (pctEl) pctEl.textContent = "";
             hideCancelBtn();
             resetBtn(btn, "Download");
         }
@@ -582,7 +693,6 @@ function finishSummary(total, done, failed) {
     showToast(msg, failed > 0 ? "error" : "success");
     sendNotification("sdexe", msg);
 
-    // Remove any existing ZIP button
     const old = summary.querySelector(".btn-zip");
     if (old) old.remove();
 
@@ -642,14 +752,12 @@ async function startPlaylistDownload() {
     const total = selected.length;
     let done = 0;
     let failed = 0;
-    let queued = 0; // next index to pick up
+    let queued = 0;
 
-    // Reset summary banner
     const summary = document.getElementById("p-summary");
     summary.className = "batch-summary";
     showSummary();
 
-    // Mark all selected as queued (skip already-done ones)
     selected.forEach(el => {
         const status = el.querySelector(".entry-status");
         if (!status.querySelector(".entry-save")) {
@@ -667,7 +775,6 @@ async function startPlaylistDownload() {
             const entry = playlistEntries[idx];
             const status = el.querySelector(".entry-status");
 
-            // Skip already-downloaded entries
             if (status.querySelector(".entry-save")) {
                 done++;
                 updateSummary(done + failed, total, done, failed, null);
@@ -675,7 +782,7 @@ async function startPlaylistDownload() {
             }
 
             el.classList.add("is-active");
-            el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            scrollIfNeeded(el);
             updateSummary(done + failed + 1, total, done, failed, entry.title);
 
             status.innerHTML = `
@@ -805,5 +912,6 @@ document.addEventListener("change", e => {
 
 /* ── Init ── */
 initTextarea();
+initPills();
 loadConfig();
 tryClipboard();
