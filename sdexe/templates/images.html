@@ -14,6 +14,10 @@
             <button class="pdf-tab active" data-tab="resize">Resize</button>
             <button class="pdf-tab" data-tab="compress">Compress</button>
             <button class="pdf-tab" data-tab="imgconvert">Convert Format</button>
+            <button class="pdf-tab" data-tab="crop">Crop</button>
+            <button class="pdf-tab" data-tab="rotate">Rotate</button>
+            <button class="pdf-tab" data-tab="stripexif">Strip EXIF</button>
+            <button class="pdf-tab" data-tab="toico">To ICO</button>
         </div>
 
         <!-- Resize -->
@@ -169,6 +173,186 @@
                 </div>
 
                 <div id="iconvert-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Crop -->
+        <div id="tab-crop" class="pdf-section card">
+            <div class="card-body">
+                <h2>Crop Image</h2>
+                <p class="meta">Crop an image to a specific region by specifying pixel coordinates.</p>
+
+                <div class="drop-zone" id="crop-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polyline points="6 2 6 22"/><polyline points="2 6 6 6"/><polyline points="2 18 6 18"/>
+                        <polyline points="18 2 18 22"/><polyline points="22 6 18 6"/><polyline points="22 18 18 18"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="crop-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP &middot; enter pixel crop bounds below</p>
+                </div>
+
+                <div id="crop-file-info" class="split-info" hidden>
+                    <img id="crop-thumb" class="img-thumb" src="" alt="">
+                    <span id="crop-file-name" class="split-name"></span>
+                    <span id="crop-dimensions" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearCropFile()">&times;</button>
+                </div>
+
+                <div id="crop-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Left (px)</label>
+                            <input type="number" id="crop-left" value="0" min="0">
+                        </div>
+                        <div class="field">
+                            <label>Top (px)</label>
+                            <input type="number" id="crop-top" value="0" min="0">
+                        </div>
+                        <div class="field">
+                            <label>Right (px)</label>
+                            <input type="number" id="crop-right" placeholder="full width" min="1">
+                        </div>
+                        <div class="field">
+                            <label>Bottom (px)</label>
+                            <input type="number" id="crop-bottom" placeholder="full height" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="crop-actions" class="pdf-actions" hidden>
+                    <button id="crop-btn" class="btn-download" onclick="doCrop()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Crop Image
+                    </button>
+                </div>
+
+                <div id="crop-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Rotate -->
+        <div id="tab-rotate" class="pdf-section card">
+            <div class="card-body">
+                <h2>Rotate Image</h2>
+                <p class="meta">Rotate an image clockwise by a set angle.</p>
+
+                <div class="drop-zone" id="rotate-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="rotate-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP &middot; choose rotation angle</p>
+                </div>
+
+                <div id="rotate-file-info" class="split-info" hidden>
+                    <img id="rotate-thumb" class="img-thumb" src="" alt="">
+                    <span id="rotate-file-name" class="split-name"></span>
+                    <button class="split-remove" onclick="clearRotateFile()">&times;</button>
+                </div>
+
+                <div id="rotate-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Angle</label>
+                            <select id="rotate-angle">
+                                <option value="90">90° clockwise</option>
+                                <option value="180">180°</option>
+                                <option value="270">270° clockwise (90° CCW)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="rotate-actions" class="pdf-actions" hidden>
+                    <button id="rotate-btn" class="btn-download" onclick="doRotate()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Rotate Image
+                    </button>
+                </div>
+
+                <div id="rotate-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Strip EXIF -->
+        <div id="tab-stripexif" class="pdf-section card">
+            <div class="card-body">
+                <h2>Strip EXIF Data</h2>
+                <p class="meta">Remove all metadata (EXIF, GPS, camera info) from an image before sharing it.</p>
+
+                <div class="drop-zone" id="stripexif-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="9" y1="9" x2="15" y2="15"/>
+                        <line x1="15" y1="9" x2="9" y2="15"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="stripexif-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; JPEG, PNG, WebP &middot; strips all metadata</p>
+                </div>
+
+                <div id="stripexif-file-info" class="split-info" hidden>
+                    <img id="stripexif-thumb" class="img-thumb" src="" alt="">
+                    <span id="stripexif-file-name" class="split-name"></span>
+                    <span id="stripexif-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearStripExifFile()">&times;</button>
+                </div>
+
+                <div id="stripexif-actions" class="pdf-actions" hidden>
+                    <button id="stripexif-btn" class="btn-download" onclick="doStripExif()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Strip EXIF
+                    </button>
+                </div>
+
+                <div id="stripexif-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- To ICO -->
+        <div id="tab-toico" class="pdf-section card">
+            <div class="card-body">
+                <h2>Convert to ICO</h2>
+                <p class="meta">Convert any image to a Windows .ico icon file with multiple sizes.</p>
+
+                <div class="drop-zone" id="toico-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="toico-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; any image format &middot; choose icon sizes</p>
+                </div>
+
+                <div id="toico-file-info" class="split-info" hidden>
+                    <img id="toico-thumb" class="img-thumb" src="" alt="">
+                    <span id="toico-file-name" class="split-name"></span>
+                    <button class="split-remove" onclick="clearToIcoFile()">&times;</button>
+                </div>
+
+                <div id="toico-options" hidden>
+                    <div style="margin-top: 16px;">
+                        <label style="display:block; margin-bottom: 8px; font-size: 0.875rem; color: var(--text-secondary);">Sizes to include</label>
+                        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                            <label class="check-label"><input type="checkbox" class="ico-size" value="16" checked> 16×16</label>
+                            <label class="check-label"><input type="checkbox" class="ico-size" value="32" checked> 32×32</label>
+                            <label class="check-label"><input type="checkbox" class="ico-size" value="48" checked> 48×48</label>
+                            <label class="check-label"><input type="checkbox" class="ico-size" value="64" checked> 64×64</label>
+                            <label class="check-label"><input type="checkbox" class="ico-size" value="128" checked> 128×128</label>
+                            <label class="check-label"><input type="checkbox" class="ico-size" value="256" checked> 256×256</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="toico-actions" class="pdf-actions" hidden>
+                    <button id="toico-btn" class="btn-download" onclick="doToIco()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to ICO
+                    </button>
+                </div>
+
+                <div id="toico-error" class="error" hidden></div>
             </div>
         </div>
     </main>

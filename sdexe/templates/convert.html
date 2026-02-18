@@ -18,6 +18,8 @@
             <button class="pdf-tab" data-tab="json2yaml">JSON → YAML</button>
             <button class="pdf-tab" data-tab="csv2tsv">CSV ↔ TSV</button>
             <button class="pdf-tab" data-tab="xml2json">XML → JSON</button>
+            <button class="pdf-tab" data-tab="createzip">Create ZIP</button>
+            <button class="pdf-tab" data-tab="extractzip">Extract ZIP</button>
         </div>
 
         <!-- Markdown to HTML -->
@@ -273,6 +275,68 @@
                     </button>
                 </div>
                 <div id="xml-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Create ZIP -->
+        <div id="tab-createzip" class="pdf-section card">
+            <div class="card-body">
+                <h2>Create ZIP Archive</h2>
+                <p class="meta">Select multiple files to bundle them into a single ZIP archive.</p>
+
+                <div class="drop-zone" id="createzip-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <label class="drop-browse">Select files<input type="file" id="createzip-input" multiple hidden></label>
+                    <p class="drop-hint">or drop files here &middot; any file type &middot; batch supported</p>
+                </div>
+
+                <div id="createzip-list" class="file-list"></div>
+
+                <div id="createzip-actions" class="pdf-actions" hidden>
+                    <button id="createzip-btn" class="btn-download" onclick="doCreateZip()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Create ZIP
+                    </button>
+                </div>
+
+                <div id="createzip-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Extract ZIP -->
+        <div id="tab-extractzip" class="pdf-section card">
+            <div class="card-body">
+                <h2>Extract ZIP Archive</h2>
+                <p class="meta">Upload a ZIP file to extract its contents. Single files download directly; multiple files are re-zipped with flat names.</p>
+
+                <div class="drop-zone" id="extractzip-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <label class="drop-browse">Select .zip file<input type="file" id="extractzip-input" accept=".zip" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; extracts all contents</p>
+                </div>
+
+                <div id="extractzip-file-info" class="split-info" hidden>
+                    <span id="extractzip-file-name" class="split-name"></span>
+                    <span id="extractzip-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearExtractZipFile()">&times;</button>
+                </div>
+
+                <div id="extractzip-actions" class="pdf-actions" hidden>
+                    <button id="extractzip-btn" class="btn-download" onclick="doExtractZip()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Extract ZIP
+                    </button>
+                </div>
+
+                <div id="extractzip-error" class="error" hidden></div>
             </div>
         </div>
     </main>

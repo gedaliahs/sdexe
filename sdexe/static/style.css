@@ -675,6 +675,28 @@ footer a:hover { color: var(--text-secondary); }
 }
 .convert-textarea::placeholder { color: #adb5bd; }
 
+/* ── Word Count Stats ── */
+.wc-stat {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    text-align: center;
+}
+.wc-num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.wc-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
 /* ── Toast ── */
 #toast-container {
     position: fixed; bottom: 24px; right: 24px;

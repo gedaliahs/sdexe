@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}AV Tools{% endblock %}
+{% block nav_av %}active{% endblock %}
+
+{% block content %}
+    <main>
+        <div class="hero">
+            <h1>AV Tools</h1>
+            <p class="subtitle">Convert, trim, and process audio and video files — everything runs locally using ffmpeg.</p>
+        </div>
+
+        <div class="pdf-tabs">
+            <button class="pdf-tab active" data-tab="av-convert-audio">Convert Audio</button>
+            <button class="pdf-tab" data-tab="av-trim-audio">Trim Audio</button>
+            <button class="pdf-tab" data-tab="av-speed">Change Speed</button>
+            <button class="pdf-tab" data-tab="av-extract-audio">Extract Audio</button>
+            <button class="pdf-tab" data-tab="av-trim-video">Trim Video</button>
+            <button class="pdf-tab" data-tab="av-compress-video">Compress Video</button>
+            <button class="pdf-tab" data-tab="av-convert-video">Convert Video</button>
+        </div>
+
+        <!-- Convert Audio -->
+        <div id="tab-av-convert-audio" class="pdf-section card active">
+            <div class="card-body">
+                <h2>Convert Audio</h2>
+                <p class="meta">Convert an audio file to a different format.</p>
+
+                <div class="drop-zone" id="av-convert-audio-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M15.54 8.46a5 5 0 010 7.07"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="av-convert-audio-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; MP3, WAV, OGG, FLAC, AAC, M4A, and more</p>
+                </div>
+
+                <div id="av-convert-audio-info" class="split-info" hidden>
+                    <span id="av-convert-audio-name" class="split-name"></span>
+                    <span id="av-convert-audio-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('av-convert-audio')">&times;</button>
+                </div>
+
+                <div id="av-convert-audio-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Output Format</label>
+                            <select id="av-convert-audio-format">
+                                <option value="mp3">MP3</option>
+                                <option value="wav">WAV</option>
+                                <option value="ogg">OGG</option>
+                                <option value="flac">FLAC</option>
+                                <option value="aac">AAC</option>
+                                <option value="m4a">M4A</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="av-convert-audio-actions" class="pdf-actions" hidden>
+                    <button id="av-convert-audio-btn" class="btn-download" onclick="doAvConvertAudio()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert Audio
+                    </button>
+                </div>
+
+                <div id="av-convert-audio-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Trim Audio -->
+        <div id="tab-av-trim-audio" class="pdf-section card">
+            <div class="card-body">
+                <h2>Trim Audio</h2>
+                <p class="meta">Cut audio to a specific start and end time.</p>
+
+                <div class="drop-zone" id="av-trim-audio-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <line x1="15" y1="9" x2="21" y2="9"/>
+                        <line x1="15" y1="15" x2="21" y2="15"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="av-trim-audio-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; specify start and end times below</p>
+                </div>
+
+                <div id="av-trim-audio-info" class="split-info" hidden>
+                    <span id="av-trim-audio-name" class="split-name"></span>
+                    <span id="av-trim-audio-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('av-trim-audio')">&times;</button>
+                </div>
+
+                <div id="av-trim-audio-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Start time</label>
+                            <input type="text" id="av-trim-audio-start" placeholder="00:00:30">
+                        </div>
+                        <div class="field">
+                            <label>End time (optional)</label>
+                            <input type="text" id="av-trim-audio-end" placeholder="00:01:30">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="av-trim-audio-actions" class="pdf-actions" hidden>
+                    <button id="av-trim-audio-btn" class="btn-download" onclick="doAvTrimAudio()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Trim Audio
+                    </button>
+                </div>
+
+                <div id="av-trim-audio-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Change Speed -->
+        <div id="tab-av-speed" class="pdf-section card">
+            <div class="card-body">
+                <h2>Change Speed</h2>
+                <p class="meta">Speed up or slow down an audio file without changing its pitch.</p>
+
+                <div class="drop-zone" id="av-speed-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="av-speed-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; choose a playback speed</p>
+                </div>
+
+                <div id="av-speed-info" class="split-info" hidden>
+                    <span id="av-speed-name" class="split-name"></span>
+                    <span id="av-speed-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('av-speed')">&times;</button>
+                </div>
+
+                <div id="av-speed-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Speed</label>
+                            <select id="av-speed-value">
+                                <option value="0.5">0.5× (half speed)</option>
+                                <option value="0.75">0.75×</option>
+                                <option value="1.25">1.25×</option>
+                                <option value="1.5" selected>1.5×</option>
+                                <option value="2">2× (double speed)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="av-speed-actions" class="pdf-actions" hidden>
+                    <button id="av-speed-btn" class="btn-download" onclick="doAvSpeed()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Change Speed
+                    </button>
+                </div>
+
+                <div id="av-speed-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Extract Audio -->
+        <div id="tab-av-extract-audio" class="pdf-section card">
+            <div class="card-body">
+                <h2>Extract Audio</h2>
+                <p class="meta">Pull the audio track out of a video file.</p>
+
+                <div class="drop-zone" id="av-extract-audio-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                        <line x1="7" y1="2" x2="7" y2="22"/>
+                        <line x1="17" y1="2" x2="17" y2="22"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <line x1="2" y1="7" x2="7" y2="7"/>
+                        <line x1="2" y1="17" x2="7" y2="17"/>
+                        <line x1="17" y1="17" x2="22" y2="17"/>
+                        <line x1="17" y1="7" x2="22" y2="7"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="av-extract-audio-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; MP4, MKV, MOV, AVI, and more</p>
+                </div>
+
+                <div id="av-extract-audio-info" class="split-info" hidden>
+                    <span id="av-extract-audio-name" class="split-name"></span>
+                    <span id="av-extract-audio-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('av-extract-audio')">&times;</button>
+                </div>
+
+                <div id="av-extract-audio-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Audio Format</label>
+                            <select id="av-extract-audio-format">
+                                <option value="mp3">MP3</option>
+                                <option value="wav">WAV</option>
+                                <option value="aac">AAC</option>
+                                <option value="flac">FLAC</option>
+                                <option value="ogg">OGG</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="av-extract-audio-actions" class="pdf-actions" hidden>
+                    <button id="av-extract-audio-btn" class="btn-download" onclick="doAvExtractAudio()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Extract Audio
+                    </button>
+                </div>
+
+                <div id="av-extract-audio-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Trim Video -->
+        <div id="tab-av-trim-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Trim Video</h2>
+                <p class="meta">Cut a video to a specific start and end time.</p>
+
+                <div class="drop-zone" id="av-trim-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="av-trim-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; specify start and end times below</p>
+                </div>
+
+                <div id="av-trim-video-info" class="split-info" hidden>
+                    <span id="av-trim-video-name" class="split-name"></span>
+                    <span id="av-trim-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('av-trim-video')">&times;</button>
+                </div>
+
+                <div id="av-trim-video-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Start time</label>
+                            <input type="text" id="av-trim-video-start" placeholder="00:00:30">
+                        </div>
+                        <div class="field">
+                            <label>End time (optional)</label>
+                            <input type="text" id="av-trim-video-end" placeholder="00:01:30">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="av-trim-video-actions" class="pdf-actions" hidden>
+                    <button id="av-trim-video-btn" class="btn-download" onclick="doAvTrimVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Trim Video
+                    </button>
+                </div>
+
+                <div id="av-trim-video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Compress Video -->
+        <div id="tab-av-compress-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Compress Video</h2>
+                <p class="meta">Re-encode a video at a lower bitrate to reduce file size.</p>
+
+                <div class="drop-zone" id="av-compress-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="av-compress-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; outputs H.264 MP4 &middot; may take a few minutes</p>
+                </div>
+
+                <div id="av-compress-video-info" class="split-info" hidden>
+                    <span id="av-compress-video-name" class="split-name"></span>
+                    <span id="av-compress-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('av-compress-video')">&times;</button>
+                </div>
+
+                <div id="av-compress-video-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Quality</label>
+                            <select id="av-compress-video-quality">
+                                <option value="high">High (larger file, better quality)</option>
+                                <option value="medium" selected>Medium (balanced)</option>
+                                <option value="low">Low (smallest file)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="av-compress-video-actions" class="pdf-actions" hidden>
+                    <button id="av-compress-video-btn" class="btn-download" onclick="doAvCompressVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Compress Video
+                    </button>
+                </div>
+
+                <div id="av-compress-video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Convert Video -->
+        <div id="tab-av-convert-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Convert Video</h2>
+                <p class="meta">Convert a video to a different container format.</p>
+
+                <div class="drop-zone" id="av-convert-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="av-convert-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; MP4, WebM, AVI, MOV</p>
+                </div>
+
+                <div id="av-convert-video-info" class="split-info" hidden>
+                    <span id="av-convert-video-name" class="split-name"></span>
+                    <span id="av-convert-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('av-convert-video')">&times;</button>
+                </div>
+
+                <div id="av-convert-video-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Output Format</label>
+                            <select id="av-convert-video-format">
+                                <option value="mp4">MP4</option>
+                                <option value="webm">WebM</option>
+                                <option value="avi">AVI</option>
+                                <option value="mov">MOV</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="av-convert-video-actions" class="pdf-actions" hidden>
+                    <button id="av-convert-video-btn" class="btn-download" onclick="doAvConvertVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert Video
+                    </button>
+                </div>
+
+                <div id="av-convert-video-error" class="error" hidden></div>
+            </div>
+        </div>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+    <script src="/static/av.js"></script>
+{% endblock %}

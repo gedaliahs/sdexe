@@ -6,6 +6,7 @@ let compressPdfFile = null;
 let totextFile = null;
 let addPwFile = null;
 let removePwFile = null;
+let rotatePagesFile = null;
 
 /* ── Tab Switching ── */
 document.querySelectorAll(".pdf-tab").forEach(tab => {
@@ -471,6 +472,68 @@ async function doRemovePassword() {
     }
     btn.disabled = false;
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Unlock PDF`;
+}
+
+/* ── Rotate Pages ── */
+setupDropZone("rotatepages-drop", "rotatepages-input", async files => {
+    const f = files[0];
+    if (!f) return;
+    rotatePagesFile = f;
+    document.getElementById("rotatepages-file-name").textContent = f.name;
+    document.getElementById("rotatepages-file-info").hidden = false;
+    document.getElementById("rotatepages-options").hidden = false;
+    document.getElementById("rotatepages-actions").hidden = false;
+    const form = new FormData();
+    form.append("file", f);
+    try {
+        const res = await fetch("/api/pdf/page-count", { method: "POST", body: form });
+        const data = await res.json();
+        if (data.pages) {
+            document.getElementById("rotatepages-page-count").textContent = `${data.pages} pages`;
+        }
+    } catch {}
+});
+
+function clearRotatePagesFile() {
+    rotatePagesFile = null;
+    document.getElementById("rotatepages-file-info").hidden = true;
+    document.getElementById("rotatepages-options").hidden = true;
+    document.getElementById("rotatepages-actions").hidden = true;
+    document.getElementById("rotatepages-page-count").textContent = "";
+    document.getElementById("rotatepages-pages").value = "";
+}
+
+async function doRotatePages() {
+    if (!rotatePagesFile) return;
+    const btn = document.getElementById("rotatepages-btn");
+    const err = document.getElementById("rotatepages-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Rotating...";
+
+    const form = new FormData();
+    form.append("file", rotatePagesFile);
+    form.append("angle", document.getElementById("rotatepages-angle").value);
+    const pagesVal = document.getElementById("rotatepages-pages").value.trim();
+    form.append("pages", pagesVal || "all");
+
+    try {
+        const res = await fetch("/api/pdf/rotate", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Rotation failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = rotatePagesFile.name.replace(/\.pdf$/i, "");
+            downloadBlob(blob, base + "_rotated.pdf");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Rotate Pages`;
 }
 
 /* ── Helpers ── */

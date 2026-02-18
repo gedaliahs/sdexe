@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block title %}Text Tools{% endblock %}
+{% block nav_text %}active{% endblock %}
+
+{% block content %}
+    <main>
+        <div class="hero">
+            <h1>Text Tools</h1>
+            <p class="subtitle">Word count, find &amp; replace, regex, Base64, hashing, diff, and more — all in-browser, nothing leaves your machine.</p>
+        </div>
+
+        <div class="pdf-tabs">
+            <button class="pdf-tab active" data-tab="wordcount">Word Count</button>
+            <button class="pdf-tab" data-tab="findreplace">Find &amp; Replace</button>
+            <button class="pdf-tab" data-tab="regex">Regex Tester</button>
+            <button class="pdf-tab" data-tab="base64">Base64</button>
+            <button class="pdf-tab" data-tab="hash">Hash Generator</button>
+            <button class="pdf-tab" data-tab="diff">Text Diff</button>
+            <button class="pdf-tab" data-tab="color">Color Converter</button>
+        </div>
+
+        <!-- Word Count -->
+        <div id="tab-wordcount" class="pdf-section card active">
+            <div class="card-body">
+                <h2>Word Counter</h2>
+                <p class="meta">Live statistics as you type.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Text</label>
+                    <textarea id="wc-input" class="convert-textarea" rows="10" placeholder="Paste or type your text here..." oninput="updateWordCount()"></textarea>
+                </div>
+
+                <div id="wc-stats" style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">
+                    <div class="wc-stat">
+                        <div id="wc-chars" class="wc-num">0</div>
+                        <div class="wc-label">Characters</div>
+                    </div>
+                    <div class="wc-stat">
+                        <div id="wc-chars-no-spaces" class="wc-num">0</div>
+                        <div class="wc-label">No spaces</div>
+                    </div>
+                    <div class="wc-stat">
+                        <div id="wc-words" class="wc-num">0</div>
+                        <div class="wc-label">Words</div>
+                    </div>
+                    <div class="wc-stat">
+                        <div id="wc-lines" class="wc-num">0</div>
+                        <div class="wc-label">Lines</div>
+                    </div>
+                    <div class="wc-stat">
+                        <div id="wc-sentences" class="wc-num">0</div>
+                        <div class="wc-label">Sentences</div>
+                    </div>
+                    <div class="wc-stat">
+                        <div id="wc-read-time" class="wc-num">0 min</div>
+                        <div class="wc-label">Reading time</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Find & Replace -->
+        <div id="tab-findreplace" class="pdf-section card">
+            <div class="card-body">
+                <h2>Find &amp; Replace</h2>
+                <p class="meta">Search and replace text with optional regex and case-sensitivity.</p>
+
+                <div class="field-row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
+                    <div class="field" style="flex: 1; min-width: 180px;">
+                        <label>Find</label>
+                        <input type="text" id="fr-find" placeholder="Search for...">
+                    </div>
+                    <div class="field" style="flex: 1; min-width: 180px;">
+                        <label>Replace with</label>
+                        <input type="text" id="fr-replace" placeholder="Replace with...">
+                    </div>
+                </div>
+
+                <div style="margin-top: 10px; display: flex; gap: 16px; flex-wrap: wrap;">
+                    <label class="check-label"><input type="checkbox" id="fr-case"> Case sensitive</label>
+                    <label class="check-label"><input type="checkbox" id="fr-regex"> Use regex</label>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <label>Input text</label>
+                    <textarea id="fr-input" class="convert-textarea" rows="6" placeholder="Paste text here..."></textarea>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 12px; display: flex; gap: 8px;">
+                    <button class="btn-download" onclick="doFindReplace()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Replace
+                    </button>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Output</label>
+                        <button onclick="copyText('fr-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                    </div>
+                    <textarea id="fr-output" class="convert-textarea" rows="6" readonly placeholder="Result will appear here..."></textarea>
+                </div>
+                <div id="fr-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;"></div>
+                <div id="fr-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Regex Tester -->
+        <div id="tab-regex" class="pdf-section card">
+            <div class="card-body">
+                <h2>Regex Tester</h2>
+                <p class="meta">Test regular expressions against text with live match highlighting.</p>
+
+                <div class="field-row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
+                    <div class="field" style="flex: 3; min-width: 200px;">
+                        <label>Pattern</label>
+                        <input type="text" id="rx-pattern" placeholder="e.g. \b\w+@\w+\.\w+\b" oninput="doRegex()">
+                    </div>
+                    <div class="field" style="flex: 1; min-width: 80px;">
+                        <label>Flags</label>
+                        <input type="text" id="rx-flags" value="g" placeholder="g, i, m" oninput="doRegex()">
+                    </div>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <label>Test string</label>
+                    <textarea id="rx-input" class="convert-textarea" rows="6" placeholder="Paste text to test against..." oninput="doRegex()"></textarea>
+                </div>
+
+                <div id="rx-highlighted" class="convert-textarea" style="margin-top: 12px; min-height: 80px; white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.875rem; display: none;"></div>
+
+                <div id="rx-matches" style="margin-top: 12px;"></div>
+                <div id="rx-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Base64 -->
+        <div id="tab-base64" class="pdf-section card">
+            <div class="card-body">
+                <h2>Base64</h2>
+                <p class="meta">Encode or decode text and files as Base64.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Input</label>
+                    <textarea id="b64-input" class="convert-textarea" rows="5" placeholder="Paste text or Base64 string..."></textarea>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn-download" onclick="doB64Encode()">Encode</button>
+                    <button class="btn-download" style="background: var(--surface-2); color: var(--text); box-shadow: none;" onclick="doB64Decode()">Decode</button>
+                    <label class="btn-download" style="background: var(--surface-2); color: var(--text); box-shadow: none; cursor: pointer;">
+                        Encode File<input type="file" id="b64-file-input" hidden onchange="doB64File()">
+                    </label>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Output</label>
+                        <button onclick="copyText('b64-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                    </div>
+                    <textarea id="b64-output" class="convert-textarea" rows="5" readonly placeholder="Result will appear here..."></textarea>
+                </div>
+                <div id="b64-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Hash Generator -->
+        <div id="tab-hash" class="pdf-section card">
+            <div class="card-body">
+                <h2>Hash Generator</h2>
+                <p class="meta">Generate cryptographic hashes of text using the browser's Web Crypto API.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Input text</label>
+                    <textarea id="hash-input" class="convert-textarea" rows="4" placeholder="Enter text to hash..."></textarea>
+                </div>
+
+                <div style="margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;">
+                    <label class="check-label"><input type="checkbox" class="hash-algo" value="SHA-1" checked> SHA-1</label>
+                    <label class="check-label"><input type="checkbox" class="hash-algo" value="SHA-256" checked> SHA-256</label>
+                    <label class="check-label"><input type="checkbox" class="hash-algo" value="SHA-512"> SHA-512</label>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 12px;">
+                    <button class="btn-download" onclick="doHash()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Generate Hashes
+                    </button>
+                </div>
+
+                <div id="hash-results" style="margin-top: 16px;"></div>
+                <div id="hash-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Text Diff -->
+        <div id="tab-diff" class="pdf-section card">
+            <div class="card-body">
+                <h2>Text Diff</h2>
+                <p class="meta">Compare two blocks of text and highlight line-by-line differences.</p>
+
+                <div class="field-row" style="margin-top: 16px; gap: 12px;">
+                    <div class="field" style="flex: 1;">
+                        <label>Original</label>
+                        <textarea id="diff-original" class="convert-textarea" rows="8" placeholder="Paste original text..."></textarea>
+                    </div>
+                    <div class="field" style="flex: 1;">
+                        <label>Modified</label>
+                        <textarea id="diff-modified" class="convert-textarea" rows="8" placeholder="Paste modified text..."></textarea>
+                    </div>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 12px;">
+                    <button class="btn-download" onclick="doDiff()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Compare
+                    </button>
+                </div>
+
+                <div id="diff-output" style="margin-top: 16px; font-family: monospace; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: none;"></div>
+                <div id="diff-summary" style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);"></div>
+            </div>
+        </div>
+
+        <!-- Color Converter -->
+        <div id="tab-color" class="pdf-section card">
+            <div class="card-body">
+                <h2>Color Converter</h2>
+                <p class="meta">Convert between HEX, RGB, and HSL color formats with a live preview.</p>
+
+                <div style="margin-top: 24px; display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start;">
+                    <div id="color-swatch" style="width: 80px; height: 80px; border-radius: 12px; border: 1px solid var(--border); background: #3b82f6; flex-shrink: 0;"></div>
+
+                    <div style="flex: 1; min-width: 240px;">
+                        <div class="field" style="margin-bottom: 12px;">
+                            <label>HEX</label>
+                            <input type="text" id="color-hex" value="#3b82f6" placeholder="#000000" oninput="colorFromHex()" style="font-family: monospace;">
+                        </div>
+
+                        <div class="field-row" style="gap: 8px; margin-bottom: 12px;">
+                            <div class="field">
+                                <label>R</label>
+                                <input type="number" id="color-r" min="0" max="255" value="59" oninput="colorFromRgb()">
+                            </div>
+                            <div class="field">
+                                <label>G</label>
+                                <input type="number" id="color-g" min="0" max="255" value="130" oninput="colorFromRgb()">
+                            </div>
+                            <div class="field">
+                                <label>B</label>
+                                <input type="number" id="color-b" min="0" max="255" value="246" oninput="colorFromRgb()">
+                            </div>
+                        </div>
+
+                        <div class="field-row" style="gap: 8px;">
+                            <div class="field">
+                                <label>H (0-360)</label>
+                                <input type="number" id="color-h" min="0" max="360" value="217" oninput="colorFromHsl()">
+                            </div>
+                            <div class="field">
+                                <label>S (%)</label>
+                                <input type="number" id="color-s" min="0" max="100" value="91" oninput="colorFromHsl()">
+                            </div>
+                            <div class="field">
+                                <label>L (%)</label>
+                                <input type="number" id="color-l" min="0" max="100" value="60" oninput="colorFromHsl()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="color-display" style="margin-top: 20px; font-family: monospace; font-size: 0.9rem; display: flex; gap: 24px; flex-wrap: wrap; color: var(--text-secondary);">
+                    <span id="color-hex-display"></span>
+                    <span id="color-rgb-display"></span>
+                    <span id="color-hsl-display"></span>
+                </div>
+            </div>
+        </div>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+    <script src="/static/text.js"></script>
+{% endblock %}

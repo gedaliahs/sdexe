@@ -7,6 +7,8 @@ let json2yamlFile = null;
 let csv2tsvFile = null;
 let tsv2csvFile = null;
 let xmlFile = null;
+let createZipFiles = [];
+let extractZipFile = null;
 
 /* ── Tab Switching ── */
 document.querySelectorAll(".pdf-tab").forEach(tab => {
@@ -338,6 +340,119 @@ function clearXmlFile() {
 async function doXmlToJson() {
     if (!xmlFile) return;
     await simpleConvert("xml-btn", "xml-error", "/api/convert/xml-to-json", xmlFile, f => f.name.replace(/\.xml$/i, ".json"), "Convert to JSON");
+}
+
+/* ── Create ZIP ── */
+setupDropZone("createzip-drop", "createzip-input", files => {
+    for (const f of files) createZipFiles.push(f);
+    renderCreateZipList();
+});
+
+function renderCreateZipList() {
+    const list = document.getElementById("createzip-list");
+    list.innerHTML = "";
+    createZipFiles.forEach((f, i) => {
+        const div = document.createElement("div");
+        div.className = "file-item";
+        div.innerHTML = `
+            <span class="file-name">${esc(f.name)}</span>
+            <span class="file-size">${formatSize(f.size)}</span>
+            <button class="file-remove" onclick="removeCreateZipFile(${i})">&times;</button>
+        `;
+        list.appendChild(div);
+    });
+    document.getElementById("createzip-actions").hidden = createZipFiles.length === 0;
+}
+
+function removeCreateZipFile(i) {
+    createZipFiles.splice(i, 1);
+    renderCreateZipList();
+}
+
+function esc(s) {
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+async function doCreateZip() {
+    if (!createZipFiles.length) return;
+    const btn = document.getElementById("createzip-btn");
+    const err = document.getElementById("createzip-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Creating...";
+
+    const form = new FormData();
+    createZipFiles.forEach(f => form.append("files", f));
+
+    try {
+        const res = await fetch("/api/convert/zip", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Failed to create ZIP";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            downloadBlob(blob, "archive.zip");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Create ZIP`;
+}
+
+/* ── Extract ZIP ── */
+setupDropZone("extractzip-drop", "extractzip-input", files => {
+    const f = files[0];
+    if (!f) return;
+    extractZipFile = f;
+    document.getElementById("extractzip-file-name").textContent = f.name;
+    document.getElementById("extractzip-file-size").textContent = formatSize(f.size);
+    document.getElementById("extractzip-file-info").hidden = false;
+    document.getElementById("extractzip-actions").hidden = false;
+});
+
+function clearExtractZipFile() {
+    extractZipFile = null;
+    document.getElementById("extractzip-file-info").hidden = true;
+    document.getElementById("extractzip-actions").hidden = true;
+}
+
+async function doExtractZip() {
+    if (!extractZipFile) return;
+    const btn = document.getElementById("extractzip-btn");
+    const err = document.getElementById("extractzip-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Extracting...";
+
+    const form = new FormData();
+    form.append("file", extractZipFile);
+
+    try {
+        const res = await fetch("/api/convert/unzip", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Failed to extract ZIP";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const ct = res.headers.get("content-type") || "";
+            const cd = res.headers.get("content-disposition") || "";
+            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const base = extractZipFile.name.replace(/\.zip$/i, "");
+            const name = match ? match[1] : (ct.includes("zip") ? `${base}_extracted.zip` : base);
+            downloadBlob(blob, name);
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Extract ZIP`;
 }
 
 /* ── Generic single-file converter ── */
