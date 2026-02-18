@@ -13,6 +13,7 @@ function showTab(tab) {
     document.querySelectorAll(".pdf-section").forEach(s => s.classList.remove("active"));
     const el = document.getElementById("tab-" + tab);
     (el || document.querySelector(".pdf-section")).classList.add("active");
+    window.scrollTo(0, 0);
 }
 showTab(location.hash.slice(1) || "merge");
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "merge"));
@@ -21,11 +22,14 @@ window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "m
 function setupDropZone(zoneId, inputId, handler) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
+    let dragCount = 0;
 
-    zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
-    zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+    zone.addEventListener("dragenter", e => { e.preventDefault(); if (++dragCount === 1) zone.classList.add("drag-over"); });
+    zone.addEventListener("dragover", e => { e.preventDefault(); });
+    zone.addEventListener("dragleave", () => { if (--dragCount === 0) zone.classList.remove("drag-over"); });
     zone.addEventListener("drop", e => {
         e.preventDefault();
+        dragCount = 0;
         zone.classList.remove("drag-over");
         handler(e.dataTransfer.files);
     });
@@ -89,6 +93,7 @@ async function doMerge() {
         } else {
             const blob = await res.blob();
             downloadBlob(blob, "merged.pdf");
+            showToast("Saved: merged.pdf");
         }
     } catch {
         err.textContent = "Network error";
@@ -153,6 +158,7 @@ async function doSplit() {
             const blob = await res.blob();
             const name = ct.includes("zip") ? "split_pages.zip" : "split.pdf";
             downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -219,6 +225,7 @@ async function doImagesToPdf() {
         } else {
             const blob = await res.blob();
             downloadBlob(blob, "images.pdf");
+            showToast("Saved: images.pdf");
         }
     } catch {
         err.textContent = "Network error";
@@ -314,6 +321,7 @@ async function doCompressPdf() {
             const blob = await res.blob();
             const base = compressPdfFile.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_compressed.pdf");
+            showToast("Saved: " + base + "_compressed.pdf");
         }
     } catch {
         err.textContent = "Network error";
@@ -361,6 +369,7 @@ async function doToText() {
             const blob = await res.blob();
             const base = totextFile.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + ".txt");
+            showToast("Saved: " + base + ".txt");
         }
     } catch {
         err.textContent = "Network error";
@@ -413,6 +422,7 @@ async function doAddPassword() {
             const blob = await res.blob();
             const base = addPwFile.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_protected.pdf");
+            showToast("Saved: " + base + "_protected.pdf");
         }
     } catch {
         err.textContent = "Network error";
@@ -464,6 +474,7 @@ async function doRemovePassword() {
             const blob = await res.blob();
             const base = removePwFile.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_unlocked.pdf");
+            showToast("Saved: " + base + "_unlocked.pdf");
         }
     } catch {
         err.textContent = "Network error";
@@ -526,6 +537,7 @@ async function doRotatePages() {
             const blob = await res.blob();
             const base = rotatePagesFile.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_rotated.pdf");
+            showToast("Saved: " + base + "_rotated.pdf");
         }
     } catch {
         err.textContent = "Network error";

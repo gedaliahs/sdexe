@@ -15,6 +15,7 @@ function showTab(tab) {
     document.querySelectorAll(".pdf-section").forEach(s => s.classList.remove("active"));
     const el = document.getElementById("tab-" + tab);
     (el || document.querySelector(".pdf-section")).classList.add("active");
+    window.scrollTo(0, 0);
 }
 showTab(location.hash.slice(1) || "md2html");
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "md2html"));
@@ -23,11 +24,14 @@ window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "m
 function setupDropZone(zoneId, inputId, handler) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
+    let dragCount = 0;
 
-    zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
-    zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+    zone.addEventListener("dragenter", e => { e.preventDefault(); if (++dragCount === 1) zone.classList.add("drag-over"); });
+    zone.addEventListener("dragover", e => { e.preventDefault(); });
+    zone.addEventListener("dragleave", () => { if (--dragCount === 0) zone.classList.remove("drag-over"); });
     zone.addEventListener("drop", e => {
         e.preventDefault();
+        dragCount = 0;
         zone.classList.remove("drag-over");
         handler(e.dataTransfer.files);
     });
@@ -91,6 +95,7 @@ async function doMdToHtml() {
         } else {
             const blob = await res.blob();
             downloadBlob(blob, "converted.html");
+            showToast("Saved: converted.html");
         }
     } catch {
         err.textContent = "Network error";
@@ -139,6 +144,7 @@ async function doCsvToJson() {
             const blob = await res.blob();
             const base = csvFile.name.replace(/\.csv$/i, "");
             downloadBlob(blob, base + ".json");
+            showToast("Saved: " + base + ".json");
         }
     } catch {
         err.textContent = "Network error";
@@ -187,6 +193,7 @@ async function doJsonToCsv() {
             const blob = await res.blob();
             const base = jsonFile.name.replace(/\.json$/i, "");
             downloadBlob(blob, base + ".csv");
+            showToast("Saved: " + base + ".csv");
         }
     } catch {
         err.textContent = "Network error";
@@ -394,6 +401,7 @@ async function doCreateZip() {
         } else {
             const blob = await res.blob();
             downloadBlob(blob, "archive.zip");
+            showToast("Saved: archive.zip");
         }
     } catch {
         err.textContent = "Network error";
@@ -445,6 +453,7 @@ async function doExtractZip() {
             const base = extractZipFile.name.replace(/\.zip$/i, "");
             const name = match ? match[1] : (ct.includes("zip") ? `${base}_extracted.zip` : base);
             downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -473,7 +482,9 @@ async function simpleConvert(btnId, errId, endpoint, file, nameFn, label) {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            downloadBlob(blob, nameFn(file));
+            const dlName = nameFn(file);
+            downloadBlob(blob, dlName);
+            showToast("Saved: " + dlName);
         }
     } catch {
         err.textContent = "Network error";

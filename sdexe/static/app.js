@@ -71,7 +71,12 @@ function renderHistory() {
     const panel = document.getElementById("history-panel");
     const list = document.getElementById("history-list");
     const toggle = document.getElementById("history-toggle");
-    if (!panel || !downloadHistory.length) return;
+    if (!panel) return;
+    if (!downloadHistory.length) {
+        panel.hidden = false;
+        list.innerHTML = '<p class="history-empty">No recent downloads</p>';
+        return;
+    }
     panel.hidden = false;
     if (toggle) toggle.textContent = `Recent (${downloadHistory.length})`;
     list.innerHTML = downloadHistory.map(item => `

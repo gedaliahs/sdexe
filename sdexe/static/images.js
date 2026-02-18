@@ -12,6 +12,7 @@ function showTab(tab) {
     document.querySelectorAll(".pdf-section").forEach(s => s.classList.remove("active"));
     const el = document.getElementById("tab-" + tab);
     (el || document.querySelector(".pdf-section")).classList.add("active");
+    window.scrollTo(0, 0);
 }
 showTab(location.hash.slice(1) || "resize");
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "resize"));
@@ -20,11 +21,14 @@ window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "r
 function setupDropZone(zoneId, inputId, handler) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
+    let dragCount = 0;
 
-    zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
-    zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+    zone.addEventListener("dragenter", e => { e.preventDefault(); if (++dragCount === 1) zone.classList.add("drag-over"); });
+    zone.addEventListener("dragover", e => { e.preventDefault(); });
+    zone.addEventListener("dragleave", () => { if (--dragCount === 0) zone.classList.remove("drag-over"); });
     zone.addEventListener("drop", e => {
         e.preventDefault();
+        dragCount = 0;
         zone.classList.remove("drag-over");
         handler(e.dataTransfer.files);
     });
@@ -121,6 +125,7 @@ async function doResize() {
             const match = cd.match(/filename="?(.+?)"?$/);
             const name = ct.includes("zip") ? "resized_images.zip" : (match ? match[1] : "resized.png");
             downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -191,6 +196,7 @@ async function doCompress() {
             const blob = await res.blob();
             const name = ct.includes("zip") ? "compressed_images.zip" : "compressed.jpg";
             downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -262,6 +268,7 @@ async function doImageConvert() {
             const fmt = document.getElementById("iconvert-format").value;
             const name = ct.includes("zip") ? `converted_${fmt}.zip` : `converted.${fmt}`;
             downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -325,6 +332,7 @@ async function doCrop() {
             const base = cropFile.name.replace(/\.[^.]+$/, "");
             const ext = cropFile.name.split(".").pop();
             downloadBlob(blob, `${base}_cropped.${ext}`);
+            showToast("Saved: " + base + "_cropped." + ext);
         }
     } catch {
         err.textContent = "Network error";
@@ -376,6 +384,7 @@ async function doRotate() {
             const base = rotateFile.name.replace(/\.[^.]+$/, "");
             const ext = rotateFile.name.split(".").pop();
             downloadBlob(blob, `${base}_rotated.${ext}`);
+            showToast("Saved: " + base + "_rotated." + ext);
         }
     } catch {
         err.textContent = "Network error";
@@ -425,6 +434,7 @@ async function doStripExif() {
             const base = stripExifFile.name.replace(/\.[^.]+$/, "");
             const ext = stripExifFile.name.split(".").pop();
             downloadBlob(blob, `${base}_clean.${ext}`);
+            showToast("Saved: " + base + "_clean." + ext);
         }
     } catch {
         err.textContent = "Network error";
@@ -484,6 +494,7 @@ async function doToIco() {
             const blob = await res.blob();
             const base = toIcoFile.name.replace(/\.[^.]+$/, "");
             downloadBlob(blob, `${base}.ico`);
+            showToast("Saved: " + base + ".ico");
         }
     } catch {
         err.textContent = "Network error";

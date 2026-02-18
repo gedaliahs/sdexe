@@ -3,6 +3,7 @@ function showTab(tab) {
     document.querySelectorAll(".pdf-section").forEach(s => s.classList.remove("active"));
     const el = document.getElementById("tab-" + tab);
     (el || document.querySelector(".pdf-section")).classList.add("active");
+    window.scrollTo(0, 0);
 }
 showTab(location.hash.slice(1) || "wordcount");
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "wordcount"));
@@ -223,10 +224,10 @@ function doDiff() {
     for (const line of diff) {
         if (line.type === "add") {
             added++;
-            html += `<div style="background: #bbf7d0; padding: 2px 12px; white-space: pre-wrap; word-break: break-word;"><span style="color: #16a34a; user-select: none;">+ </span>${esc(line.text)}</div>`;
+            html += `<div style="background: #bbf7d0; padding: 2px 12px; white-space: pre-wrap; word-break: break-word;"><span style="color: #065f46; user-select: none;">+ </span>${esc(line.text)}</div>`;
         } else if (line.type === "remove") {
             removed++;
-            html += `<div style="background: #fecaca; padding: 2px 12px; white-space: pre-wrap; word-break: break-word;"><span style="color: #dc2626; user-select: none;">- </span>${esc(line.text)}</div>`;
+            html += `<div style="background: #fecaca; padding: 2px 12px; white-space: pre-wrap; word-break: break-word;"><span style="color: #991b1b; user-select: none;">- </span>${esc(line.text)}</div>`;
         } else {
             html += `<div style="padding: 2px 12px; white-space: pre-wrap; word-break: break-word; color: var(--text-secondary);"><span style="user-select: none;">  </span>${esc(line.text)}</div>`;
         }

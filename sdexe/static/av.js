@@ -6,6 +6,7 @@ function showTab(tab) {
     document.querySelectorAll(".pdf-section").forEach(s => s.classList.remove("active"));
     const el = document.getElementById("tab-" + tab);
     (el || document.querySelector(".pdf-section")).classList.add("active");
+    window.scrollTo(0, 0);
 }
 showTab(location.hash.slice(1) || "av-convert-audio");
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "av-convert-audio"));
@@ -15,11 +16,14 @@ function setupDropZone(zoneId, inputId, handler) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
     if (!zone || !input) return;
+    let dragCount = 0;
 
-    zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
-    zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+    zone.addEventListener("dragenter", e => { e.preventDefault(); if (++dragCount === 1) zone.classList.add("drag-over"); });
+    zone.addEventListener("dragover", e => { e.preventDefault(); });
+    zone.addEventListener("dragleave", () => { if (--dragCount === 0) zone.classList.remove("drag-over"); });
     zone.addEventListener("drop", e => {
         e.preventDefault();
+        dragCount = 0;
         zone.classList.remove("drag-over");
         handler(e.dataTransfer.files);
     });
@@ -73,6 +77,7 @@ async function avFetch(prefix, endpoint, buildForm, downloadName, loadingText) {
             const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
             const name = match ? match[1] : downloadName(f);
             downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";

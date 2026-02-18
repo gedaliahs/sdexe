@@ -69,7 +69,7 @@ nav {
 /* Direct nav link (Media only) */
 .nav-links { display: flex; align-items: center; gap: 0; }
 .nav-link {
-    font-size: .8rem; font-weight: 600; color: var(--text);
+    font-size: .85rem; font-weight: 600; color: var(--text);
     text-decoration: none; padding: 0 14px; height: 60px;
     display: flex; align-items: center;
     transition: color .15s;
@@ -81,7 +81,7 @@ nav {
 /* Nav Group (dropdown) */
 .nav-group { position: relative; display: flex; align-items: center; }
 .nav-group-trigger {
-    font-size: .8rem; font-weight: 600; color: var(--text);
+    font-size: .85rem; font-weight: 600; color: var(--text);
     text-decoration: none; padding: 0 14px; height: 60px;
     display: flex; align-items: center; gap: 5px;
     cursor: pointer; white-space: nowrap;
@@ -147,7 +147,7 @@ nav {
 /* ── Main ── */
 main {
     flex: 1; width: 100%; max-width: 960px;
-    margin: 0 auto; padding: 72px 32px 120px;
+    margin: 0 auto; padding: 64px 32px 96px;
 }
 
 /* ── Hero ── */
@@ -203,14 +203,14 @@ main {
 .search-bar.multi-link button { align-self: flex-end; }
 
 .search-bar button {
-    padding: 11px 22px; background: linear-gradient(135deg, var(--accent), var(--accent-hover)); color: #fff; border: none;
+    padding: 11px 22px; background: var(--accent); color: #fff; border: none;
     border-radius: var(--radius-pill);
     font-size: .82rem; font-weight: 600; cursor: pointer; font-family: inherit;
     display: flex; align-items: center; gap: 6px;
     transition: background .15s, transform .1s, box-shadow .15s; flex-shrink: 0;
     box-shadow: 0 2px 8px rgba(59,130,246,.25);
 }
-.search-bar button:hover { background: linear-gradient(135deg, var(--accent-hover), #1d4ed8); box-shadow: 0 4px 12px rgba(59,130,246,.35); }
+.search-bar button:hover { background: var(--accent-hover); box-shadow: 0 4px 12px rgba(59,130,246,.35); }
 .search-bar button:active { transform: scale(.97); }
 .search-bar button:disabled { background: var(--surface-2); color: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
 .btn-arrow { font-size: 1.1rem; line-height: 1; }
@@ -227,10 +227,10 @@ main {
 
 /* ── Card ── */
 .card {
-    margin-top: 28px; background: var(--surface);
+    margin-top: 24px; background: var(--surface);
     border: 1px solid var(--border); overflow: hidden;
     border-radius: var(--radius-xl);
-    box-shadow: 0 4px 32px rgba(0,0,0,.07), 0 1px 3px rgba(0,0,0,.05);
+    box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04);
     animation: cardIn .35s ease-out;
 }
 @keyframes cardIn {
@@ -255,16 +255,16 @@ main {
 }
 .card-body { padding: 24px; }
 .card-body h2 {
-    font-size: 1.05rem; font-weight: 600; line-height: 1.4;
+    font-size: 1.1rem; font-weight: 600; line-height: 1.4;
     margin-bottom: 4px; letter-spacing: -.02em;
 }
-.meta { color: var(--text-secondary); font-size: .82rem; margin-bottom: 20px; }
+.meta { color: var(--text-secondary); font-size: .875rem; margin-bottom: 20px; }
 
 /* ── Metadata Fields ── */
 .meta-fields { margin-bottom: 20px; }
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .field label, .select-wrap label {
-    font-size: .68rem; text-transform: uppercase; letter-spacing: .07em;
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
     color: var(--text-muted); font-weight: 500;
 }
 .field input {
@@ -276,7 +276,7 @@ main {
 }
 .field input:focus {
     border-color: var(--accent-dim);
-    box-shadow: 0 0 0 2px var(--accent-glow);
+    box-shadow: 0 0 0 3px var(--accent-glow);
 }
 .field input::placeholder { color: #adb5bd; }
 .field-row { display: flex; gap: 10px; margin-top: 10px; }
@@ -300,7 +300,7 @@ select:focus { border-color: var(--accent-dim); }
 select:disabled { opacity: .35; cursor: not-allowed; }
 
 .btn-download {
-    padding: 18px 32px; background: linear-gradient(135deg, var(--accent), var(--accent-hover)); color: #fff; border: none;
+    padding: 18px 32px; background: var(--accent); color: #fff; border: none;
     border-radius: var(--radius-md);
     font-size: .9rem; font-weight: 700; cursor: pointer; font-family: inherit;
     display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -308,7 +308,7 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     margin-top: 4px;
     box-shadow: 0 2px 8px rgba(59,130,246,.25);
 }
-.btn-download:hover { background: linear-gradient(135deg, var(--accent-hover), #1d4ed8); box-shadow: 0 4px 16px rgba(59,130,246,.35); }
+.btn-download:hover { background: var(--accent-hover); box-shadow: 0 4px 16px rgba(59,130,246,.35); }
 .btn-download:active { transform: scale(.98); }
 .btn-download:disabled { background: var(--surface-3); color: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
 
@@ -342,13 +342,13 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     display: flex; align-items: center; justify-content: center; gap: 8px;
     margin-top: 20px; padding: 16px;
     border-radius: var(--radius-md);
-    background: linear-gradient(135deg, var(--green), #059669); border: none;
+    background: var(--green); border: none;
     color: #fff; text-decoration: none; font-size: .82rem; font-weight: 600;
     transition: background .15s, box-shadow .15s, transform .1s; cursor: pointer;
     box-shadow: 0 2px 8px rgba(16,185,129,.25);
     animation: cardIn .3s ease-out;
 }
-.btn-save:hover { background: linear-gradient(135deg, #059669, #047857); box-shadow: 0 4px 16px rgba(16,185,129,.35); }
+.btn-save:hover { background: #059669; box-shadow: 0 4px 16px rgba(16,185,129,.35); }
 .btn-save:active { transform: scale(.98); }
 
 /* ── Playlist Header ── */
@@ -641,7 +641,7 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     margin-top: 0;
     animation: none;
 }
-.pdf-section .card-body { padding: 32px 0 0; }
+.pdf-section .card-body { padding: 40px 0 0; }
 .pdf-section .card-body h2 {
     font-size: 2.2rem; font-weight: 700; letter-spacing: -0.04em; margin-bottom: 10px;
     text-align: center;
@@ -709,7 +709,7 @@ select:disabled { opacity: .35; cursor: not-allowed; }
 
 .drop-browse {
     display: inline-block;
-    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    background: var(--accent);
     color: #fff; cursor: pointer; font-weight: 700;
     font-size: 1.05rem;
     padding: 20px 48px;
@@ -720,7 +720,7 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     box-shadow: 0 4px 16px rgba(59,130,246,.32);
 }
 .drop-browse:hover {
-    background: linear-gradient(135deg, var(--accent-hover), #1d4ed8);
+    background: var(--accent-hover);
     box-shadow: 0 6px 20px rgba(59,130,246,.42);
 }
 .drop-browse:active { transform: scale(.97); }
@@ -897,13 +897,13 @@ footer a:hover { color: var(--text-secondary); }
 .folder-input-row { display: flex; gap: 8px; margin-top: 6px; }
 .folder-input-row input { flex: 1; }
 .btn-settings-save {
-    padding: 10px 20px; background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    padding: 10px 20px; background: var(--accent);
     color: #fff; border: none; border-radius: var(--radius-sm);
     font-size: .82rem; font-weight: 600; cursor: pointer; font-family: inherit;
     transition: background .15s, box-shadow .15s; flex-shrink: 0;
     box-shadow: 0 2px 8px rgba(59,130,246,.25);
 }
-.btn-settings-save:hover { box-shadow: 0 4px 12px rgba(59,130,246,.35); }
+.btn-settings-save:hover { background: var(--accent-hover); box-shadow: 0 4px 12px rgba(59,130,246,.35); }
 .btn-settings-browse {
     padding: 10px 16px; background: var(--card-bg); color: var(--text-primary);
     border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -939,7 +939,7 @@ footer a:hover { color: var(--text-secondary); }
 .history-panel {
     margin-top: 28px; background: var(--surface);
     border: 1px solid var(--border); border-radius: var(--radius-xl);
-    box-shadow: 0 4px 32px rgba(0,0,0,.07), 0 1px 3px rgba(0,0,0,.05);
+    box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04);
     overflow: hidden; animation: cardIn .35s ease-out;
 }
 .history-header {
@@ -1031,3 +1031,83 @@ main { animation: fadeIn .4s ease-out; }
     .drop-browse { min-width: unset; width: 100%; text-align: center; }
     .pdf-section .card-body h2 { font-size: 1.6rem; }
 }
+
+/* ── Button loading spinner ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn-download:disabled::before {
+    content: '';
+    display: inline-block;
+    width: 13px; height: 13px;
+    border: 2px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .65s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+/* ── Select hover ── */
+select:hover { border-color: var(--border-hover); }
+
+/* ── Drop browse focus ── */
+.drop-browse:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+/* ── Nav active group indicator ── */
+.nav-group.active .nav-group-trigger {
+    border-bottom: 2px solid var(--accent);
+    margin-bottom: -2px;
+}
+
+/* ── History empty state ── */
+.history-empty {
+    padding: 16px 20px;
+    font-size: .8rem;
+    color: var(--text-muted);
+    text-align: center;
+    font-style: italic;
+}
+
+/* ── Entrance animations for post-upload UI ── */
+.pdf-section .split-info  { animation: fadeIn .2s ease-out; }
+.pdf-section .file-list   { animation: fadeIn .2s ease-out; }
+.pdf-section .pdf-actions { animation: fadeIn .18s ease-out; }
+
+/* ── Batch summary animation ── */
+.batch-summary { animation: fadeIn .25s ease-out; }
+
+/* ── Secondary button ── */
+.btn-secondary {
+    background: var(--surface-2) !important;
+    color: var(--text) !important;
+    box-shadow: none !important;
+}
+.btn-secondary:hover { background: var(--surface-3) !important; }
+
+/* ── Text-page card layout ── */
+.text-page .pdf-section.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04);
+    margin-top: 24px;
+    padding-bottom: 32px;
+}
+.text-page .pdf-section .card-body {
+    padding: 28px 28px 0;
+    text-align: left;
+}
+.text-page .pdf-section .card-body h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    text-align: left;
+    margin-bottom: 4px;
+}
+.text-page .pdf-section .card-body .meta {
+    text-align: left;
+    max-width: none;
+    margin: 0 0 20px;
+}
+.text-page .pdf-section .card-body > * { max-width: 100%; }
+.text-page .pdf-section .pdf-actions { margin-left: 0; max-width: 300px; }

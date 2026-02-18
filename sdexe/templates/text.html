@@ -4,7 +4,7 @@
 {% block nav_text %}active{% endblock %}
 
 {% block content %}
-    <main>
+    <main class="text-page">
 
         <!-- Word Count -->
         <div id="tab-wordcount" class="pdf-section card active">
@@ -134,8 +134,8 @@
 
                 <div class="pdf-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="btn-download" onclick="doB64Encode()">Encode</button>
-                    <button class="btn-download" style="background: var(--surface-2); color: var(--text); box-shadow: none;" onclick="doB64Decode()">Decode</button>
-                    <label class="btn-download" style="background: var(--surface-2); color: var(--text); box-shadow: none; cursor: pointer;">
+                    <button class="btn-download btn-secondary" onclick="doB64Decode()">Decode</button>
+                    <label class="btn-download btn-secondary" style="cursor: pointer;">
                         Encode File<input type="file" id="b64-file-input" hidden onchange="doB64File()">
                     </label>
                 </div>
