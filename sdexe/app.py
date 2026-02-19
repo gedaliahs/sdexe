@@ -173,6 +173,11 @@ def av_page():
 def text_page():
     return render_template("text.html")
 
+@app.route("/about")
+def about_page():
+    return render_template("about.html")
+
+
 @app.route("/settings")
 def settings_page():
     import sys as _sys

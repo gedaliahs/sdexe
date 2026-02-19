@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}sdexe — About{% endblock %}
+
+{% block content %}
+<main class="about-main">
+    <div class="about-hero">
+        <h1>sd<span class="hero-accent">exe</span></h1>
+        <p class="about-tagline">Suite for Downloading, Editing & eXporting Everything</p>
+        <p class="about-sub">60+ tools for media, PDF, images, audio, video, and text — all running locally on your machine. No uploads, no accounts, no cloud.</p>
+    </div>
+
+    <div class="about-video-wrap">
+        <video id="demo-video" controls playsinline preload="metadata">
+            <source src="/static/demo.mp4" type="video/mp4">
+            <source src="/static/demo.webm" type="video/webm">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+
+    <div class="about-features">
+        <div class="about-section">
+            <h2>What is sdexe?</h2>
+            <p>sdexe is a free, open-source toolkit that runs entirely on your computer. Install it once with <code>pipx install sdexe</code>, run <code>sdexe</code>, and get a full suite of tools in your browser at <code>localhost:5001</code>. No data ever leaves your machine.</p>
+        </div>
+
+        <div class="about-grid">
+            <div class="about-card" data-category="media">
+                <h3>Media Downloader</h3>
+                <p>Download video and audio from 1000+ sites including YouTube, Vimeo, Twitter, and more. Choose format, quality, and output. Batch download multiple URLs at once.</p>
+            </div>
+            <div class="about-card" data-category="pdf">
+                <h3>PDF Tools</h3>
+                <p>Merge, split, compress, rotate, reorder, delete pages, add watermarks, number pages, extract text and images, edit metadata, password protect, and unlock PDFs.</p>
+            </div>
+            <div class="about-card" data-category="images">
+                <h3>Image Tools</h3>
+                <p>Resize, compress, convert formats, crop, rotate, flip, blur, grayscale, strip EXIF data, generate QR codes, add watermarks, create placeholders, and convert to ICO.</p>
+            </div>
+            <div class="about-card" data-category="av">
+                <h3>Audio & Video</h3>
+                <p>Trim, convert, merge, reverse, change speed/pitch, normalize volume, equalize, fade audio. Trim, compress, convert, crop, rotate, resize, loop, reverse video. Record audio and screen.</p>
+            </div>
+            <div class="about-card" data-category="convert">
+                <h3>File Converter</h3>
+                <p>Convert between Markdown/HTML, CSV/JSON, JSON/YAML, CSV/TSV, XML/JSON. Create and extract ZIP archives.</p>
+            </div>
+            <div class="about-card" data-category="text">
+                <h3>Text Tools</h3>
+                <p>Word count, find & replace, regex tester, text diff, case converter, Base64, hash generator, URL encode, JSON formatter, JWT decoder, UUID generator, timestamps, lorem ipsum, color converter, password generator.</p>
+            </div>
+        </div>
+
+        <div class="about-section">
+            <h2>Why sdexe?</h2>
+            <ul class="about-list">
+                <li><strong>100% local</strong> — Your files never leave your machine</li>
+                <li><strong>No accounts</strong> — No sign-up, no login, no tracking</li>
+                <li><strong>Free & open source</strong> — MIT licensed, forever free</li>
+                <li><strong>One command install</strong> — <code>pipx install sdexe</code></li>
+                <li><strong>60+ tools</strong> — Everything you need in one place</li>
+                <li><strong>Works offline</strong> — No internet needed (except media downloads)</li>
+            </ul>
+        </div>
+
+        <div class="about-section about-cta">
+            <h2>Get started</h2>
+            <div class="about-install">
+                <code>pipx install sdexe && sdexe</code>
+            </div>
+            <div class="about-links">
+                <a href="https://github.com/gedaliahs/sdexe" class="btn btn-primary" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://pypi.org/project/sdexe/" class="btn btn-secondary" target="_blank" rel="noopener">PyPI</a>
+                <a href="/" class="btn btn-secondary">Home</a>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
