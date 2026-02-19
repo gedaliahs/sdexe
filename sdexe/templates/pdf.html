@@ -322,6 +322,66 @@
             </div>
         </div>
 
+        <!-- Watermark -->
+        <div id="tab-watermark" class="pdf-section card">
+            <div class="card-body">
+                <h2>Watermark PDF</h2>
+                <p class="meta">Add a text watermark to every page of a PDF.</p>
+
+                <div class="drop-zone" id="watermark-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <polyline points="9 15 12 12 15 15"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="watermark-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; adds text watermark to every page</p>
+                </div>
+
+                <div id="watermark-file-info" class="split-info" hidden>
+                    <span id="watermark-file-name" class="split-name"></span>
+                    <span id="watermark-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearWatermarkFile()">&times;</button>
+                </div>
+
+                <div id="watermark-options" hidden>
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Watermark Text</label>
+                        <input type="text" id="watermark-text" placeholder="e.g. CONFIDENTIAL, DRAFT, Sample">
+                    </div>
+                    <div class="field-row" style="margin-top: 12px;">
+                        <div class="field" style="max-width: 120px;">
+                            <label>Font Size</label>
+                            <input type="number" id="watermark-fontsize" value="36" min="8" max="200">
+                        </div>
+                        <div class="field" style="flex: 1;">
+                            <label>Opacity: <span id="watermark-opacity-val">0.3</span></label>
+                            <input type="range" id="watermark-opacity" min="0.1" max="1.0" step="0.1" value="0.3">
+                        </div>
+                        <div class="select-wrap">
+                            <label>Position</label>
+                            <select id="watermark-position">
+                                <option value="center">Center</option>
+                                <option value="top-left">Top Left</option>
+                                <option value="top-right">Top Right</option>
+                                <option value="bottom-left">Bottom Left</option>
+                                <option value="bottom-right">Bottom Right</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="watermark-actions" class="pdf-actions" hidden>
+                    <button id="watermark-btn" class="btn-download" onclick="doWatermark()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Add Watermark
+                    </button>
+                </div>
+                <div id="watermark-error" class="error" hidden></div>
+            </div>
+        </div>
+
         <!-- Number Pages -->
         <div id="tab-numberpages" class="pdf-section card">
             <div class="card-body">
@@ -368,6 +428,140 @@
                     </button>
                 </div>
                 <div id="numberpages-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Reorder Pages -->
+        <div id="tab-reorder" class="pdf-section card">
+            <div class="card-body">
+                <h2>Reorder Pages</h2>
+                <p class="meta">Rearrange pages in a PDF by specifying a new page order.</p>
+
+                <div class="drop-zone" id="reorder-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <polyline points="9 15 12 12 15 15"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="reorder-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; specify the new page order below</p>
+                </div>
+
+                <div id="reorder-file-info" class="split-info" hidden>
+                    <span id="reorder-file-name" class="split-name"></span>
+                    <span id="reorder-page-count" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearReorderFile()">&times;</button>
+                </div>
+
+                <div id="reorder-options" hidden>
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Page order (comma-separated page numbers)</label>
+                        <input type="text" id="reorder-order" placeholder="e.g. 3, 1, 2, 4">
+                    </div>
+                </div>
+
+                <div id="reorder-actions" class="pdf-actions" hidden>
+                    <button id="reorder-btn" class="btn-download" onclick="doReorder()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Reorder Pages
+                    </button>
+                </div>
+
+                <div id="reorder-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Delete Pages -->
+        <div id="tab-deletepages" class="pdf-section card">
+            <div class="card-body">
+                <h2>Delete Pages</h2>
+                <p class="meta">Remove specific pages from a PDF file.</p>
+
+                <div class="drop-zone" id="deletepages-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="9" y1="14" x2="15" y2="14"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="deletepages-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; specify which pages to remove</p>
+                </div>
+
+                <div id="deletepages-file-info" class="split-info" hidden>
+                    <span id="deletepages-file-name" class="split-name"></span>
+                    <span id="deletepages-page-count" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearDeletePagesFile()">&times;</button>
+                </div>
+
+                <div id="deletepages-options" hidden>
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Pages to delete</label>
+                        <input type="text" id="deletepages-pages" placeholder="e.g. 1, 3, 5-7">
+                    </div>
+                </div>
+
+                <div id="deletepages-actions" class="pdf-actions" hidden>
+                    <button id="deletepages-btn" class="btn-download" onclick="doDeletePages()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Delete Pages
+                    </button>
+                </div>
+
+                <div id="deletepages-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Edit Metadata -->
+        <div id="tab-metadata" class="pdf-section card">
+            <div class="card-body">
+                <h2>Edit Metadata</h2>
+                <p class="meta">View and edit PDF document metadata fields.</p>
+
+                <div class="drop-zone" id="metadata-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="8" y1="13" x2="16" y2="13"/>
+                        <line x1="8" y1="17" x2="16" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="metadata-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; view and edit title, author, subject, creator</p>
+                </div>
+
+                <div id="metadata-file-info" class="split-info" hidden>
+                    <span id="metadata-file-name" class="split-name"></span>
+                    <span id="metadata-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearMetadataFile()">&times;</button>
+                </div>
+
+                <div id="metadata-options" hidden>
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Title</label>
+                        <input type="text" id="metadata-title" placeholder="Document title">
+                    </div>
+                    <div class="field" style="margin-top: 12px;">
+                        <label>Author</label>
+                        <input type="text" id="metadata-author" placeholder="Author name">
+                    </div>
+                    <div class="field" style="margin-top: 12px;">
+                        <label>Subject</label>
+                        <input type="text" id="metadata-subject" placeholder="Document subject">
+                    </div>
+                    <div class="field" style="margin-top: 12px;">
+                        <label>Creator</label>
+                        <input type="text" id="metadata-creator" placeholder="Creator application">
+                    </div>
+                </div>
+
+                <div id="metadata-actions" class="pdf-actions" hidden>
+                    <button id="metadata-btn" class="btn-download" onclick="doSaveMetadata()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Save Metadata
+                    </button>
+                </div>
+                <div id="metadata-error" class="error" hidden></div>
             </div>
         </div>
     </main>

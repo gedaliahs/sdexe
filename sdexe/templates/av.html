@@ -467,6 +467,545 @@
                 <div id="av-video-to-gif-error" class="error" hidden></div>
             </div>
         </div>
+        <!-- Reverse Audio -->
+        <div id="tab-reverse-audio" class="pdf-section card">
+            <div class="card-body">
+                <h2>Reverse Audio</h2>
+                <p class="meta">Play an audio file backwards.</p>
+
+                <div class="drop-zone" id="reverse-audio-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <polyline points="19 1 15 5 19 9"/>
+                        <path d="M15 5h4a2 2 0 012 2v10"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="reverse-audio-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; reverses the entire audio track</p>
+                </div>
+
+                <div id="reverse-audio-info" class="split-info" hidden>
+                    <span id="reverse-audio-name" class="split-name"></span>
+                    <span id="reverse-audio-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('reverse-audio')">&times;</button>
+                </div>
+
+                <div id="reverse-audio-options" hidden></div>
+
+                <div id="reverse-audio-actions" class="pdf-actions" hidden>
+                    <button id="reverse-audio-btn" class="btn-download" onclick="doReverseAudio()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Reverse Audio
+                    </button>
+                </div>
+
+                <div id="reverse-audio-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Change Pitch -->
+        <div id="tab-pitch" class="pdf-section card">
+            <div class="card-body">
+                <h2>Change Pitch</h2>
+                <p class="meta">Shift the pitch of an audio file up or down by semitones.</p>
+
+                <div class="drop-zone" id="pitch-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M15 3v18"/>
+                        <polyline points="12 6 15 3 18 6"/>
+                        <polyline points="12 18 15 21 18 18"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="pitch-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; adjust pitch in semitones</p>
+                </div>
+
+                <div id="pitch-info" class="split-info" hidden>
+                    <span id="pitch-name" class="split-name"></span>
+                    <span id="pitch-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('pitch')">&times;</button>
+                </div>
+
+                <div id="pitch-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Semitones (-12 to 12)</label>
+                            <input type="number" id="pitch-semitones" min="-12" max="12" value="0" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pitch-actions" class="pdf-actions" hidden>
+                    <button id="pitch-btn" class="btn-download" onclick="doPitch()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Change Pitch
+                    </button>
+                </div>
+
+                <div id="pitch-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Audio Equalizer -->
+        <div id="tab-equalizer" class="pdf-section card">
+            <div class="card-body">
+                <h2>Audio Equalizer</h2>
+                <p class="meta">Adjust bass, mid, and treble frequency bands.</p>
+
+                <div class="drop-zone" id="equalizer-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <line x1="4" y1="21" x2="4" y2="14"/>
+                        <line x1="4" y1="10" x2="4" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12" y2="3"/>
+                        <line x1="20" y1="21" x2="20" y2="16"/>
+                        <line x1="20" y1="12" x2="20" y2="3"/>
+                        <line x1="1" y1="14" x2="7" y2="14"/>
+                        <line x1="9" y1="8" x2="15" y2="8"/>
+                        <line x1="17" y1="16" x2="23" y2="16"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="equalizer-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; tweak bass, mid, and treble</p>
+                </div>
+
+                <div id="equalizer-info" class="split-info" hidden>
+                    <span id="equalizer-name" class="split-name"></span>
+                    <span id="equalizer-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('equalizer')">&times;</button>
+                </div>
+
+                <div id="equalizer-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Bass <span id="eq-bass-val">0</span> dB</label>
+                            <input type="range" id="eq-bass" min="-10" max="10" value="0" step="1" oninput="document.getElementById('eq-bass-val').textContent=this.value">
+                        </div>
+                        <div class="field">
+                            <label>Mid <span id="eq-mid-val">0</span> dB</label>
+                            <input type="range" id="eq-mid" min="-10" max="10" value="0" step="1" oninput="document.getElementById('eq-mid-val').textContent=this.value">
+                        </div>
+                        <div class="field">
+                            <label>Treble <span id="eq-treble-val">0</span> dB</label>
+                            <input type="range" id="eq-treble" min="-10" max="10" value="0" step="1" oninput="document.getElementById('eq-treble-val').textContent=this.value">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="equalizer-actions" class="pdf-actions" hidden>
+                    <button id="equalizer-btn" class="btn-download" onclick="doEqualizer()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Apply Equalizer
+                    </button>
+                </div>
+
+                <div id="equalizer-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Audio Fade -->
+        <div id="tab-fade" class="pdf-section card">
+            <div class="card-body">
+                <h2>Audio Fade</h2>
+                <p class="meta">Add fade-in and fade-out effects to an audio file.</p>
+
+                <div class="drop-zone" id="fade-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M15 12h7"/>
+                        <path d="M15 12l3-4"/>
+                        <path d="M22 12l-3 4"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="fade-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; set fade-in and fade-out durations</p>
+                </div>
+
+                <div id="fade-info" class="split-info" hidden>
+                    <span id="fade-name" class="split-name"></span>
+                    <span id="fade-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('fade')">&times;</button>
+                </div>
+
+                <div id="fade-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Fade in (seconds)</label>
+                            <input type="number" id="fade-in" min="0" step="0.5" value="0" placeholder="0">
+                        </div>
+                        <div class="field">
+                            <label>Fade out (seconds)</label>
+                            <input type="number" id="fade-out" min="0" step="0.5" value="0" placeholder="0">
+                        </div>
+                        <div class="field">
+                            <label>Duration (seconds, optional)</label>
+                            <input type="number" id="fade-duration" min="0" step="0.1" placeholder="auto">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="fade-actions" class="pdf-actions" hidden>
+                    <button id="fade-btn" class="btn-download" onclick="doFade()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Apply Fade
+                    </button>
+                </div>
+
+                <div id="fade-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Crop Video -->
+        <div id="tab-crop-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Crop Video</h2>
+                <p class="meta">Crop a video to a specific region.</p>
+
+                <div class="drop-zone" id="crop-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M6.13 1L6 16a2 2 0 002 2h15"/>
+                        <path d="M1 6.13L16 6a2 2 0 012 2v15"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="crop-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; specify crop dimensions below</p>
+                </div>
+
+                <div id="crop-video-info" class="split-info" hidden>
+                    <span id="crop-video-name" class="split-name"></span>
+                    <span id="crop-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('crop-video')">&times;</button>
+                </div>
+
+                <div id="crop-video-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Width (px)</label>
+                            <input type="number" id="crop-video-width" min="1" placeholder="640">
+                        </div>
+                        <div class="field">
+                            <label>Height (px)</label>
+                            <input type="number" id="crop-video-height" min="1" placeholder="480">
+                        </div>
+                        <div class="field">
+                            <label>X offset (px)</label>
+                            <input type="number" id="crop-video-x" min="0" value="0">
+                        </div>
+                        <div class="field">
+                            <label>Y offset (px)</label>
+                            <input type="number" id="crop-video-y" min="0" value="0">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="crop-video-actions" class="pdf-actions" hidden>
+                    <button id="crop-video-btn" class="btn-download" onclick="doCropVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Crop Video
+                    </button>
+                </div>
+
+                <div id="crop-video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Rotate Video -->
+        <div id="tab-rotate-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Rotate Video</h2>
+                <p class="meta">Rotate a video by 90, 180, or 270 degrees.</p>
+
+                <div class="drop-zone" id="rotate-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polyline points="1 4 1 10 7 10"/>
+                        <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="rotate-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; choose rotation angle</p>
+                </div>
+
+                <div id="rotate-video-info" class="split-info" hidden>
+                    <span id="rotate-video-name" class="split-name"></span>
+                    <span id="rotate-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('rotate-video')">&times;</button>
+                </div>
+
+                <div id="rotate-video-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Angle</label>
+                            <select id="rotate-video-angle">
+                                <option value="90">90° clockwise</option>
+                                <option value="180">180°</option>
+                                <option value="270">270° clockwise</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="rotate-video-actions" class="pdf-actions" hidden>
+                    <button id="rotate-video-btn" class="btn-download" onclick="doRotateVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Rotate Video
+                    </button>
+                </div>
+
+                <div id="rotate-video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Resize Video -->
+        <div id="tab-resize-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Resize Video</h2>
+                <p class="meta">Change the resolution of a video.</p>
+
+                <div class="drop-zone" id="resize-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polyline points="15 3 21 3 21 9"/>
+                        <polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/>
+                        <line x1="3" y1="21" x2="10" y2="14"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="resize-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; specify new dimensions</p>
+                </div>
+
+                <div id="resize-video-info" class="split-info" hidden>
+                    <span id="resize-video-name" class="split-name"></span>
+                    <span id="resize-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('resize-video')">&times;</button>
+                </div>
+
+                <div id="resize-video-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Width (px)</label>
+                            <input type="number" id="resize-video-width" min="1" placeholder="1280">
+                        </div>
+                        <div class="field">
+                            <label>Height (px)</label>
+                            <input type="number" id="resize-video-height" min="1" placeholder="720">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="resize-video-actions" class="pdf-actions" hidden>
+                    <button id="resize-video-btn" class="btn-download" onclick="doResizeVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Resize Video
+                    </button>
+                </div>
+
+                <div id="resize-video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Reverse Video -->
+        <div id="tab-reverse-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Reverse Video</h2>
+                <p class="meta">Play a video backwards.</p>
+
+                <div class="drop-zone" id="reverse-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        <polyline points="10 8 6 12 10 16"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="reverse-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; reverses the entire video</p>
+                </div>
+
+                <div id="reverse-video-info" class="split-info" hidden>
+                    <span id="reverse-video-name" class="split-name"></span>
+                    <span id="reverse-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('reverse-video')">&times;</button>
+                </div>
+
+                <div id="reverse-video-options" hidden></div>
+
+                <div id="reverse-video-actions" class="pdf-actions" hidden>
+                    <button id="reverse-video-btn" class="btn-download" onclick="doReverseVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Reverse Video
+                    </button>
+                </div>
+
+                <div id="reverse-video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Loop Video -->
+        <div id="tab-loop-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Loop Video</h2>
+                <p class="meta">Repeat a video a specified number of times.</p>
+
+                <div class="drop-zone" id="loop-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polyline points="17 1 21 5 17 9"/>
+                        <path d="M3 11V9a4 4 0 014-4h14"/>
+                        <polyline points="7 23 3 19 7 15"/>
+                        <path d="M21 13v2a4 4 0 01-4 4H3"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="loop-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; choose how many times to loop</p>
+                </div>
+
+                <div id="loop-video-info" class="split-info" hidden>
+                    <span id="loop-video-name" class="split-name"></span>
+                    <span id="loop-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('loop-video')">&times;</button>
+                </div>
+
+                <div id="loop-video-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Loop count</label>
+                            <input type="number" id="loop-video-count" min="2" value="2" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="loop-video-actions" class="pdf-actions" hidden>
+                    <button id="loop-video-btn" class="btn-download" onclick="doLoopVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Loop Video
+                    </button>
+                </div>
+
+                <div id="loop-video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Mute Video -->
+        <div id="tab-mute-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Mute Video</h2>
+                <p class="meta">Remove the audio track from a video file.</p>
+
+                <div class="drop-zone" id="mute-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <line x1="23" y1="9" x2="17" y2="15"/>
+                        <line x1="17" y1="9" x2="23" y2="15"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="mute-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; strips all audio from the video</p>
+                </div>
+
+                <div id="mute-video-info" class="split-info" hidden>
+                    <span id="mute-video-name" class="split-name"></span>
+                    <span id="mute-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('mute-video')">&times;</button>
+                </div>
+
+                <div id="mute-video-options" hidden></div>
+
+                <div id="mute-video-actions" class="pdf-actions" hidden>
+                    <button id="mute-video-btn" class="btn-download" onclick="doMuteVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Mute Video
+                    </button>
+                </div>
+
+                <div id="mute-video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Add Audio to Video -->
+        <div id="tab-add-audio" class="pdf-section card">
+            <div class="card-body">
+                <h2>Add Audio to Video</h2>
+                <p class="meta">Replace or add an audio track to a video file.</p>
+
+                <div class="drop-zone" id="add-audio-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="add-audio-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a video file here</p>
+                </div>
+
+                <div id="add-audio-video-info" class="split-info" hidden>
+                    <span id="add-audio-video-name" class="split-name"></span>
+                    <span id="add-audio-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAddAudioVideo()">&times;</button>
+                </div>
+
+                <div class="drop-zone" id="add-audio-audio-drop" style="margin-top: 16px;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M15.54 8.46a5 5 0 010 7.07"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="add-audio-audio-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop an audio file here</p>
+                </div>
+
+                <div id="add-audio-audio-info" class="split-info" hidden>
+                    <span id="add-audio-audio-name" class="split-name"></span>
+                    <span id="add-audio-audio-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAddAudioAudio()">&times;</button>
+                </div>
+
+                <div id="add-audio-actions" class="pdf-actions" hidden>
+                    <button id="add-audio-btn" class="btn-download" onclick="doAddAudio()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Add Audio
+                    </button>
+                </div>
+
+                <div id="add-audio-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Burn Subtitles -->
+        <div id="tab-burn-subs" class="pdf-section card">
+            <div class="card-body">
+                <h2>Burn Subtitles</h2>
+                <p class="meta">Hardcode subtitles from an SRT file into a video.</p>
+
+                <div class="drop-zone" id="burn-subs-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="burn-subs-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a video file here</p>
+                </div>
+
+                <div id="burn-subs-video-info" class="split-info" hidden>
+                    <span id="burn-subs-video-name" class="split-name"></span>
+                    <span id="burn-subs-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearBurnSubsVideo()">&times;</button>
+                </div>
+
+                <div class="drop-zone" id="burn-subs-srt-drop" style="margin-top: 16px;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    <label class="drop-browse">Select SRT file<input type="file" id="burn-subs-srt-input" accept=".srt" hidden></label>
+                    <p class="drop-hint">or drop an .srt subtitle file here</p>
+                </div>
+
+                <div id="burn-subs-srt-info" class="split-info" hidden>
+                    <span id="burn-subs-srt-name" class="split-name"></span>
+                    <span id="burn-subs-srt-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearBurnSubsSrt()">&times;</button>
+                </div>
+
+                <div id="burn-subs-actions" class="pdf-actions" hidden>
+                    <button id="burn-subs-btn" class="btn-download" onclick="doBurnSubs()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Burn Subtitles
+                    </button>
+                </div>
+
+                <div id="burn-subs-error" class="error" hidden></div>
+            </div>
+        </div>
+
         <!-- Voice Recorder -->
         <div id="tab-av-record-audio" class="pdf-section card">
             <div class="card-body">

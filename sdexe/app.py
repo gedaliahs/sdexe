@@ -1133,19 +1133,35 @@ def image_crop():
 
 @app.route("/api/images/rotate", methods=["POST"])
 def image_rotate():
-    f = request.files.get("file")
-    if not f:
+    files = request.files.getlist("files")
+    if not files:
+        f = request.files.get("file")
+        if f:
+            files = [f]
+    if not files:
         return jsonify({"error": "No image provided"}), 400
     try:
         angle = int(request.form.get("angle", 90))
     except ValueError:
         return jsonify({"error": "Invalid angle"}), 400
-    try:
-        img = Image.open(f.stream)
-        rotated = tools.rotate_image(img, angle)
-        return _image_response(rotated, f.filename, "rotated")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    results = []
+    for f in files:
+        try:
+            img = Image.open(f.stream)
+            rotated = tools.rotate_image(img, angle)
+            fmt = tools._ext_from_filename(f.filename)
+            data = tools._save_image(rotated, fmt)
+            base = tools._base_from_filename(f.filename, "image")
+            results.append((f"{base}_rotated.{fmt}", data, fmt))
+        except Exception as e:
+            return jsonify({"error": f"Error processing {f.filename}: {e}"}), 400
+    if len(results) == 1:
+        name, data, fmt = results[0]
+        mime = tools._MIME_MAP.get(fmt, f"image/{fmt}")
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=name, mimetype=mime)
+    zip_data = tools.create_zip([(n, d) for n, d, _ in results])
+    return send_file(io.BytesIO(zip_data), as_attachment=True,
+                     download_name="rotated_images.zip", mimetype="application/zip")
 
 
 @app.route("/api/images/strip-exif", methods=["POST"])
@@ -1173,46 +1189,94 @@ def image_strip_exif():
 
 @app.route("/api/images/flip", methods=["POST"])
 def image_flip():
-    f = request.files.get("file")
-    if not f:
+    files = request.files.getlist("files")
+    if not files:
+        f = request.files.get("file")
+        if f:
+            files = [f]
+    if not files:
         return jsonify({"error": "No image provided"}), 400
     direction = request.form.get("direction", "horizontal")
-    try:
-        img = Image.open(f.stream)
-        flipped = tools.flip_image(img, direction)
-        return _image_response(flipped, f.filename, "flipped")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    results = []
+    for f in files:
+        try:
+            img = Image.open(f.stream)
+            flipped = tools.flip_image(img, direction)
+            fmt = tools._ext_from_filename(f.filename)
+            data = tools._save_image(flipped, fmt)
+            base = tools._base_from_filename(f.filename, "image")
+            results.append((f"{base}_flipped.{fmt}", data, fmt))
+        except Exception as e:
+            return jsonify({"error": f"Error processing {f.filename}: {e}"}), 400
+    if len(results) == 1:
+        name, data, fmt = results[0]
+        mime = tools._MIME_MAP.get(fmt, f"image/{fmt}")
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=name, mimetype=mime)
+    zip_data = tools.create_zip([(n, d) for n, d, _ in results])
+    return send_file(io.BytesIO(zip_data), as_attachment=True,
+                     download_name="flipped_images.zip", mimetype="application/zip")
 
 
 @app.route("/api/images/grayscale", methods=["POST"])
 def image_grayscale():
-    f = request.files.get("file")
-    if not f:
+    files = request.files.getlist("files")
+    if not files:
+        f = request.files.get("file")
+        if f:
+            files = [f]
+    if not files:
         return jsonify({"error": "No image provided"}), 400
-    try:
-        img = Image.open(f.stream)
-        gray = tools.grayscale_image(img)
-        return _image_response(gray, f.filename, "grayscale")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    results = []
+    for f in files:
+        try:
+            img = Image.open(f.stream)
+            gray = tools.grayscale_image(img)
+            fmt = tools._ext_from_filename(f.filename)
+            data = tools._save_image(gray, fmt)
+            base = tools._base_from_filename(f.filename, "image")
+            results.append((f"{base}_grayscale.{fmt}", data, fmt))
+        except Exception as e:
+            return jsonify({"error": f"Error processing {f.filename}: {e}"}), 400
+    if len(results) == 1:
+        name, data, fmt = results[0]
+        mime = tools._MIME_MAP.get(fmt, f"image/{fmt}")
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=name, mimetype=mime)
+    zip_data = tools.create_zip([(n, d) for n, d, _ in results])
+    return send_file(io.BytesIO(zip_data), as_attachment=True,
+                     download_name="grayscale_images.zip", mimetype="application/zip")
 
 
 @app.route("/api/images/blur", methods=["POST"])
 def image_blur():
-    f = request.files.get("file")
-    if not f:
+    files = request.files.getlist("files")
+    if not files:
+        f = request.files.get("file")
+        if f:
+            files = [f]
+    if not files:
         return jsonify({"error": "No image provided"}), 400
     try:
         radius = float(request.form.get("radius", 5))
     except ValueError:
         return jsonify({"error": "Invalid radius"}), 400
-    try:
-        img = Image.open(f.stream)
-        blurred = tools.blur_image(img, radius)
-        return _image_response(blurred, f.filename, "blur")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    results = []
+    for f in files:
+        try:
+            img = Image.open(f.stream)
+            blurred = tools.blur_image(img, radius)
+            fmt = tools._ext_from_filename(f.filename)
+            data = tools._save_image(blurred, fmt)
+            base = tools._base_from_filename(f.filename, "image")
+            results.append((f"{base}_blur.{fmt}", data, fmt))
+        except Exception as e:
+            return jsonify({"error": f"Error processing {f.filename}: {e}"}), 400
+    if len(results) == 1:
+        name, data, fmt = results[0]
+        mime = tools._MIME_MAP.get(fmt, f"image/{fmt}")
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=name, mimetype=mime)
+    zip_data = tools.create_zip([(n, d) for n, d, _ in results])
+    return send_file(io.BytesIO(zip_data), as_attachment=True,
+                     download_name="blurred_images.zip", mimetype="application/zip")
 
 
 @app.route("/api/images/to-ico", methods=["POST"])
@@ -1309,6 +1373,25 @@ def qr_generate():
         )
         return send_file(io.BytesIO(result), mimetype="image/png",
                          download_name="qrcode.png")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/images/placeholder", methods=["POST"])
+def placeholder_image():
+    data = request.json or {}
+    width = int(data.get("width", 800))
+    height = int(data.get("height", 600))
+    if width < 1 or height < 1 or width > 4096 or height > 4096:
+        return jsonify({"error": "Dimensions must be 1-4096"}), 400
+    try:
+        result = tools.generate_placeholder_image(
+            width, height,
+            bg_color=data.get("bg_color", "#cccccc"),
+            text_color=data.get("text_color", "#666666"),
+            text=data.get("text", ""),
+        )
+        return send_file(io.BytesIO(result), mimetype="image/png",
+                         download_name=f"placeholder_{width}x{height}.png")
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -1627,6 +1710,237 @@ def av_video_to_gif():
         result = tools.video_to_gif(f.stream.read(), ext, fps=fps, width=width)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}.gif", mimetype="image/gif")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/reverse-audio", methods=["POST"])
+def av_reverse_audio():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No audio file provided"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp3")
+    base = tools._base_from_filename(f.filename, "audio")
+    try:
+        result = tools.reverse_audio(f.stream.read(), ext)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_reversed.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/change-pitch", methods=["POST"])
+def av_change_pitch():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No audio file provided"}), 400
+    try:
+        semitones = float(request.form.get("semitones", 0))
+    except ValueError:
+        return jsonify({"error": "Invalid semitones value"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp3")
+    base = tools._base_from_filename(f.filename, "audio")
+    try:
+        result = tools.change_pitch(f.stream.read(), ext, semitones)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_pitch.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/audio-equalizer", methods=["POST"])
+def av_audio_equalizer():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No audio file provided"}), 400
+    try:
+        bass = float(request.form.get("bass", 0))
+        mid = float(request.form.get("mid", 0))
+        treble = float(request.form.get("treble", 0))
+    except ValueError:
+        return jsonify({"error": "Invalid equalizer values"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp3")
+    base = tools._base_from_filename(f.filename, "audio")
+    try:
+        result = tools.audio_equalizer(f.stream.read(), ext, bass, mid, treble)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_eq.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/audio-fade", methods=["POST"])
+def av_audio_fade():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No audio file provided"}), 400
+    try:
+        fade_in = float(request.form.get("fade_in", 0))
+        fade_out = float(request.form.get("fade_out", 0))
+        duration = float(request.form.get("duration", 0))
+    except ValueError:
+        return jsonify({"error": "Invalid fade values"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp3")
+    base = tools._base_from_filename(f.filename, "audio")
+    try:
+        result = tools.audio_fade(f.stream.read(), ext, fade_in, fade_out, duration)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_faded.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/crop-video", methods=["POST"])
+def av_crop_video():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    try:
+        width = int(request.form.get("width", 0))
+        height = int(request.form.get("height", 0))
+        x = int(request.form.get("x", 0))
+        y = int(request.form.get("y", 0))
+    except ValueError:
+        return jsonify({"error": "Invalid crop parameters"}), 400
+    if width <= 0 or height <= 0:
+        return jsonify({"error": "Width and height required"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.crop_video(f.stream.read(), ext, width, height, x, y)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_cropped.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/rotate-video", methods=["POST"])
+def av_rotate_video():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    try:
+        angle = int(request.form.get("angle", 90))
+    except ValueError:
+        return jsonify({"error": "Invalid angle"}), 400
+    if angle not in (90, 180, 270):
+        return jsonify({"error": "Angle must be 90, 180, or 270"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.rotate_video(f.stream.read(), ext, angle)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_rotated.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/resize-video", methods=["POST"])
+def av_resize_video():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    try:
+        width = int(request.form.get("width", 0))
+        height = int(request.form.get("height", -1))
+    except ValueError:
+        return jsonify({"error": "Invalid dimensions"}), 400
+    if width <= 0:
+        return jsonify({"error": "Width required"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.resize_video(f.stream.read(), ext, width, height)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_resized.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/reverse-video", methods=["POST"])
+def av_reverse_video():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.reverse_video(f.stream.read(), ext)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_reversed.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/loop-video", methods=["POST"])
+def av_loop_video():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    try:
+        count = int(request.form.get("count", 2))
+    except ValueError:
+        return jsonify({"error": "Invalid loop count"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.loop_video(f.stream.read(), ext, count)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_looped.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/mute-video", methods=["POST"])
+def av_mute_video():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No video file provided"}), 400
+    ext = tools._ext_from_filename(f.filename, "mp4")
+    base = tools._base_from_filename(f.filename, "video")
+    try:
+        result = tools.mute_video(f.stream.read(), ext)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_muted.{ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/add-audio", methods=["POST"])
+def av_add_audio():
+    video = request.files.get("video")
+    audio = request.files.get("audio")
+    if not video:
+        return jsonify({"error": "No video file provided"}), 400
+    if not audio:
+        return jsonify({"error": "No audio file provided"}), 400
+    video_ext = tools._ext_from_filename(video.filename, "mp4")
+    base = tools._base_from_filename(video.filename, "video")
+    audio_ext = tools._ext_from_filename(audio.filename, "mp3")
+    try:
+        result = tools.add_audio_to_video(video.stream.read(), video_ext,
+                                          audio.stream.read(), audio_ext)
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_with_audio.{video_ext}")
+    except Exception as e:
+        return jsonify({"error": str(e)[-500:]}), 500
+
+
+@app.route("/api/av/burn-subtitles", methods=["POST"])
+def av_burn_subtitles():
+    video = request.files.get("video")
+    subtitles = request.files.get("subtitles")
+    if not video:
+        return jsonify({"error": "No video file provided"}), 400
+    if not subtitles:
+        return jsonify({"error": "No subtitles file provided"}), 400
+    video_ext = tools._ext_from_filename(video.filename, "mp4")
+    base = tools._base_from_filename(video.filename, "video")
+    try:
+        result = tools.burn_subtitles(video.stream.read(), video_ext,
+                                      subtitles.stream.read())
+        return send_file(io.BytesIO(result), as_attachment=True,
+                         download_name=f"{base}_subtitled.{video_ext}")
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 

@@ -9,6 +9,10 @@ let removePwFile = null;
 let rotatePagesFile = null;
 let extractImagesFile = null;
 let numberPagesFile = null;
+let watermarkFile = null;
+let reorderFile = null;
+let deletePagesFile = null;
+let metadataFile = null;
 
 /* ── Hash Routing ── */
 function showTab(tab) {
@@ -610,6 +614,67 @@ async function doExtractImages() {
     btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Extract Images';
 }
 
+/* ── Watermark ── */
+setupDropZone("watermark-drop", "watermark-input", files => {
+    const f = files[0];
+    if (!f || (!f.type.includes("pdf") && !f.name.endsWith(".pdf"))) return;
+    watermarkFile = f;
+    document.getElementById("watermark-file-name").textContent = f.name;
+    document.getElementById("watermark-file-size").textContent = formatSize(f.size);
+    document.getElementById("watermark-file-info").hidden = false;
+    document.getElementById("watermark-options").hidden = false;
+    document.getElementById("watermark-actions").hidden = false;
+});
+
+document.getElementById("watermark-opacity").addEventListener("input", function() {
+    document.getElementById("watermark-opacity-val").textContent = this.value;
+});
+
+function clearWatermarkFile() {
+    watermarkFile = null;
+    document.getElementById("watermark-file-info").hidden = true;
+    document.getElementById("watermark-options").hidden = true;
+    document.getElementById("watermark-actions").hidden = true;
+    document.getElementById("watermark-text").value = "";
+}
+
+async function doWatermark() {
+    if (!watermarkFile) return;
+    const text = document.getElementById("watermark-text").value.trim();
+    if (!text) { document.getElementById("watermark-error").textContent = "Enter watermark text"; document.getElementById("watermark-error").hidden = false; return; }
+    const btn = document.getElementById("watermark-btn");
+    const err = document.getElementById("watermark-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Processing...";
+
+    const form = new FormData();
+    form.append("file", watermarkFile);
+    form.append("text", text);
+    form.append("font_size", document.getElementById("watermark-fontsize").value);
+    form.append("opacity", document.getElementById("watermark-opacity").value);
+    form.append("position", document.getElementById("watermark-position").value);
+
+    try {
+        const res = await fetch("/api/pdf/watermark", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Watermark failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = watermarkFile.name.replace(/\.pdf$/i, "");
+            downloadBlob(blob, base + "_watermarked.pdf");
+            showToast("Saved: " + base + "_watermarked.pdf");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Add Watermark';
+}
+
 /* ── Number Pages ── */
 setupDropZone("numberpages-drop", "numberpages-input", files => {
     const f = files[0];
@@ -660,6 +725,208 @@ async function doNumberPages() {
     }
     btn.disabled = false;
     btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Number Pages';
+}
+
+/* ── Reorder Pages ── */
+setupDropZone("reorder-drop", "reorder-input", async files => {
+    const f = files[0];
+    if (!f) return;
+    reorderFile = f;
+    document.getElementById("reorder-file-name").textContent = f.name;
+    document.getElementById("reorder-file-info").hidden = false;
+    document.getElementById("reorder-options").hidden = false;
+    document.getElementById("reorder-actions").hidden = false;
+
+    const form = new FormData();
+    form.append("file", f);
+    try {
+        const res = await fetch("/api/pdf/page-count", { method: "POST", body: form });
+        const data = await res.json();
+        if (data.pages) {
+            document.getElementById("reorder-page-count").textContent = `${data.pages} pages`;
+        }
+    } catch {}
+});
+
+function clearReorderFile() {
+    reorderFile = null;
+    document.getElementById("reorder-file-info").hidden = true;
+    document.getElementById("reorder-options").hidden = true;
+    document.getElementById("reorder-actions").hidden = true;
+    document.getElementById("reorder-page-count").textContent = "";
+    document.getElementById("reorder-order").value = "";
+}
+
+async function doReorder() {
+    if (!reorderFile) return;
+    const order = document.getElementById("reorder-order").value.trim();
+    if (!order) { document.getElementById("reorder-error").textContent = "Enter a page order"; document.getElementById("reorder-error").hidden = false; return; }
+    const btn = document.getElementById("reorder-btn");
+    const err = document.getElementById("reorder-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Reordering...";
+
+    const form = new FormData();
+    form.append("file", reorderFile);
+    form.append("order", order);
+
+    try {
+        const res = await fetch("/api/pdf/reorder", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Reorder failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = reorderFile.name.replace(/\.pdf$/i, "");
+            downloadBlob(blob, base + "_reordered.pdf");
+            showToast("Saved: " + base + "_reordered.pdf");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Reorder Pages`;
+}
+
+/* ── Delete Pages ── */
+setupDropZone("deletepages-drop", "deletepages-input", async files => {
+    const f = files[0];
+    if (!f) return;
+    deletePagesFile = f;
+    document.getElementById("deletepages-file-name").textContent = f.name;
+    document.getElementById("deletepages-file-info").hidden = false;
+    document.getElementById("deletepages-options").hidden = false;
+    document.getElementById("deletepages-actions").hidden = false;
+
+    const form = new FormData();
+    form.append("file", f);
+    try {
+        const res = await fetch("/api/pdf/page-count", { method: "POST", body: form });
+        const data = await res.json();
+        if (data.pages) {
+            document.getElementById("deletepages-page-count").textContent = `${data.pages} pages`;
+        }
+    } catch {}
+});
+
+function clearDeletePagesFile() {
+    deletePagesFile = null;
+    document.getElementById("deletepages-file-info").hidden = true;
+    document.getElementById("deletepages-options").hidden = true;
+    document.getElementById("deletepages-actions").hidden = true;
+    document.getElementById("deletepages-page-count").textContent = "";
+    document.getElementById("deletepages-pages").value = "";
+}
+
+async function doDeletePages() {
+    if (!deletePagesFile) return;
+    const pages = document.getElementById("deletepages-pages").value.trim();
+    if (!pages) { document.getElementById("deletepages-error").textContent = "Enter pages to delete"; document.getElementById("deletepages-error").hidden = false; return; }
+    const btn = document.getElementById("deletepages-btn");
+    const err = document.getElementById("deletepages-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Deleting...";
+
+    const form = new FormData();
+    form.append("file", deletePagesFile);
+    form.append("pages", pages);
+
+    try {
+        const res = await fetch("/api/pdf/delete-pages", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Delete failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = deletePagesFile.name.replace(/\.pdf$/i, "");
+            downloadBlob(blob, base + "_deleted.pdf");
+            showToast("Saved: " + base + "_deleted.pdf");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Delete Pages`;
+}
+
+/* ── Edit Metadata ── */
+setupDropZone("metadata-drop", "metadata-input", async files => {
+    const f = files[0];
+    if (!f) return;
+    metadataFile = f;
+    document.getElementById("metadata-file-name").textContent = f.name;
+    document.getElementById("metadata-file-size").textContent = formatSize(f.size);
+    document.getElementById("metadata-file-info").hidden = false;
+    document.getElementById("metadata-options").hidden = false;
+    document.getElementById("metadata-actions").hidden = false;
+
+    // Auto-fetch existing metadata
+    const form = new FormData();
+    form.append("file", f);
+    form.append("action", "get");
+    try {
+        const res = await fetch("/api/pdf/metadata", { method: "POST", body: form });
+        if (res.ok) {
+            const data = await res.json();
+            document.getElementById("metadata-title").value = data.title || "";
+            document.getElementById("metadata-author").value = data.author || "";
+            document.getElementById("metadata-subject").value = data.subject || "";
+            document.getElementById("metadata-creator").value = data.creator || "";
+        }
+    } catch {}
+});
+
+function clearMetadataFile() {
+    metadataFile = null;
+    document.getElementById("metadata-file-info").hidden = true;
+    document.getElementById("metadata-options").hidden = true;
+    document.getElementById("metadata-actions").hidden = true;
+    document.getElementById("metadata-title").value = "";
+    document.getElementById("metadata-author").value = "";
+    document.getElementById("metadata-subject").value = "";
+    document.getElementById("metadata-creator").value = "";
+}
+
+async function doSaveMetadata() {
+    if (!metadataFile) return;
+    const btn = document.getElementById("metadata-btn");
+    const err = document.getElementById("metadata-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Saving...";
+
+    const form = new FormData();
+    form.append("file", metadataFile);
+    form.append("action", "set");
+    form.append("title", document.getElementById("metadata-title").value);
+    form.append("author", document.getElementById("metadata-author").value);
+    form.append("subject", document.getElementById("metadata-subject").value);
+    form.append("creator", document.getElementById("metadata-creator").value);
+
+    try {
+        const res = await fetch("/api/pdf/metadata", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Metadata update failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = metadataFile.name.replace(/\.pdf$/i, "");
+            downloadBlob(blob, base + "_metadata.pdf");
+            showToast("Saved: " + base + "_metadata.pdf");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Save Metadata`;
 }
 
 /* ── Helpers ── */

@@ -856,6 +856,216 @@ def video_to_gif(data: bytes, ext: str, fps: int = 10, width: int = 480) -> byte
                       timeout=300)
 
 
+def reverse_audio(data: bytes, ext: str) -> bytes:
+    """Reverse audio using ffmpeg areverse filter. Returns audio bytes."""
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-map", "0:a", "-af", "areverse"])
+
+
+def change_pitch(data: bytes, ext: str, semitones: float) -> bytes:
+    """Change audio pitch without changing speed.
+
+    semitones: -12 to 12 (negative = lower, positive = higher).
+    Uses asetrate to shift pitch then atempo to compensate speed.
+    """
+    if semitones < -12 or semitones > 12:
+        raise ValueError("Semitones must be between -12 and 12")
+    semitone_ratio = 2 ** (semitones / 12)
+    tempo_correction = 1 / semitone_ratio
+    af = f"asetrate=44100*{semitone_ratio:.6f},atempo={tempo_correction:.6f}"
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-map", "0:a", "-af", af])
+
+
+def audio_equalizer(data: bytes, ext: str, bass: float = 0,
+                    mid: float = 0, treble: float = 0) -> bytes:
+    """Apply 3-band equalizer to audio.
+
+    bass: -10 to 10 dB (centered at 100 Hz).
+    mid: -10 to 10 dB (centered at 1000 Hz).
+    treble: -10 to 10 dB (centered at 4000 Hz).
+    """
+    bass = max(-10, min(10, bass))
+    mid = max(-10, min(10, mid))
+    treble = max(-10, min(10, treble))
+    af = f"bass=g={bass}:f=100,treble=g={treble}:f=4000,equalizer=f=1000:t=h:width=500:g={mid}"
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-map", "0:a", "-af", af])
+
+
+def audio_fade(data: bytes, ext: str, fade_in: float = 0,
+               fade_out: float = 0, duration: float = 0) -> bytes:
+    """Add fade-in and/or fade-out to audio.
+
+    fade_in: fade-in duration in seconds.
+    fade_out: fade-out duration in seconds.
+    duration: total audio duration in seconds (required for fade-out).
+    """
+    filters = []
+    if fade_in > 0:
+        filters.append(f"afade=t=in:st=0:d={fade_in}")
+    if fade_out > 0 and duration > 0:
+        fade_start = max(0, duration - fade_out)
+        filters.append(f"afade=t=out:st={fade_start}:d={fade_out}")
+    if not filters:
+        raise ValueError("Provide fade_in and/or fade_out duration")
+    af = ",".join(filters)
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-map", "0:a", "-af", af])
+
+
+def crop_video(data: bytes, ext: str, width: int, height: int,
+               x: int = 0, y: int = 0) -> bytes:
+    """Crop video to specified dimensions.
+
+    width/height: output dimensions in pixels.
+    x/y: top-left corner offset of the crop area.
+    """
+    vf = f"crop={width}:{height}:{x}:{y}"
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-vf", vf, "-c:a", "copy"], timeout=300)
+
+
+def rotate_video(data: bytes, ext: str, angle: int) -> bytes:
+    """Rotate video by 90, 180, or 270 degrees.
+
+    Uses ffmpeg transpose filter:
+    90  = transpose=1 (clockwise)
+    180 = transpose=1,transpose=1
+    270 = transpose=2 (counter-clockwise)
+    """
+    if angle == 90:
+        vf = "transpose=1"
+    elif angle == 180:
+        vf = "transpose=1,transpose=1"
+    elif angle == 270:
+        vf = "transpose=2"
+    else:
+        raise ValueError("Angle must be 90, 180, or 270")
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-vf", vf, "-c:a", "copy"], timeout=300)
+
+
+def resize_video(data: bytes, ext: str, width: int, height: int = -1) -> bytes:
+    """Resize video to specified dimensions.
+
+    width/height: target dimensions. Use -1 for either to auto-calculate
+    based on aspect ratio. Both values are rounded to nearest even number
+    by the scale filter.
+    """
+    vf = f"scale={width}:{height}"
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-vf", vf, "-c:a", "copy"], timeout=300)
+
+
+def reverse_video(data: bytes, ext: str) -> bytes:
+    """Reverse video and audio using ffmpeg reverse and areverse filters."""
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-vf", "reverse", "-af", "areverse"], timeout=300)
+
+
+def loop_video(data: bytes, ext: str, count: int = 2) -> bytes:
+    """Loop video N times using ffmpeg stream_loop.
+
+    count: number of total plays (e.g. 2 = play twice).
+    """
+    if count < 1:
+        raise ValueError("Loop count must be at least 1")
+    # stream_loop takes number of additional loops (0 = play once, 1 = play twice)
+    with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as inf:
+        inf.write(data)
+        inf_path = inf.name
+    with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as outf:
+        out_path = outf.name
+    try:
+        cmd = ["ffmpeg", "-y", "-stream_loop", str(count - 1),
+               "-i", inf_path, "-c", "copy", out_path]
+        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
+        return Path(out_path).read_bytes()
+    finally:
+        Path(inf_path).unlink(missing_ok=True)
+        Path(out_path).unlink(missing_ok=True)
+
+
+def mute_video(data: bytes, ext: str) -> bytes:
+    """Strip audio track from video."""
+    return run_ffmpeg(data, f".{ext}", f".{ext}",
+                      ["-an", "-c:v", "copy"], timeout=300)
+
+
+def add_audio_to_video(video_data: bytes, video_ext: str,
+                       audio_data: bytes, audio_ext: str) -> bytes:
+    """Replace audio in a video with a separate audio file.
+
+    Uses two input files: the video (video track only) and the audio.
+    The audio is trimmed or padded to match the video duration.
+    """
+    tmpdir = tempfile.mkdtemp()
+    try:
+        video_path = str(Path(tmpdir) / f"video.{video_ext}")
+        audio_path = str(Path(tmpdir) / f"audio.{audio_ext}")
+        out_path = str(Path(tmpdir) / f"output.{video_ext}")
+
+        Path(video_path).write_bytes(video_data)
+        Path(audio_path).write_bytes(audio_data)
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-i", audio_path,
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-shortest",
+            out_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
+
+        return Path(out_path).read_bytes()
+    finally:
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def burn_subtitles(video_data: bytes, video_ext: str, srt_data: bytes) -> bytes:
+    """Burn SRT subtitles into a video using the ffmpeg subtitles filter.
+
+    Renders subtitle text permanently onto video frames.
+    """
+    tmpdir = tempfile.mkdtemp()
+    try:
+        video_path = str(Path(tmpdir) / f"video.{video_ext}")
+        srt_path = str(Path(tmpdir) / "subs.srt")
+        out_path = str(Path(tmpdir) / f"output.{video_ext}")
+
+        Path(video_path).write_bytes(video_data)
+        Path(srt_path).write_bytes(srt_data)
+
+        # Escape special characters in path for ffmpeg subtitles filter
+        escaped_srt = srt_path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-vf", f"subtitles={escaped_srt}",
+            "-c:a", "copy",
+            out_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
+
+        return Path(out_path).read_bytes()
+    finally:
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 # ── QR Code Tools ──
 
 def generate_qr(text: str, box_size: int = 10, border: int = 4,
@@ -881,3 +1091,172 @@ def generate_qr(text: str, box_size: int = 10, border: int = 4,
     buf = io.BytesIO()
     img.save(buf, "PNG")
     return buf.getvalue()
+
+
+# ── Developer Tools ──
+
+def generate_hash(data: bytes, algorithm: str = "sha256") -> dict:
+    """Generate hash digests for the given data."""
+    import hashlib
+    algos = ["md5", "sha1", "sha256", "sha512"]
+    if algorithm == "all":
+        return {a: hashlib.new(a, data).hexdigest() for a in algos}
+    if algorithm not in algos:
+        raise ValueError(f"Unsupported algorithm: {algorithm}")
+    return {algorithm: hashlib.new(algorithm, data).hexdigest()}
+
+
+def json_format(text: str, indent: int = 2) -> str:
+    """Format/prettify JSON string."""
+    data = json.loads(text)
+    return json.dumps(data, indent=indent, ensure_ascii=False, sort_keys=False)
+
+
+def json_minify(text: str) -> str:
+    """Minify JSON string."""
+    data = json.loads(text)
+    return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+
+
+def json_validate(text: str) -> dict:
+    """Validate JSON and return info."""
+    try:
+        data = json.loads(text)
+        info = {"valid": True, "type": type(data).__name__}
+        if isinstance(data, list):
+            info["length"] = len(data)
+        elif isinstance(data, dict):
+            info["keys"] = len(data)
+        return info
+    except json.JSONDecodeError as e:
+        return {"valid": False, "error": str(e), "line": e.lineno, "column": e.colno}
+
+
+def base64_encode(data: bytes) -> str:
+    """Base64 encode binary data."""
+    import base64
+    return base64.b64encode(data).decode("ascii")
+
+
+def base64_decode(text: str) -> bytes:
+    """Base64 decode a string."""
+    import base64
+    return base64.b64decode(text)
+
+
+def generate_placeholder_image(width: int, height: int, bg_color: str = "#cccccc",
+                                text_color: str = "#666666", text: str = "") -> bytes:
+    """Generate a placeholder image with dimensions text."""
+    img = Image.new("RGB", (width, height), bg_color)
+    draw = ImageDraw.Draw(img)
+
+    label = text or f"{width} x {height}"
+    font_size = max(12, min(width, height) // 8)
+    font = None
+    for fp in [
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+    ]:
+        try:
+            font = ImageFont.truetype(fp, font_size)
+            break
+        except Exception:
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+
+    bbox = draw.textbbox((0, 0), label, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    x = (width - tw) / 2
+    y = (height - th) / 2
+    draw.text((x, y), label, fill=text_color, font=font)
+
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def generate_password(length: int = 16, uppercase: bool = True, lowercase: bool = True,
+                      digits: bool = True, symbols: bool = True, count: int = 1) -> list[str]:
+    """Generate random passwords."""
+    import secrets
+    import string
+    chars = ""
+    if uppercase:
+        chars += string.ascii_uppercase
+    if lowercase:
+        chars += string.ascii_lowercase
+    if digits:
+        chars += string.digits
+    if symbols:
+        chars += "!@#$%^&*()-_=+[]{}|;:,.<>?"
+    if not chars:
+        chars = string.ascii_letters + string.digits
+    return ["".join(secrets.choice(chars) for _ in range(length)) for _ in range(count)]
+
+
+def generate_uuid(version: int = 4, count: int = 1) -> list[str]:
+    """Generate UUIDs."""
+    import uuid as _uuid
+    results = []
+    for _ in range(count):
+        if version == 1:
+            results.append(str(_uuid.uuid1()))
+        else:
+            results.append(str(_uuid.uuid4()))
+    return results
+
+
+def generate_lorem(paragraphs: int = 3) -> str:
+    """Generate lorem ipsum placeholder text."""
+    base = [
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+        "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+        "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.",
+        "Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet.",
+        "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.",
+    ]
+    result = []
+    for i in range(paragraphs):
+        result.append(base[i % len(base)])
+    return "\n\n".join(result)
+
+
+def text_stats(text: str) -> dict:
+    """Get text statistics."""
+    lines = text.split("\n")
+    words = text.split()
+    return {
+        "characters": len(text),
+        "characters_no_spaces": len(text.replace(" ", "").replace("\n", "")),
+        "words": len(words),
+        "lines": len(lines),
+        "paragraphs": len([p for p in text.split("\n\n") if p.strip()]),
+        "sentences": len([s for s in text.replace("!", ".").replace("?", ".").split(".") if s.strip()]),
+    }
+
+
+def text_diff(text1: str, text2: str) -> str:
+    """Generate a unified diff between two texts."""
+    import difflib
+    lines1 = text1.splitlines(keepends=True)
+    lines2 = text2.splitlines(keepends=True)
+    diff = difflib.unified_diff(lines1, lines2, fromfile="Original", tofile="Modified")
+    return "".join(diff)
+
+
+def file_metadata(filepath: str) -> dict:
+    """Get file metadata."""
+    import os
+    import datetime
+    p = Path(filepath)
+    stat = p.stat()
+    return {
+        "name": p.name,
+        "size": stat.st_size,
+        "created": datetime.datetime.fromtimestamp(stat.st_ctime).isoformat(),
+        "modified": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        "extension": p.suffix,
+    }
