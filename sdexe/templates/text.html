@@ -83,7 +83,7 @@
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label>Output</label>
-                        <button onclick="copyText('fr-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                        <button class="btn-copy" onclick="copyText('fr-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="fr-output" class="convert-textarea" rows="6" readonly placeholder="Result will appear here..."></textarea>
                 </div>
@@ -143,7 +143,7 @@
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label>Output</label>
-                        <button onclick="copyText('b64-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                        <button class="btn-copy" onclick="copyText('b64-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="b64-output" class="convert-textarea" rows="5" readonly placeholder="Result will appear here..."></textarea>
                 </div>
@@ -168,11 +168,14 @@
                     <label class="check-label"><input type="checkbox" class="hash-algo" value="SHA-512"> SHA-512</label>
                 </div>
 
-                <div class="pdf-actions" style="margin-top: 12px;">
+                <div class="pdf-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="btn-download" onclick="doHash()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
-                        Generate Hashes
+                        Hash Text
                     </button>
+                    <label class="btn-download btn-secondary" style="cursor: pointer;">
+                        Hash File<input type="file" id="hash-file-input" hidden onchange="doHashFile()">
+                    </label>
                 </div>
 
                 <div id="hash-results" style="margin-top: 16px;"></div>
@@ -282,7 +285,7 @@
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label>Output</label>
-                        <button onclick="copyText('url-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                        <button class="btn-copy" onclick="copyText('url-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="url-output" class="convert-textarea" rows="4" readonly placeholder="Result will appear here..."></textarea>
                 </div>
@@ -309,7 +312,7 @@
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label>Output</label>
-                        <button onclick="copyText('json-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                        <button class="btn-copy" onclick="copyText('json-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="json-output" class="convert-textarea" rows="8" readonly style="font-family: ui-monospace, monospace;"></textarea>
                 </div>
@@ -360,7 +363,7 @@
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label>Output</label>
-                        <button onclick="copyText('case-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                        <button class="btn-copy" onclick="copyText('case-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="case-output" class="convert-textarea" rows="4" readonly></textarea>
                 </div>
@@ -384,7 +387,7 @@
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label>UUIDs</label>
-                        <button onclick="copyText('uuid-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                        <button class="btn-copy" onclick="copyText('uuid-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="uuid-output" class="convert-textarea" rows="6" readonly style="font-family: ui-monospace, monospace;"></textarea>
                 </div>
@@ -437,7 +440,7 @@
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label>Output</label>
-                        <button onclick="copyText('lorem-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                        <button class="btn-copy" onclick="copyText('lorem-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="lorem-output" class="convert-textarea" rows="8" readonly></textarea>
                 </div>
@@ -468,12 +471,13 @@
                 <div class="field" style="margin-top: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label>Password</label>
-                        <button onclick="copyText('pw-output')" style="font-size: 0.8rem; background: none; border: none; cursor: pointer; color: var(--text-secondary);">Copy</button>
+                        <button class="btn-copy" onclick="copyText('pw-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <input type="text" id="pw-output" readonly style="font-family: ui-monospace, monospace; font-size: 1.1rem; letter-spacing: .05em; padding: 14px;">
                 </div>
 
                 <div id="pw-strength" style="margin-top: 8px; font-size: .82rem; color: var(--text-secondary);"></div>
+                <div class="pw-strength-bar"><div class="pw-strength-fill" id="pw-strength-fill"></div></div>
             </div>
         </div>
 

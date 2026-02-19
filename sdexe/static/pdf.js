@@ -298,22 +298,6 @@ function setupDragItem(el, arr, renderFn) {
     });
 }
 
-/* ── Subtab switching (for Password tab) ── */
-document.querySelectorAll("[data-subtab]").forEach(btn => {
-    btn.addEventListener("click", () => {
-        const parent = btn.closest(".card-body");
-        parent.querySelectorAll("[data-subtab]").forEach(b => b.classList.remove("active"));
-        parent.querySelectorAll(".pdf-subsection").forEach(s => { s.hidden = true; s.classList.remove("active"); });
-        btn.classList.add("active");
-        const sec = document.getElementById("subtab-" + btn.dataset.subtab);
-        if (sec) { sec.hidden = false; sec.classList.add("active"); }
-    });
-});
-// Init first subtab
-document.querySelectorAll(".pdf-subsection").forEach((s, i) => {
-    if (i === 0) { s.hidden = false; s.classList.add("active"); }
-});
-
 /* ── Compress PDF ── */
 setupDropZone("compress-drop", "compress-pdf-input", files => {
     const f = files[0];

@@ -1130,6 +1130,51 @@ main { animation: fadeIn .4s ease-out; }
 .error-dismiss { background: none; border: none; color: var(--danger); font-size: 1.1rem; cursor: pointer; padding: 0 4px; margin-left: auto; opacity: .6; transition: opacity .15s; }
 .error-dismiss:hover { opacity: 1; }
 
+/* ── Copy Button ── */
+.btn-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all .15s;
+    line-height: 1.4;
+}
+.btn-copy:hover { background: var(--surface-3); color: var(--text); }
+.btn-copy.copied { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+
+/* ── Password Strength Bar ── */
+.pw-strength-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--surface-3);
+    margin-top: 8px;
+    overflow: hidden;
+}
+.pw-strength-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width .3s, background .3s;
+}
+
+/* ── Size Comparison ── */
+.size-compare {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: .82rem;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+.size-compare .size-arrow { color: var(--text-muted); }
+.size-compare .size-saved { color: var(--green); font-weight: 600; }
+
 /* ── Error Appear ── */
 @keyframes errorSlideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .error:not([hidden]) { animation: errorSlideIn .25s ease-out; }

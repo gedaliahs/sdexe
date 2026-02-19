@@ -170,76 +170,73 @@
             </div>
         </div>
 
-        <!-- Password -->
+        <!-- Password Protect -->
         <div id="tab-password" class="pdf-section card">
             <div class="card-body">
-                <h2>PDF Password</h2>
-                <p class="meta">Add or remove password protection from a PDF.</p>
+                <h2>Password Protect</h2>
+                <p class="meta">Add password protection to a PDF file.</p>
 
-                <div class="pdf-tabs" style="margin-top:0; margin-bottom:16px;">
-                    <button class="pdf-tab active" data-subtab="addpw">Add Password</button>
-                    <button class="pdf-tab" data-subtab="removepw">Remove Password</button>
+                <div class="drop-zone" id="addpw-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="addpw-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; enter a password below to protect it</p>
                 </div>
+                <div id="addpw-file-info" class="split-info" hidden>
+                    <span id="addpw-file-name" class="split-name"></span>
+                    <span id="addpw-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAddPwFile()">&times;</button>
+                </div>
+                <div id="addpw-options" hidden style="margin-top:16px;">
+                    <div class="field">
+                        <label>Password</label>
+                        <input type="password" id="addpw-password" placeholder="Enter password to set">
+                    </div>
+                </div>
+                <div id="addpw-actions" class="pdf-actions" hidden>
+                    <button id="addpw-btn" class="btn-download" onclick="doAddPassword()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Protect PDF
+                    </button>
+                </div>
+                <div id="addpw-error" class="error" hidden></div>
+            </div>
+        </div>
 
-                <!-- Add password -->
-                <div id="subtab-addpw" class="pdf-subsection">
-                    <div class="drop-zone" id="addpw-drop">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                            <path d="M7 11V7a5 5 0 0110 0v4"/>
-                        </svg>
-                        <label class="drop-browse">Select PDF file<input type="file" id="addpw-input" accept=".pdf" hidden></label>
-                        <p class="drop-hint">or drop a file here &middot; enter a password below to protect it</p>
-                    </div>
-                    <div id="addpw-file-info" class="split-info" hidden>
-                        <span id="addpw-file-name" class="split-name"></span>
-                        <span id="addpw-file-size" class="file-size"></span>
-                        <button class="split-remove" onclick="clearAddPwFile()">&times;</button>
-                    </div>
-                    <div id="addpw-options" hidden style="margin-top:16px;">
-                        <div class="field">
-                            <label>Password</label>
-                            <input type="password" id="addpw-password" placeholder="Enter password to set">
-                        </div>
-                    </div>
-                    <div id="addpw-actions" class="pdf-actions" hidden>
-                        <button id="addpw-btn" class="btn-download" onclick="doAddPassword()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
-                            Protect PDF
-                        </button>
-                    </div>
-                    <div id="addpw-error" class="error" hidden></div>
-                </div>
+        <!-- Unlock PDF -->
+        <div id="tab-unlock" class="pdf-section card">
+            <div class="card-body">
+                <h2>Unlock PDF</h2>
+                <p class="meta">Remove password protection from a PDF file.</p>
 
-                <!-- Remove password -->
-                <div id="subtab-removepw" class="pdf-subsection" hidden>
-                    <div class="drop-zone" id="removepw-drop">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                            <path d="M7 11V7a5 5 0 0110 0v4"/>
-                        </svg>
-                        <label class="drop-browse">Select PDF file<input type="file" id="removepw-input" accept=".pdf" hidden></label>
-                        <p class="drop-hint">or drop a file here &middot; enter the current password to unlock it</p>
-                    </div>
-                    <div id="removepw-file-info" class="split-info" hidden>
-                        <span id="removepw-file-name" class="split-name"></span>
-                        <span id="removepw-file-size" class="file-size"></span>
-                        <button class="split-remove" onclick="clearRemovePwFile()">&times;</button>
-                    </div>
-                    <div id="removepw-options" hidden style="margin-top:16px;">
-                        <div class="field">
-                            <label>Current Password</label>
-                            <input type="password" id="removepw-password" placeholder="Enter the existing password">
-                        </div>
-                    </div>
-                    <div id="removepw-actions" class="pdf-actions" hidden>
-                        <button id="removepw-btn" class="btn-download" onclick="doRemovePassword()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
-                            Unlock PDF
-                        </button>
-                    </div>
-                    <div id="removepw-error" class="error" hidden></div>
+                <div class="drop-zone" id="removepw-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="removepw-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; enter the current password to unlock it</p>
                 </div>
+                <div id="removepw-file-info" class="split-info" hidden>
+                    <span id="removepw-file-name" class="split-name"></span>
+                    <span id="removepw-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearRemovePwFile()">&times;</button>
+                </div>
+                <div id="removepw-options" hidden style="margin-top:16px;">
+                    <div class="field">
+                        <label>Current Password</label>
+                        <input type="password" id="removepw-password" placeholder="Enter the existing password">
+                    </div>
+                </div>
+                <div id="removepw-actions" class="pdf-actions" hidden>
+                    <button id="removepw-btn" class="btn-download" onclick="doRemovePassword()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Unlock PDF
+                    </button>
+                </div>
+                <div id="removepw-error" class="error" hidden></div>
             </div>
         </div>
         <!-- Rotate Pages -->

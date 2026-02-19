@@ -210,6 +210,50 @@ async function doHash() {
     }
 }
 
+/* ── Hash File ── */
+async function doHashFile() {
+    const fileInput = document.getElementById("hash-file-input");
+    const file = fileInput.files[0];
+    if (!file) return;
+    fileInput.value = "";
+
+    const algos = [...document.querySelectorAll(".hash-algo:checked")].map(cb => cb.value);
+    const results = document.getElementById("hash-results");
+    const err = document.getElementById("hash-error");
+    err.hidden = true;
+    results.innerHTML = `<p style="font-size:.85rem;color:var(--text-secondary);">Hashing ${file.name} (${(file.size / 1024).toFixed(1)} KB)...</p>`;
+
+    if (!algos.length) {
+        err.textContent = "Select at least one algorithm";
+        err.hidden = false;
+        results.innerHTML = "";
+        return;
+    }
+
+    const buffer = await file.arrayBuffer();
+    results.innerHTML = "";
+
+    for (const algo of algos) {
+        try {
+            const hashBuffer = await crypto.subtle.digest(algo, buffer);
+            const hex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+            const row = document.createElement("div");
+            row.style.cssText = "margin-bottom: 12px;";
+            row.innerHTML = `
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">${algo} <span style="color:var(--text-muted);">— ${file.name}</span></div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <code style="font-size: 0.78rem; word-break: break-all; flex: 1; padding: 6px 10px; background: var(--surface-2); border-radius: 6px;">${hex}</code>
+                    <button class="btn-copy" onclick="navigator.clipboard.writeText('${hex}');this.classList.add('copied');this.innerHTML='Copied!';setTimeout(()=>{this.classList.remove('copied');this.innerHTML='Copy'},1500)">Copy</button>
+                </div>
+            `;
+            results.appendChild(row);
+        } catch (e) {
+            err.textContent = `${algo} failed: ${e.message}`;
+            err.hidden = false;
+        }
+    }
+}
+
 /* ── Text Diff ── */
 function doDiff() {
     const original = document.getElementById("diff-original").value.split("\n");
@@ -556,9 +600,16 @@ function esc(s) {
     return d.innerHTML;
 }
 
-function copyText(id) {
+function copyText(id, btn) {
     const el = document.getElementById(id);
-    navigator.clipboard.writeText(el.value || el.textContent).catch(() => {
+    navigator.clipboard.writeText(el.value || el.textContent).then(() => {
+        if (btn) {
+            btn.classList.add("copied");
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+            setTimeout(() => { btn.classList.remove("copied"); btn.innerHTML = orig; }, 1500);
+        }
+    }).catch(() => {
         el.select && el.select();
         document.execCommand("copy");
     });
@@ -600,4 +651,10 @@ function doPassword() {
     else if (entropy >= 60) strength = "Good";
     else if (entropy >= 40) strength = "Fair";
     document.getElementById("pw-strength").textContent = `${entropy} bits of entropy — ${strength}`;
+
+    const fill = document.getElementById("pw-strength-fill");
+    const pct = Math.min(100, (entropy / 128) * 100);
+    const colors = { "Weak": "#ef4444", "Fair": "#f59e0b", "Good": "#eab308", "Strong": "#22c55e", "Very Strong": "#10b981" };
+    fill.style.width = pct + "%";
+    fill.style.background = colors[strength] || "#ef4444";
 }
