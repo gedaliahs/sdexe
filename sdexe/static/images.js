@@ -692,6 +692,67 @@ async function doGrayscale() {
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Convert to Grayscale`;
 }
 
+/* ── QR Code Generator ── */
+let qrBlobUrl = null;
+
+async function doQrGenerate() {
+    const text = document.getElementById("qr-text").value.trim();
+    const btn = document.getElementById("qr-btn");
+    const err = document.getElementById("qr-error");
+    err.hidden = true;
+
+    if (!text) {
+        err.textContent = "Enter text or a URL";
+        err.hidden = false;
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Generating...";
+
+    try {
+        const res = await fetch("/api/images/qr-generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                text: text,
+                size: parseInt(document.getElementById("qr-size").value),
+                error_correction: document.getElementById("qr-ec").value,
+                fill_color: document.getElementById("qr-fill").value,
+                back_color: document.getElementById("qr-back").value,
+            }),
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Generation failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            if (qrBlobUrl) URL.revokeObjectURL(qrBlobUrl);
+            qrBlobUrl = URL.createObjectURL(blob);
+            document.getElementById("qr-img").src = qrBlobUrl;
+            document.getElementById("qr-preview").hidden = false;
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Generate QR Code';
+}
+
+function downloadQr() {
+    if (!qrBlobUrl) return;
+    const a = document.createElement("a");
+    a.href = qrBlobUrl;
+    a.download = "qrcode.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast("Saved: qrcode.png");
+}
+
 /* ── Blur ── */
 setupDropZone("blur-drop", "blur-input", files => {
     const f = files[0];

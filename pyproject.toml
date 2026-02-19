@@ -18,6 +18,7 @@ dependencies = [
     "rich",
     "pystray",
     "PyYAML",
+    "qrcode",
 ]
 
 [project.scripts]

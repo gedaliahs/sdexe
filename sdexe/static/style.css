@@ -1219,6 +1219,53 @@ select:hover { border-color: var(--border-hover); }
 }
 .btn-secondary:hover { background: var(--surface-3) !important; }
 
+/* ── Danger button ── */
+.btn-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    background: var(--danger) !important;
+    color: #fff !important;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: .9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-danger:hover { background: #cc3d42 !important; }
+
+/* ── Recorder ── */
+.recorder-area {
+    text-align: center;
+    padding: 32px 0 16px;
+}
+.recorder-waveform {
+    width: 100%;
+    max-width: 600px;
+    height: 100px;
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    margin-bottom: 16px;
+}
+.recorder-timer {
+    font-size: 2rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    margin-bottom: 16px;
+    letter-spacing: .05em;
+}
+.recorder-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+.recorder-btn-start {
+    font-size: 1rem;
+}
+
 /* ── Text-page card layout ── */
 .text-page .pdf-section.card {
     background: var(--surface);

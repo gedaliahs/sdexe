@@ -467,6 +467,92 @@
                 <div id="av-video-to-gif-error" class="error" hidden></div>
             </div>
         </div>
+        <!-- Voice Recorder -->
+        <div id="tab-av-record-audio" class="pdf-section card">
+            <div class="card-body">
+                <h2>Voice Recorder</h2>
+                <p class="meta">Record audio from your microphone. No data leaves your machine.</p>
+
+                <div class="recorder-area">
+                    <canvas id="recorder-audio-waveform" class="recorder-waveform" width="600" height="100"></canvas>
+                    <div class="recorder-timer" id="recorder-audio-timer">00:00</div>
+                    <div class="recorder-controls">
+                        <button id="recorder-audio-start" class="btn-download recorder-btn-start" onclick="startAudioRecording()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                            Start Recording
+                        </button>
+                        <button id="recorder-audio-pause" class="btn-secondary" onclick="pauseAudioRecording()" hidden>Pause</button>
+                        <button id="recorder-audio-stop" class="btn-danger" onclick="stopAudioRecording()" hidden>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                            Stop
+                        </button>
+                    </div>
+                </div>
+
+                <div id="recorder-audio-result" hidden>
+                    <audio id="recorder-audio-player" controls style="width:100%;margin:16px 0;"></audio>
+                    <div class="control-row" style="margin-bottom:12px;">
+                        <div class="select-wrap">
+                            <label>Format</label>
+                            <select id="recorder-audio-format">
+                                <option value="webm" selected>WebM (original)</option>
+                                <option value="wav">WAV</option>
+                                <option value="mp3">MP3</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="pdf-actions">
+                        <button id="recorder-audio-download" class="btn-download" onclick="downloadAudioRecording()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Download Recording
+                        </button>
+                        <button class="btn-secondary" onclick="resetAudioRecording()">New Recording</button>
+                    </div>
+                </div>
+
+                <div id="recorder-audio-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Screen Recorder -->
+        <div id="tab-av-record-screen" class="pdf-section card">
+            <div class="card-body">
+                <h2>Screen Recorder</h2>
+                <p class="meta">Record your screen, window, or browser tab. Stays 100% local.</p>
+
+                <div class="recorder-area">
+                    <div class="recorder-timer" id="recorder-screen-timer">00:00</div>
+                    <div class="recorder-controls">
+                        <button id="recorder-screen-start" class="btn-download recorder-btn-start" onclick="startScreenRecording()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                            Start Recording
+                        </button>
+                        <button id="recorder-screen-stop" class="btn-danger" onclick="stopScreenRecording()" hidden>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                            Stop
+                        </button>
+                    </div>
+                    <div style="margin-top:12px;">
+                        <label class="check-label">
+                            <input type="checkbox" id="recorder-screen-audio"> Include system audio (if supported)
+                        </label>
+                    </div>
+                </div>
+
+                <div id="recorder-screen-result" hidden>
+                    <video id="recorder-screen-player" controls style="width:100%;max-height:400px;margin:16px 0;border-radius:8px;background:#000;"></video>
+                    <div class="pdf-actions">
+                        <button id="recorder-screen-download" class="btn-download" onclick="downloadScreenRecording()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Download Recording
+                        </button>
+                        <button class="btn-secondary" onclick="resetScreenRecording()">New Recording</button>
+                    </div>
+                </div>
+
+                <div id="recorder-screen-error" class="error" hidden></div>
+            </div>
+        </div>
     </main>
 {% endblock %}
 

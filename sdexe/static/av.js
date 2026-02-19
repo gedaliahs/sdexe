@@ -347,6 +347,235 @@ async function doAvVideoToGif() {
     );
 }
 
+/* ── Voice Recorder ── */
+let audioMediaRecorder = null;
+let audioRecordChunks = [];
+let audioRecordBlob = null;
+let audioRecordStream = null;
+let audioCtx = null;
+let audioAnalyser = null;
+let audioAnimFrame = null;
+let audioTimerInterval = null;
+let audioRecordStart = 0;
+
+function startAudioRecording() {
+    const err = document.getElementById("recorder-audio-error");
+    err.hidden = true;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        audioRecordStream = stream;
+        audioRecordChunks = [];
+
+        // Set up waveform visualization
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(stream);
+        audioAnalyser = audioCtx.createAnalyser();
+        audioAnalyser.fftSize = 256;
+        source.connect(audioAnalyser);
+        drawAudioWaveform();
+
+        audioMediaRecorder = new MediaRecorder(stream);
+        audioMediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioRecordChunks.push(e.data); };
+        audioMediaRecorder.onstop = () => {
+            audioRecordBlob = new Blob(audioRecordChunks, { type: "audio/webm" });
+            document.getElementById("recorder-audio-player").src = URL.createObjectURL(audioRecordBlob);
+            document.getElementById("recorder-audio-result").hidden = false;
+        };
+        audioMediaRecorder.start();
+
+        // UI state
+        document.getElementById("recorder-audio-start").hidden = true;
+        document.getElementById("recorder-audio-pause").hidden = false;
+        document.getElementById("recorder-audio-stop").hidden = false;
+
+        // Timer
+        audioRecordStart = Date.now();
+        audioTimerInterval = setInterval(updateAudioTimer, 200);
+    }).catch(e => {
+        err.textContent = "Microphone access denied: " + e.message;
+        err.hidden = false;
+    });
+}
+
+function pauseAudioRecording() {
+    if (!audioMediaRecorder) return;
+    const btn = document.getElementById("recorder-audio-pause");
+    if (audioMediaRecorder.state === "recording") {
+        audioMediaRecorder.pause();
+        btn.textContent = "Resume";
+    } else {
+        audioMediaRecorder.resume();
+        btn.textContent = "Pause";
+    }
+}
+
+function stopAudioRecording() {
+    if (audioMediaRecorder && audioMediaRecorder.state !== "inactive") {
+        audioMediaRecorder.stop();
+    }
+    if (audioRecordStream) {
+        audioRecordStream.getTracks().forEach(t => t.stop());
+    }
+    cancelAnimationFrame(audioAnimFrame);
+    clearInterval(audioTimerInterval);
+    if (audioCtx) audioCtx.close();
+    document.getElementById("recorder-audio-pause").hidden = true;
+    document.getElementById("recorder-audio-stop").hidden = true;
+}
+
+function resetAudioRecording() {
+    document.getElementById("recorder-audio-result").hidden = true;
+    document.getElementById("recorder-audio-start").hidden = false;
+    document.getElementById("recorder-audio-timer").textContent = "00:00";
+    // Clear waveform
+    const canvas = document.getElementById("recorder-audio-waveform");
+    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    audioRecordBlob = null;
+}
+
+function updateAudioTimer() {
+    const elapsed = Math.floor((Date.now() - audioRecordStart) / 1000);
+    const min = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    const sec = String(elapsed % 60).padStart(2, "0");
+    document.getElementById("recorder-audio-timer").textContent = min + ":" + sec;
+}
+
+function drawAudioWaveform() {
+    const canvas = document.getElementById("recorder-audio-waveform");
+    const ctx = canvas.getContext("2d");
+    const bufLen = audioAnalyser.frequencyBinCount;
+    const data = new Uint8Array(bufLen);
+
+    function draw() {
+        audioAnimFrame = requestAnimationFrame(draw);
+        audioAnalyser.getByteTimeDomainData(data);
+        ctx.fillStyle = "#f7f6f5";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#4285f4";
+        ctx.beginPath();
+        const sliceWidth = canvas.width / bufLen;
+        let x = 0;
+        for (let i = 0; i < bufLen; i++) {
+            const v = data[i] / 128.0;
+            const y = v * canvas.height / 2;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            x += sliceWidth;
+        }
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+    }
+    draw();
+}
+
+async function downloadAudioRecording() {
+    if (!audioRecordBlob) return;
+    const fmt = document.getElementById("recorder-audio-format").value;
+    if (fmt === "webm") {
+        downloadBlob(audioRecordBlob, "recording.webm");
+        showToast("Saved: recording.webm");
+        return;
+    }
+    // Convert via backend
+    const btn = document.getElementById("recorder-audio-download");
+    btn.disabled = true;
+    btn.textContent = "Converting...";
+    const fd = new FormData();
+    fd.append("file", audioRecordBlob, "recording.webm");
+    fd.append("format", fmt);
+    try {
+        const res = await fetch("/api/av/convert-audio", { method: "POST", body: fd });
+        if (!res.ok) {
+            const data = await res.json();
+            document.getElementById("recorder-audio-error").textContent = data.error || "Conversion failed";
+            document.getElementById("recorder-audio-error").hidden = false;
+        } else {
+            const blob = await res.blob();
+            downloadBlob(blob, "recording." + fmt);
+            showToast("Saved: recording." + fmt);
+        }
+    } catch {
+        document.getElementById("recorder-audio-error").textContent = "Conversion failed";
+        document.getElementById("recorder-audio-error").hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Download Recording';
+}
+
+/* ── Screen Recorder ── */
+let screenMediaRecorder = null;
+let screenRecordChunks = [];
+let screenRecordBlob = null;
+let screenRecordStream = null;
+let screenTimerInterval = null;
+let screenRecordStart = 0;
+
+async function startScreenRecording() {
+    const err = document.getElementById("recorder-screen-error");
+    err.hidden = true;
+    const includeAudio = document.getElementById("recorder-screen-audio").checked;
+    try {
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: includeAudio,
+        });
+        screenRecordStream = displayStream;
+        screenRecordChunks = [];
+
+        screenMediaRecorder = new MediaRecorder(displayStream);
+        screenMediaRecorder.ondataavailable = e => { if (e.data.size > 0) screenRecordChunks.push(e.data); };
+        screenMediaRecorder.onstop = () => {
+            screenRecordBlob = new Blob(screenRecordChunks, { type: "video/webm" });
+            document.getElementById("recorder-screen-player").src = URL.createObjectURL(screenRecordBlob);
+            document.getElementById("recorder-screen-result").hidden = false;
+        };
+
+        // Handle user stopping via browser UI (clicking "Stop sharing")
+        displayStream.getVideoTracks()[0].onended = () => stopScreenRecording();
+
+        screenMediaRecorder.start();
+
+        document.getElementById("recorder-screen-start").hidden = true;
+        document.getElementById("recorder-screen-stop").hidden = false;
+
+        screenRecordStart = Date.now();
+        screenTimerInterval = setInterval(updateScreenTimer, 200);
+    } catch (e) {
+        err.textContent = "Screen sharing denied or not supported: " + e.message;
+        err.hidden = false;
+    }
+}
+
+function stopScreenRecording() {
+    if (screenMediaRecorder && screenMediaRecorder.state !== "inactive") {
+        screenMediaRecorder.stop();
+    }
+    if (screenRecordStream) {
+        screenRecordStream.getTracks().forEach(t => t.stop());
+    }
+    clearInterval(screenTimerInterval);
+    document.getElementById("recorder-screen-stop").hidden = true;
+}
+
+function resetScreenRecording() {
+    document.getElementById("recorder-screen-result").hidden = true;
+    document.getElementById("recorder-screen-start").hidden = false;
+    document.getElementById("recorder-screen-timer").textContent = "00:00";
+    screenRecordBlob = null;
+}
+
+function updateScreenTimer() {
+    const elapsed = Math.floor((Date.now() - screenRecordStart) / 1000);
+    const min = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    const sec = String(elapsed % 60).padStart(2, "0");
+    document.getElementById("recorder-screen-timer").textContent = min + ":" + sec;
+}
+
+function downloadScreenRecording() {
+    if (!screenRecordBlob) return;
+    downloadBlob(screenRecordBlob, "screen-recording.webm");
+    showToast("Saved: screen-recording.webm");
+}
+
 /* ── Helpers ── */
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + " B";

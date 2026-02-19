@@ -1293,6 +1293,26 @@ def image_adjust():
         return jsonify({"error": str(e)}), 400
 
 
+@app.route("/api/images/qr-generate", methods=["POST"])
+def qr_generate():
+    data = request.json or {}
+    text = data.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+    try:
+        result = tools.generate_qr(
+            text,
+            box_size=int(data.get("size", 10)),
+            error_correction=data.get("error_correction", "M"),
+            fill_color=data.get("fill_color", "black"),
+            back_color=data.get("back_color", "white"),
+        )
+        return send_file(io.BytesIO(result), mimetype="image/png",
+                         download_name="qrcode.png")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 # ── Convert API ──
 
 @app.route("/api/convert/md-to-html", methods=["POST"])

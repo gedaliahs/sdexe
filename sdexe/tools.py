@@ -854,3 +854,30 @@ def video_to_gif(data: bytes, ext: str, fps: int = 10, width: int = 480) -> byte
     return run_ffmpeg(data, f".{ext}", ".gif",
                       ["-vf", f"fps={fps},scale={width}:-1:flags=lanczos", "-loop", "0"],
                       timeout=300)
+
+
+# ── QR Code Tools ──
+
+def generate_qr(text: str, box_size: int = 10, border: int = 4,
+                error_correction: str = "M",
+                fill_color: str = "black", back_color: str = "white") -> bytes:
+    """Generate a QR code PNG from text."""
+    import qrcode
+    ec_map = {
+        "L": qrcode.constants.ERROR_CORRECT_L,
+        "M": qrcode.constants.ERROR_CORRECT_M,
+        "Q": qrcode.constants.ERROR_CORRECT_Q,
+        "H": qrcode.constants.ERROR_CORRECT_H,
+    }
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=ec_map.get(error_correction, qrcode.constants.ERROR_CORRECT_M),
+        box_size=box_size,
+        border=border,
+    )
+    qr.add_data(text)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color=fill_color, back_color=back_color)
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()

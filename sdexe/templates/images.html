@@ -456,6 +456,69 @@
                 <div id="blur-error" class="error" hidden></div>
             </div>
         </div>
+        <!-- QR Code Generator -->
+        <div id="tab-qrcode" class="pdf-section card">
+            <div class="card-body">
+                <h2>QR Code Generator</h2>
+                <p class="meta">Generate a QR code from any text or URL.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Text or URL</label>
+                    <textarea id="qr-text" rows="3" placeholder="https://example.com" style="width:100%;font-family:inherit;resize:vertical;"></textarea>
+                </div>
+
+                <div class="field-row" style="margin-top: 12px;">
+                    <div class="select-wrap">
+                        <label>Size</label>
+                        <select id="qr-size">
+                            <option value="8">Small</option>
+                            <option value="10" selected>Medium</option>
+                            <option value="15">Large</option>
+                            <option value="20">Extra Large</option>
+                        </select>
+                    </div>
+                    <div class="select-wrap">
+                        <label>Error Correction</label>
+                        <select id="qr-ec">
+                            <option value="L">Low (7%)</option>
+                            <option value="M" selected>Medium (15%)</option>
+                            <option value="Q">Quartile (25%)</option>
+                            <option value="H">High (30%)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="field-row" style="margin-top: 12px;">
+                    <div class="field">
+                        <label>Foreground</label>
+                        <input type="color" id="qr-fill" value="#000000" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
+                    </div>
+                    <div class="field">
+                        <label>Background</label>
+                        <input type="color" id="qr-back" value="#ffffff" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
+                    </div>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 16px;">
+                    <button id="qr-btn" class="btn-download" onclick="doQrGenerate()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        Generate QR Code
+                    </button>
+                </div>
+
+                <div id="qr-preview" hidden style="text-align:center;margin-top:20px;">
+                    <img id="qr-img" src="" alt="QR Code" style="max-width:300px;border:1px solid var(--border);border-radius:8px;">
+                    <div class="pdf-actions" style="margin-top:12px;">
+                        <button class="btn-download" onclick="downloadQr()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Download PNG
+                        </button>
+                    </div>
+                </div>
+
+                <div id="qr-error" class="error" hidden></div>
+            </div>
+        </div>
     </main>
 {% endblock %}
 
