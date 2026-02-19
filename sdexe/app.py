@@ -921,6 +921,7 @@ def pdf_metadata():
                 author=request.form.get("author", ""),
                 subject=request.form.get("subject", ""),
                 keywords=request.form.get("keywords", ""),
+                creator=request.form.get("creator", ""),
             )
             base = tools._base_from_filename(f.filename, "document")
             return send_file(io.BytesIO(result), as_attachment=True,
@@ -1173,15 +1174,10 @@ def image_strip_exif():
         img = Image.open(f.stream)
         clean = tools.strip_exif(img)
         fmt = tools._ext_from_filename(f.filename, "jpg")
-        pil_fmt = tools._PIL_FMT_MAP.get(fmt, "PNG")
-        buf = io.BytesIO()
-        if pil_fmt == "JPEG":
-            clean.save(buf, "JPEG", quality=95)
-        else:
-            clean.save(buf, pil_fmt)
+        data = tools._save_image(clean, fmt)
         base = tools._base_from_filename(f.filename, "image")
         mime = tools._MIME_MAP.get(fmt, f"image/{fmt}")
-        return send_file(io.BytesIO(buf.getvalue()), as_attachment=True,
+        return send_file(io.BytesIO(data), as_attachment=True,
                          download_name=f"{base}_clean.{fmt}", mimetype=mime)
     except Exception as e:
         return jsonify({"error": str(e)}), 400

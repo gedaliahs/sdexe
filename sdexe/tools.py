@@ -35,11 +35,31 @@ def _base_from_filename(filename: str, default: str = "file") -> str:
     return filename.rsplit(".", 1)[0] if "." in filename else default
 
 
+def _ensure_processable(img: Image.Image) -> Image.Image:
+    """Convert palette, CMYK, and other exotic modes to RGB/RGBA for processing."""
+    if img.mode in ("P", "PA"):
+        return img.convert("RGBA" if "transparency" in img.info else "RGB")
+    if img.mode in ("CMYK", "YCbCr", "LAB", "HSV"):
+        return img.convert("RGB")
+    if img.mode == "I":
+        return img.convert("L")
+    return img
+
+
 def _save_image(img: Image.Image, fmt: str) -> bytes:
     """Save a PIL Image to bytes in the given format string (e.g. 'png', 'jpg')."""
     pil_fmt = _PIL_FMT_MAP.get(fmt, "PNG")
     buf = io.BytesIO()
-    save_img = img.convert("RGB") if pil_fmt == "JPEG" and img.mode == "RGBA" else img
+    if pil_fmt == "JPEG" and img.mode in ("RGBA", "LA", "PA", "P"):
+        save_img = img.convert("RGB")
+    elif pil_fmt == "GIF":
+        save_img = img
+    elif img.mode in ("CMYK", "YCbCr", "LAB", "HSV", "I"):
+        save_img = img.convert("RGB")
+    elif img.mode in ("P", "PA") and pil_fmt == "PNG":
+        save_img = img  # PNG supports palette
+    else:
+        save_img = img
     save_img.save(buf, pil_fmt)
     return buf.getvalue()
 
@@ -183,10 +203,14 @@ def rotate_pdf(stream: BinaryIO, angle: int, pages_str: str = "all") -> bytes:
 
 
 def reorder_pdf(stream: BinaryIO, order: list[int]) -> bytes:
-    """Reorder pages. order is 0-based list of page indices."""
+    """Reorder pages. order is 1-based list of page numbers."""
     reader = PdfReader(stream)
+    total = len(reader.pages)
     writer = PdfWriter()
-    for idx in order:
+    for num in order:
+        idx = num - 1
+        if idx < 0 or idx >= total:
+            raise ValueError(f"Page {num} out of range (1-{total})")
         writer.add_page(reader.pages[idx])
     buf = io.BytesIO()
     writer.write(buf)
@@ -233,18 +257,22 @@ def get_pdf_metadata(stream: BinaryIO) -> dict:
 
 
 def set_pdf_metadata(stream: BinaryIO, title: str = "", author: str = "",
-                     subject: str = "", keywords: str = "") -> bytes:
+                     subject: str = "", keywords: str = "",
+                     creator: str = "") -> bytes:
     """Set PDF metadata. Returns new PDF bytes."""
     reader = PdfReader(stream)
     writer = PdfWriter()
     for page in reader.pages:
         writer.add_page(page)
-    writer.add_metadata({
+    meta = {
         "/Title": title,
         "/Author": author,
         "/Subject": subject,
         "/Keywords": keywords,
-    })
+    }
+    if creator:
+        meta["/Creator"] = creator
+    writer.add_metadata(meta)
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()
@@ -348,12 +376,14 @@ def compress_image(img: Image.Image, quality: int, fmt: str) -> bytes:
     """Compress image. quality: 0-100, fmt: file extension string."""
     buf = io.BytesIO()
     if fmt in ("jpg", "jpeg"):
-        if img.mode == "RGBA":
+        if img.mode not in ("RGB", "L"):
             img = img.convert("RGB")
         img.save(buf, "JPEG", quality=quality, optimize=True)
     elif fmt == "webp":
+        img = _ensure_processable(img)
         img.save(buf, "WEBP", quality=quality)
     else:
+        img = _ensure_processable(img)
         img.save(buf, "PNG", optimize=True)
     return buf.getvalue()
 
@@ -361,8 +391,10 @@ def compress_image(img: Image.Image, quality: int, fmt: str) -> bytes:
 def convert_image(img: Image.Image, target: str) -> bytes:
     """Convert image to target format. target: 'png', 'jpg', 'webp'."""
     pil_fmt = "JPEG" if target == "jpg" else target.upper()
-    if pil_fmt == "JPEG" and img.mode == "RGBA":
+    if pil_fmt == "JPEG" and img.mode not in ("RGB", "L"):
         img = img.convert("RGB")
+    elif pil_fmt in ("PNG", "WEBP"):
+        img = _ensure_processable(img)
     buf = io.BytesIO()
     img.save(buf, pil_fmt)
     return buf.getvalue()
@@ -382,6 +414,8 @@ def rotate_image(img: Image.Image, angle: int) -> Image.Image:
 
 def strip_exif(img: Image.Image) -> Image.Image:
     new_img = Image.new(img.mode, img.size)
+    if img.mode == "P":
+        new_img.putpalette(img.getpalette())
     new_img.putdata(list(img.getdata()))
     return new_img
 
@@ -396,6 +430,7 @@ def image_to_ico(img: Image.Image, sizes: list[int] | None = None) -> bytes:
 
 
 def flip_image(img: Image.Image, direction: str = "horizontal") -> Image.Image:
+    img = _ensure_processable(img)
     if direction == "vertical":
         return img.transpose(Image.FLIP_TOP_BOTTOM)
     return img.transpose(Image.FLIP_LEFT_RIGHT)
@@ -406,6 +441,7 @@ def grayscale_image(img: Image.Image) -> Image.Image:
 
 
 def blur_image(img: Image.Image, radius: float = 5.0) -> Image.Image:
+    img = _ensure_processable(img)
     return img.filter(ImageFilter.GaussianBlur(radius=radius))
 
 
@@ -476,6 +512,7 @@ def image_info(img: Image.Image) -> dict:
 def adjust_image(img: Image.Image, brightness: float = 1.0,
                  contrast: float = 1.0, sharpness: float = 1.0) -> Image.Image:
     """Adjust brightness, contrast, and sharpness. 1.0 = original."""
+    img = _ensure_processable(img)
     if brightness != 1.0:
         img = ImageEnhance.Brightness(img).enhance(brightness)
     if contrast != 1.0:
