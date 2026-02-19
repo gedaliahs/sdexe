@@ -229,13 +229,21 @@ main {
 
 /* ── Error ── */
 .error {
-    margin-top: 16px; padding: 12px 16px;
-    background: var(--danger-bg);
-    border: 1px solid rgba(230,81,86,.18);
-    border-left: 3px solid var(--danger);
+    margin-top: 16px; padding: 14px 18px 14px 44px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
     border-radius: var(--radius-md);
-    color: var(--danger); font-size: .82rem; line-height: 1.5;
-    display: flex; align-items: center; gap: 12px;
+    color: #991b1b; font-size: .85rem; line-height: 1.6;
+    position: relative;
+}
+.error::before {
+    content: '';
+    position: absolute;
+    left: 14px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23dc2626' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' y1='8' x2='12' y2='12'/%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'/%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
 }
 
 /* ── Card ── */
@@ -1122,9 +1130,9 @@ main { animation: fadeIn .4s ease-out; }
 .error-dismiss { background: none; border: none; color: var(--danger); font-size: 1.1rem; cursor: pointer; padding: 0 4px; margin-left: auto; opacity: .6; transition: opacity .15s; }
 .error-dismiss:hover { opacity: 1; }
 
-/* ── Error Shake ── */
-@keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-4px); } 40%,80% { transform: translateX(4px); } }
-.error:not([hidden]) { animation: shake .4s ease-out, fadeIn .2s ease-out; }
+/* ── Error Appear ── */
+@keyframes errorSlideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+.error:not([hidden]) { animation: errorSlideIn .25s ease-out; }
 
 /* ── Save Button Bounce ── */
 @keyframes bounceIn { 0% { transform: scale(0.8); opacity: 0; } 60% { transform: scale(1.04); } 100% { transform: scale(1); opacity: 1; } }
