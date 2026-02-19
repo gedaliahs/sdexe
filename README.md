@@ -1,5 +1,7 @@
 # sdexe
 
+**Suite for Downloading, Editing & eXporting Everything**
+
 [![PyPI version](https://img.shields.io/pypi/v/sdexe)](https://pypi.org/project/sdexe/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/sdexe)](https://pypi.org/project/sdexe/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
