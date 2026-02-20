@@ -109,6 +109,17 @@
                             Download subtitles (English)
                         </label>
                     </div>
+                    <div id="v-clip-wrap" class="clip-wrap" hidden>
+                        <label class="check-label">
+                            <input type="checkbox" id="v-clip-toggle">
+                            Clip
+                        </label>
+                        <div id="v-clip-fields" class="clip-fields" style="display:none;">
+                            <input type="text" id="v-clip-start" placeholder="0:00" class="clip-time">
+                            <span>to</span>
+                            <input type="text" id="v-clip-end" placeholder="end" class="clip-time">
+                        </div>
+                    </div>
                     <button id="v-dl-btn" class="btn-download" onclick="startSingleDownload()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
                         Download

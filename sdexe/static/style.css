@@ -1080,6 +1080,27 @@ main { animation: fadeIn .4s ease-out; }
     50% { box-shadow: 0 4px 20px rgba(0,0,0,.1), 0 0 0 4px rgba(66,133,244,.08); }
 }
 
+/* ── Clip Controls ── */
+.clip-wrap { margin-top: 4px; }
+.clip-fields {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px;
+}
+.clip-time {
+    width: 70px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--text);
+    font-size: .82rem; font-family: inherit;
+    text-align: center; outline: none;
+    transition: border-color .2s, box-shadow .2s;
+}
+.clip-time:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.clip-time::placeholder { color: #c0c0c0; }
+.clip-fields span { font-size: .78rem; color: var(--text-muted); }
+
 /* ── Format Pills ── */
 .format-pills { display: flex; flex-direction: column; gap: 16px; }
 .pill-group { display: flex; flex-direction: column; gap: 8px; }

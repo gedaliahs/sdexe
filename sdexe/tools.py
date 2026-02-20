@@ -644,7 +644,8 @@ def xml_to_json_str(text: str) -> str:
 # ── AV Tools ──
 
 def run_ffmpeg(input_data: bytes, in_suffix: str, out_suffix: str,
-               ffmpeg_args: list[str], timeout: int = 300) -> bytes:
+               ffmpeg_args: list[str], timeout: int = 300,
+               pre_input_args: list[str] | None = None) -> bytes:
     """Run ffmpeg with input data, return output bytes."""
     with tempfile.NamedTemporaryFile(suffix=in_suffix, delete=False) as inf:
         inf.write(input_data)
@@ -652,7 +653,7 @@ def run_ffmpeg(input_data: bytes, in_suffix: str, out_suffix: str,
     with tempfile.NamedTemporaryFile(suffix=out_suffix, delete=False) as outf:
         out_path = outf.name
     try:
-        cmd = ["ffmpeg", "-y", "-i", inf_path] + ffmpeg_args + [out_path]
+        cmd = ["ffmpeg", "-y"] + (pre_input_args or []) + ["-i", inf_path] + ffmpeg_args + [out_path]
         result = subprocess.run(cmd, capture_output=True, timeout=timeout)
         if result.returncode != 0:
             raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
@@ -717,11 +718,12 @@ def extract_audio(data: bytes, in_ext: str, out_fmt: str) -> bytes:
 
 
 def trim_video(data: bytes, ext: str, start: str, end: str = "") -> bytes:
-    args = ["-ss", start]
+    pre = ["-ss", start]
+    args = []
     if end:
         args += ["-to", end]
     args += ["-c", "copy"]
-    return run_ffmpeg(data, f".{ext}", f".{ext}", args, timeout=300)
+    return run_ffmpeg(data, f".{ext}", f".{ext}", args, timeout=300, pre_input_args=pre)
 
 
 def compress_video(data: bytes, ext: str, quality: str = "medium") -> bytes:

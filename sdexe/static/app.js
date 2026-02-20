@@ -79,6 +79,15 @@ function formatDuration(sec) {
     if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
     return `${m}:${String(s).padStart(2,"0")}`;
 }
+function parseTime(str) {
+    if (!str || !str.trim()) return null;
+    const parts = str.trim().split(":").map(Number);
+    if (parts.some(isNaN)) return null;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 1) return parts[0];
+    return null;
+}
 function showError(msg) {
     const el = document.getElementById("error");
     document.getElementById("error-text").textContent = msg;
@@ -439,6 +448,16 @@ function renderVideo(data) {
     document.getElementById("v-album").value = "";
     document.getElementById("video-card").hidden = false;
     restoreFormatPrefs("v");
+    // Clip controls
+    const clipWrap = document.getElementById("v-clip-wrap");
+    const clipToggle = document.getElementById("v-clip-toggle");
+    const clipFields = document.getElementById("v-clip-fields");
+    clipWrap.hidden = false;
+    clipToggle.checked = false;
+    clipFields.style.display = "none";
+    document.getElementById("v-clip-start").value = "";
+    document.getElementById("v-clip-end").value = "";
+    document.getElementById("v-clip-end").placeholder = data.duration ? formatDuration(data.duration) : "end";
 }
 
 /* ── Render Playlist ── */
@@ -507,6 +526,11 @@ async function startSingleDownload() {
         album: document.getElementById("v-album").value.trim(),
     };
 
+    // Clip params
+    const clipEnabled = document.getElementById("v-clip-toggle")?.checked;
+    const clipStart = clipEnabled ? parseTime(document.getElementById("v-clip-start").value) : null;
+    const clipEnd = clipEnabled ? parseTime(document.getElementById("v-clip-end").value) : null;
+
     const btn = document.getElementById("v-dl-btn");
     btn.disabled = true;
     btn.textContent = "Starting...";
@@ -524,10 +548,13 @@ async function startSingleDownload() {
     if (detailEl) detailEl.textContent = "";
 
     try {
+        const body = {url: currentUrl, format: fmt, quality, metadata, subtitles};
+        if (clipStart !== null) body.clip_start = clipStart;
+        if (clipEnd !== null) body.clip_end = clipEnd;
         const res = await fetch("/api/download", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({url: currentUrl, format: fmt, quality, metadata, subtitles}),
+            body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) { showError(data.error || "Download failed"); resetBtn(btn, "Download"); return; }
@@ -908,6 +935,11 @@ document.addEventListener("change", e => {
     if (e.target.id === "v-quality" || e.target.id === "p-quality") {
         localStorage.setItem("sdexe_quality", e.target.value);
     }
+});
+
+/* ── Clip Toggle ── */
+document.getElementById("v-clip-toggle").addEventListener("change", function() {
+    document.getElementById("v-clip-fields").style.display = this.checked ? "flex" : "none";
 });
 
 /* ── Init ── */

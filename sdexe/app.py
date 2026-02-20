@@ -439,6 +439,8 @@ def download():
     quality = request.json.get("quality", "best")
     metadata = request.json.get("metadata") or {}
     subtitles = request.json.get("subtitles", False)
+    clip_start = request.json.get("clip_start")
+    clip_end = request.json.get("clip_end")
 
     if not url:
         return jsonify({"error": "No URL provided"}), 400
@@ -572,6 +574,12 @@ def download():
             ],
             **common_hooks,
         }
+
+    # Apply clip range if specified
+    if clip_start is not None or clip_end is not None:
+        from yt_dlp.utils import download_range_func
+        ydl_opts["download_ranges"] = download_range_func(None, [(clip_start or 0, clip_end or float('inf'))])
+        ydl_opts["force_keyframes_at_cuts"] = True
 
     def do_download():
         try:
