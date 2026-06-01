@@ -145,6 +145,8 @@ function showToast(msg, type, actions) {
                     </div>
                 </div>
 
+                <a href="/transcribe" class="nav-link {% block nav_transcribe %}{% endblock %}">Transcribe</a>
+
                 <div class="nav-group {% block nav_text %}{% endblock %}">
                     <a href="/text" class="nav-group-trigger">Text
                         <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -194,6 +196,7 @@ function showToast(msg, type, actions) {
     </footer>
 
     <div id="toast-container"></div>
+    <script src="/static/shared.js?v={{ version }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

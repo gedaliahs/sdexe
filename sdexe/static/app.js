@@ -141,11 +141,11 @@ function renderHistory() {
         <div class="history-item">
             <div class="history-info">
                 <span class="history-title">${esc(item.title)}</span>
-                <span class="history-fmt">${item.format.toUpperCase()}</span>
+                <span class="history-fmt">${esc(item.format.toUpperCase())}</span>
             </div>
             ${item.ts ? `<span class="history-time">${timeAgo(item.ts)}</span>` : ""}
             ${item.url ? `<button class="history-refetch" title="Re-fetch this URL" onclick="refetchUrl(${JSON.stringify(item.url)})">&#x21A9;</button>` : ""}
-            <a href="/api/file/${item.id}" class="history-save">Save</a>
+            <a href="/api/file/${encodeURIComponent(item.id)}" class="history-save">Save</a>
         </div>
     `).join("");
 }
@@ -446,6 +446,18 @@ function renderVideo(data) {
     document.getElementById("v-title").value = data.title || "";
     document.getElementById("v-artist").value = data.uploader || "";
     document.getElementById("v-album").value = "";
+    const descWrap = document.getElementById("v-description-wrap");
+    const descField = document.getElementById("v-description");
+    const dateEl = document.getElementById("v-upload-date");
+    if (data.description || data.upload_date) {
+        descField.value = data.description || "";
+        dateEl.textContent = data.upload_date ? `· ${data.upload_date}` : "";
+        descWrap.hidden = false;
+    } else {
+        descField.value = "";
+        dateEl.textContent = "";
+        descWrap.hidden = true;
+    }
     document.getElementById("video-card").hidden = false;
     restoreFormatPrefs("v");
     // Clip controls
@@ -524,6 +536,7 @@ async function startSingleDownload() {
         title: document.getElementById("v-title").value.trim(),
         artist: document.getElementById("v-artist").value.trim(),
         album: document.getElementById("v-album").value.trim(),
+        description: document.getElementById("v-description").value.trim(),
     };
 
     // Clip params
@@ -878,7 +891,7 @@ function trackEntryProgress(id, statusEl, retries = 0) {
                 pct().classList.add("entry-processing");
             } else if (d.status === "done") {
                 source.close();
-                statusEl.innerHTML = `<a href="/api/file/${id}" class="entry-save">Save</a>`;
+                statusEl.innerHTML = `<a href="/api/file/${encodeURIComponent(id)}" class="entry-save">Save</a>`;
                 resolve(true);
             } else if (d.status === "error") {
                 source.close();

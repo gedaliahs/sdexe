@@ -11,63 +11,10 @@ let createZipFiles = [];
 let extractZipFile = null;
 
 /* ── Hash Routing ── */
-function showTab(tab) {
-    document.querySelectorAll(".pdf-section").forEach(s => s.classList.remove("active"));
-    const el = document.getElementById("tab-" + tab);
-    (el || document.querySelector(".pdf-section")).classList.add("active");
-    window.scrollTo(0, 0);
-}
 showTab(location.hash.slice(1) || "md2html");
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "md2html"));
 
-/* ── Drop Zone Setup ── */
-function setupDropZone(zoneId, inputId, handler) {
-    const zone = document.getElementById(zoneId);
-    const input = document.getElementById(inputId);
-    let dragCount = 0;
-
-    zone.addEventListener("dragenter", e => { e.preventDefault(); if (++dragCount === 1) zone.classList.add("drag-over"); });
-    zone.addEventListener("dragover", e => { e.preventDefault(); });
-    zone.addEventListener("dragleave", () => { if (--dragCount === 0) zone.classList.remove("drag-over"); });
-    zone.addEventListener("drop", e => {
-        e.preventDefault();
-        dragCount = 0;
-        zone.classList.remove("drag-over");
-        handler(e.dataTransfer.files);
-    });
-    input.addEventListener("change", () => {
-        handler(input.files);
-        input.value = "";
-    });
-    if (!window._pageDropHandlers) window._pageDropHandlers = [];
-    window._pageDropHandlers.push({ zoneId, handler });
-}
-
-(function() {
-    var ov = document.createElement("div");
-    ov.className = "page-drop-overlay";
-    ov.innerHTML = '<div class="page-drop-message">Drop files anywhere</div>';
-    document.body.appendChild(ov);
-    var dc = 0;
-    document.addEventListener("dragenter", function(e) {
-        if (!e.dataTransfer.types.includes("Files")) return;
-        e.preventDefault(); if (++dc === 1) ov.classList.add("visible");
-    });
-    document.addEventListener("dragover", function(e) { e.preventDefault(); });
-    document.addEventListener("dragleave", function() { if (--dc === 0) ov.classList.remove("visible"); });
-    document.addEventListener("drop", function(e) {
-        dc = 0; ov.classList.remove("visible");
-        if (!e.dataTransfer.files.length) return;
-        var handlers = window._pageDropHandlers || [];
-        for (var i = 0; i < handlers.length; i++) {
-            var zone = document.getElementById(handlers[i].zoneId);
-            if (zone && zone.closest(".pdf-section.active")) {
-                e.preventDefault(); handlers[i].handler(e.dataTransfer.files); return;
-            }
-        }
-        if (handlers.length) { e.preventDefault(); handlers[0].handler(e.dataTransfer.files); }
-    });
-})();
+setupPageDropOverlay();
 
 /* ── Markdown to HTML ── */
 setupDropZone("md-drop", "md-input", files => {
@@ -258,7 +205,17 @@ async function doMdPreview() {
         const res = await fetch("/api/convert/md-preview", { method: "POST", body: form });
         const data = await res.json();
         if (data.html) {
-            previewEl.innerHTML = data.html;
+            const tmp = document.createElement("div");
+            tmp.innerHTML = data.html;
+            tmp.querySelectorAll("script,iframe,object,embed,link[rel=import]").forEach(el => el.remove());
+            tmp.querySelectorAll("*").forEach(el => {
+                for (const attr of [...el.attributes]) {
+                    if (attr.name.startsWith("on") || (attr.name === "href" && attr.value.trim().toLowerCase().startsWith("javascript:"))) {
+                        el.removeAttribute(attr.name);
+                    }
+                }
+            });
+            previewEl.innerHTML = tmp.innerHTML;
             previewEl.hidden = false;
         }
     } catch {}

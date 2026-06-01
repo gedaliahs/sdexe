@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Transcribe — sdexe{% endblock %}
+{% block nav_transcribe %}active{% endblock %}
+
+{% block content %}
+    <main>
+        <div class="hero">
+            <h1>Audio <span class="hero-accent">Transcription</span></h1>
+            <p class="subtitle">Transcribe audio and video files with speaker identification. Runs locally on your machine.</p>
+        </div>
+
+        {% if not whisper_available %}
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="card-body">
+                <div class="error" style="margin-top: 0;">
+                    <strong>Transcription dependencies not installed.</strong><br>
+                    Run <code>sdexe transcribe</code> in your terminal or <code>pip install sdexe[transcribe]</code> to enable this feature.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div id="transcribe-upload" class="card">
+            <div class="card-body" style="text-align: center;">
+                <div class="drop-zone" id="transcribe-drop" style="border-color: var(--border);">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                        <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/>
+                        <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                    <label class="drop-browse">Select audio or video file<input type="file" id="transcribe-input" accept="audio/*,video/*,.mp3,.wav,.m4a,.flac,.ogg,.mp4,.mkv,.mov,.avi,.webm" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; MP3, WAV, M4A, FLAC, MP4, MKV, and more</p>
+                </div>
+
+                <div id="transcribe-file-info" class="split-info" hidden>
+                    <span id="transcribe-file-name" class="split-name"></span>
+                    <span id="transcribe-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearTranscribeFile()">&times;</button>
+                </div>
+
+                <div id="transcribe-options" hidden style="max-width: 520px; margin: 20px auto 0;">
+                    <div class="field-row">
+                        <div class="select-wrap">
+                            <label>Model</label>
+                            <select id="transcribe-model">
+                                <option value="tiny">Tiny (fastest, least accurate)</option>
+                                <option value="base" selected>Base (fast, good accuracy)</option>
+                                <option value="small">Small (balanced)</option>
+                                <option value="medium">Medium (slower, high accuracy)</option>
+                                <option value="large-v3">Large v3 (slowest, best accuracy)</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <label>Language</label>
+                            <select id="transcribe-language">
+                                <option value="">Auto-detect</option>
+                                <option value="en">English</option>
+                                <option value="es">Spanish</option>
+                                <option value="fr">French</option>
+                                <option value="de">German</option>
+                                <option value="it">Italian</option>
+                                <option value="pt">Portuguese</option>
+                                <option value="nl">Dutch</option>
+                                <option value="ru">Russian</option>
+                                <option value="zh">Chinese</option>
+                                <option value="ja">Japanese</option>
+                                <option value="ko">Korean</option>
+                                <option value="ar">Arabic</option>
+                                <option value="hi">Hindi</option>
+                                <option value="tr">Turkish</option>
+                                <option value="pl">Polish</option>
+                                <option value="uk">Ukrainian</option>
+                                <option value="he">Hebrew</option>
+                                <option value="sv">Swedish</option>
+                                <option value="da">Danish</option>
+                                <option value="fi">Finnish</option>
+                                <option value="no">Norwegian</option>
+                                <option value="cs">Czech</option>
+                                <option value="el">Greek</option>
+                                <option value="ro">Romanian</option>
+                                <option value="hu">Hungarian</option>
+                                <option value="th">Thai</option>
+                                <option value="vi">Vietnamese</option>
+                                <option value="id">Indonesian</option>
+                                <option value="ms">Malay</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {% if diarize_available %}
+                    <div style="margin-top: 16px;">
+                        <label class="check-label">
+                            <input type="checkbox" id="transcribe-diarize"> Enable speaker identification
+                        </label>
+                    </div>
+                    <div id="transcribe-diarize-options" hidden style="margin-top: 12px;">
+                        <div class="field-row">
+                            <div class="field" style="flex: 2;">
+                                <label>HuggingFace Token</label>
+                                <input type="password" id="transcribe-hf-token" placeholder="hf_...">
+                                <p class="drop-hint" style="margin-top: 4px; text-align: left;">Required for speaker diarization model. <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">Get token</a></p>
+                            </div>
+                            <div class="field" style="flex: 1;">
+                                <label>Number of speakers (optional)</label>
+                                <input type="number" id="transcribe-num-speakers" min="1" max="20" placeholder="Auto">
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="drop-hint" style="margin-top: 12px;">Speaker identification unavailable. Install <code>pyannote.audio</code> for diarization.</p>
+                    {% endif %}
+
+                    <div class="pdf-actions" style="max-width: 440px; margin: 20px auto 0; display: flex; gap: 8px;">
+                        <button id="transcribe-btn" class="btn-download" onclick="startTranscription()" {% if not whisper_available %}disabled{% endif %}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+                            Transcribe
+                        </button>
+                    </div>
+                </div>
+
+                <div id="transcribe-progress" class="progress-panel" hidden>
+                    <div class="progress-track"><div id="transcribe-progress-fill" class="progress-fill"></div></div>
+                    <div class="progress-details">
+                        <span id="transcribe-progress-status" class="progress-status">Preparing...</span>
+                        <span id="transcribe-progress-pct" class="progress-pct"></span>
+                    </div>
+                    <div id="transcribe-progress-detail" class="progress-detail-text"></div>
+                </div>
+
+                <div id="transcribe-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <div id="transcribe-results" hidden>
+            <div class="card" style="margin-top: 16px;">
+                <div class="card-body" style="padding: 16px 28px;">
+                    <div class="transcript-toolbar">
+                        <div class="transcript-toolbar-left">
+                            <span id="transcribe-lang-badge" class="transcript-badge"></span>
+                            <span id="transcribe-seg-count" class="transcript-badge"></span>
+                        </div>
+                        <div class="transcript-toolbar-right">
+                            <div class="transcript-search">
+                                <input type="text" id="transcript-search-input" placeholder="Search transcript..." oninput="searchTranscript()">
+                                <span id="transcript-search-count"></span>
+                            </div>
+                            <button class="btn-secondary transcript-toolbar-btn" onclick="copyTranscript()" title="Copy to clipboard">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                Copy
+                            </button>
+                            <div class="select-wrap" style="margin: 0;">
+                                <select id="transcript-export-format">
+                                    <option value="txt">TXT</option>
+                                    <option value="srt">SRT</option>
+                                    <option value="vtt">VTT</option>
+                                    <option value="csv">CSV</option>
+                                </select>
+                            </div>
+                            <button class="btn-download transcript-toolbar-btn" onclick="exportTranscript()">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                                Export
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="transcript-segments" class="transcript-segments"></div>
+        </div>
+    </main>
+{% endblock %}
+
+{% block scripts %}
+    <script src="/static/transcribe.js?v={{ version }}"></script>
+{% endblock %}
