@@ -300,6 +300,19 @@ main {
     box-shadow: 0 0 0 3px var(--accent-glow);
 }
 .field input::placeholder { color: #c0c0c0; }
+.field textarea {
+    padding: 11px 14px; background: var(--surface); border: 1px solid #e5e5e5;
+    border-radius: var(--radius-sm);
+    color: var(--text); font-size: .85rem; outline: none;
+    font-family: inherit; resize: vertical;
+    transition: border-color .2s, box-shadow .2s;
+}
+.field textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.field textarea::placeholder { color: #c0c0c0; }
+.meta-date { text-transform: none; letter-spacing: normal; font-weight: 400; }
 .field-row { display: flex; gap: 12px; margin-top: 12px; }
 
 /* ── Controls ── */
@@ -725,7 +738,7 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     color: #fff; cursor: pointer; font-weight: 700;
     font-size: 1.05rem;
     padding: 20px 48px;
-    min-width: 440px;
+    min-width: min(440px, 100%);
     border-radius: var(--radius-sm);
     transition: background .15s, transform .1s, box-shadow .15s;
     text-decoration: none;

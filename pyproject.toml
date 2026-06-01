@@ -9,6 +9,20 @@ description = "Suite for Downloading, Editing & eXporting Everything — local t
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
+authors = [{name = "Gedaliah Sax"}]
+keywords = ["media", "pdf", "image", "audio", "video", "conversion", "download", "tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia",
+    "Topic :: Utilities",
+]
 dependencies = [
     "flask",
     "yt-dlp",
@@ -19,7 +33,16 @@ dependencies = [
     "pystray",
     "PyYAML",
     "qrcode",
+    "imageio-ffmpeg",
 ]
+
+[project.optional-dependencies]
+transcribe = ["faster-whisper>=1.0.0", "pyannote.audio>=3.1"]
+
+[project.urls]
+Homepage = "https://github.com/gedaliahs/sdexe"
+Repository = "https://github.com/gedaliahs/sdexe.git"
+Issues = "https://github.com/gedaliahs/sdexe/issues"
 
 [project.scripts]
 sdexe = "sdexe.app:main"

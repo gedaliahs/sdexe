@@ -3,6 +3,7 @@
 import io
 import csv
 import json
+import shutil
 import tempfile
 import subprocess
 import zipfile
@@ -19,6 +20,86 @@ try:
     _YAML_AVAILABLE = True
 except ImportError:
     _YAML_AVAILABLE = False
+
+
+# ── Dependency resolution ──
+
+_ffmpeg_path_cache = None  # None = unresolved; "" = resolved to nothing
+
+
+def _binary_runs(path: str) -> bool:
+    """True only if the binary actually starts (catches e.g. a dangling dylib)."""
+    try:
+        return subprocess.run([path, "-version"], capture_output=True, timeout=10).returncode == 0
+    except Exception:
+        return False
+
+
+def ffmpeg_path(refresh: bool = False) -> str | None:
+    """Path to a *working* ffmpeg binary.
+
+    Prefers a system ffmpeg on PATH; if that is missing or broken (e.g. a dangling
+    dynamic-library dependency that makes it fail to start), falls back to the ffmpeg
+    bundled with imageio-ffmpeg. Returns None only if neither runs.
+
+    The result is cached; pass refresh=True to re-resolve after installing ffmpeg.
+    """
+    global _ffmpeg_path_cache
+    if _ffmpeg_path_cache is not None and not refresh:
+        return _ffmpeg_path_cache or None
+
+    resolved = ""
+    system = shutil.which("ffmpeg")
+    if system and _binary_runs(system):
+        resolved = system
+    else:
+        try:
+            import imageio_ffmpeg
+            bundled = imageio_ffmpeg.get_ffmpeg_exe()
+            if bundled and _binary_runs(bundled):
+                resolved = bundled
+        except Exception:
+            resolved = ""
+    _ffmpeg_path_cache = resolved
+    return resolved or None
+
+
+def _reset_ffmpeg_cache():
+    """Forget the cached ffmpeg path (call after an install)."""
+    global _ffmpeg_path_cache
+    _ffmpeg_path_cache = None
+
+
+def _ffmpeg_exe() -> str:
+    """Resolved ffmpeg path, or raise FFmpegMissingError."""
+    exe = ffmpeg_path()
+    if not exe:
+        raise FFmpegMissingError("ffmpeg is not installed")
+    return exe
+
+
+def ffmpeg_available() -> bool:
+    return ffmpeg_path() is not None
+
+
+def ffprobe_available() -> bool:
+    return shutil.which("ffprobe") is not None
+
+
+def ffmpeg_version() -> str | None:
+    """Short ffmpeg version string for display, or None if unavailable."""
+    path = ffmpeg_path()
+    if not path:
+        return None
+    try:
+        r = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0 and r.stdout:
+            parts = r.stdout.split("\n", 1)[0].split()
+            if len(parts) >= 3:
+                return parts[2]
+    except Exception:
+        pass
+    return "installed"
 
 
 # ── Helpers ──
@@ -643,20 +724,31 @@ def xml_to_json_str(text: str) -> str:
 
 # ── AV Tools ──
 
+class FFmpegMissingError(RuntimeError):
+    """Raised when no usable ffmpeg binary is available."""
+
+
 def run_ffmpeg(input_data: bytes, in_suffix: str, out_suffix: str,
                ffmpeg_args: list[str], timeout: int = 300,
                pre_input_args: list[str] | None = None) -> bytes:
     """Run ffmpeg with input data, return output bytes."""
+    exe = ffmpeg_path()
+    if not exe:
+        raise FFmpegMissingError("ffmpeg is not installed")
     with tempfile.NamedTemporaryFile(suffix=in_suffix, delete=False) as inf:
         inf.write(input_data)
         inf_path = inf.name
     with tempfile.NamedTemporaryFile(suffix=out_suffix, delete=False) as outf:
         out_path = outf.name
     try:
-        cmd = ["ffmpeg", "-y"] + (pre_input_args or []) + ["-i", inf_path] + ffmpeg_args + [out_path]
-        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+        cmd = [exe, "-y"] + (pre_input_args or []) + ["-i", inf_path] + ffmpeg_args + [out_path]
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+        except FileNotFoundError:
+            raise FFmpegMissingError("ffmpeg is not installed")
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
+            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(stderr[-800:] if len(stderr) > 800 else stderr)
         return Path(out_path).read_bytes()
     finally:
         Path(inf_path).unlink(missing_ok=True)
@@ -863,7 +955,7 @@ def merge_audio_files(files_data: list[tuple[str, bytes]], out_fmt: str = "mp3")
 
         out_path = str(Path(tmpdir) / f"output.{out_fmt}")
 
-        cmd = ["ffmpeg", "-y"]
+        cmd = [_ffmpeg_exe(), "-y"]
         for p in input_paths:
             cmd += ["-i", p]
 
@@ -1017,7 +1109,7 @@ def loop_video(data: bytes, ext: str, count: int = 2) -> bytes:
     with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as outf:
         out_path = outf.name
     try:
-        cmd = ["ffmpeg", "-y", "-stream_loop", str(count - 1),
+        cmd = [_ffmpeg_exe(), "-y", "-stream_loop", str(count - 1),
                "-i", inf_path, "-c", "copy", out_path]
         result = subprocess.run(cmd, capture_output=True, timeout=300)
         if result.returncode != 0:
@@ -1051,7 +1143,7 @@ def add_audio_to_video(video_data: bytes, video_ext: str,
         Path(audio_path).write_bytes(audio_data)
 
         cmd = [
-            "ffmpeg", "-y",
+            _ffmpeg_exe(), "-y",
             "-i", video_path,
             "-i", audio_path,
             "-c:v", "copy",
@@ -1089,7 +1181,7 @@ def burn_subtitles(video_data: bytes, video_ext: str, srt_data: bytes) -> bytes:
         escaped_srt = srt_path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
         cmd = [
-            "ffmpeg", "-y",
+            _ffmpeg_exe(), "-y",
             "-i", video_path,
             "-vf", f"subtitles={escaped_srt}",
             "-c:a", "copy",
@@ -1299,3 +1391,186 @@ def file_metadata(filepath: str) -> dict:
         "modified": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
         "extension": p.suffix,
     }
+
+
+# ── Transcription ──
+
+def _check_transcribe_deps():
+    """Return (whisper_available, diarize_available) booleans."""
+    whisper_ok = False
+    diarize_ok = False
+    try:
+        import faster_whisper
+        whisper_ok = True
+    except ImportError:
+        pass
+    try:
+        from pyannote.audio import Pipeline
+        diarize_ok = True
+    except ImportError:
+        pass
+    return whisper_ok, diarize_ok
+
+
+def extract_audio_for_transcription(input_path: str, output_path: str):
+    """Extract audio from any input to 16kHz mono WAV for Whisper."""
+    cmd = [
+        _ffmpeg_exe(), "-y", "-i", input_path,
+        "-vn", "-acodec", "pcm_s16le",
+        "-ar", "16000", "-ac", "1",
+        output_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, timeout=300)
+    if result.returncode != 0:
+        raise RuntimeError(f"Audio extraction failed: {result.stderr.decode('utf-8', errors='replace')[:500]}")
+
+
+def transcribe_audio(audio_path: str, model_size: str = "base",
+                     language: str | None = None, progress_cb=None):
+    """Transcribe audio using faster-whisper. Returns (segments, detected_language)."""
+    from faster_whisper import WhisperModel
+
+    if progress_cb:
+        progress_cb(5, "loading_model", f"Loading {model_size} model...")
+
+    model = WhisperModel(model_size, device="cpu", compute_type="int8")
+
+    if progress_cb:
+        progress_cb(15, "transcribing", "Starting transcription...")
+
+    segments_iter, info = model.transcribe(
+        audio_path, language=language, word_timestamps=True, beam_size=5,
+    )
+
+    detected_language = info.language
+    duration = info.duration
+
+    segments = []
+    for seg in segments_iter:
+        words = []
+        if seg.words:
+            for w in seg.words:
+                words.append({"start": round(w.start, 3), "end": round(w.end, 3), "word": w.word})
+
+        segments.append({
+            "start": round(seg.start, 3),
+            "end": round(seg.end, 3),
+            "text": seg.text.strip(),
+            "words": words,
+        })
+
+        if progress_cb and duration > 0:
+            pct = min(int(15 + (seg.end / duration) * 55), 70)
+            progress_cb(pct, "transcribing", f"Transcribing... {pct}%")
+
+    return segments, detected_language
+
+
+def diarize_audio(audio_path: str, hf_token: str,
+                  num_speakers: int | None = None, progress_cb=None):
+    """Run speaker diarization using pyannote.audio."""
+    from pyannote.audio import Pipeline
+
+    if progress_cb:
+        progress_cb(72, "diarizing", "Loading diarization model...")
+
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1", use_auth_token=hf_token,
+    )
+
+    if progress_cb:
+        progress_cb(78, "diarizing", "Identifying speakers...")
+
+    kwargs = {}
+    if num_speakers:
+        kwargs["num_speakers"] = num_speakers
+
+    diarization = pipeline(audio_path, **kwargs)
+
+    if progress_cb:
+        progress_cb(90, "diarizing", "Processing speaker labels...")
+
+    result = []
+    for turn, _, speaker in diarization.itertracks(yield_label=True):
+        result.append({"start": round(turn.start, 3), "end": round(turn.end, 3), "speaker": speaker})
+
+    return result
+
+
+def merge_transcription_and_diarization(segments: list[dict], diarization: list[dict]):
+    """Assign speaker labels to transcription segments by maximum time overlap."""
+    for seg in segments:
+        best_speaker = "Speaker 1"
+        best_overlap = 0.0
+        seg_start, seg_end = seg["start"], seg["end"]
+
+        for d in diarization:
+            overlap = max(0.0, min(seg_end, d["end"]) - max(seg_start, d["start"]))
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_speaker = d["speaker"]
+
+        if best_speaker.startswith("SPEAKER_"):
+            try:
+                best_speaker = f"Speaker {int(best_speaker.split('_')[-1]) + 1}"
+            except ValueError:
+                pass
+        seg["speaker"] = best_speaker
+
+    return segments
+
+
+def _fmt_ts(seconds: float) -> str:
+    """Convert seconds to HH:MM:SS.mmm format."""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int((seconds % 1) * 1000)
+    return f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
+
+
+def _srt_ts(seconds: float) -> str:
+    """Format seconds as SRT timestamp: HH:MM:SS,mmm"""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int((seconds % 1) * 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def export_transcript_txt(segments: list[dict], include_speakers: bool = True) -> str:
+    lines = []
+    for seg in segments:
+        prefix = f"[{seg.get('speaker', '')}] " if include_speakers and seg.get('speaker') else ""
+        lines.append(f"{prefix}{seg['text']}")
+    return "\n".join(lines)
+
+
+def export_transcript_srt(segments: list[dict]) -> str:
+    lines = []
+    for i, seg in enumerate(segments, 1):
+        speaker = f"[{seg.get('speaker', '')}] " if seg.get('speaker') else ""
+        lines.append(f"{i}")
+        lines.append(f"{_srt_ts(seg['start'])} --> {_srt_ts(seg['end'])}")
+        lines.append(f"{speaker}{seg['text']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def export_transcript_vtt(segments: list[dict]) -> str:
+    lines = ["WEBVTT", ""]
+    for seg in segments:
+        speaker = f"<v {seg.get('speaker', 'Speaker')}>" if seg.get('speaker') else ""
+        lines.append(f"{_fmt_ts(seg['start'])} --> {_fmt_ts(seg['end'])}")
+        lines.append(f"{speaker}{seg['text']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def export_transcript_csv(segments: list[dict]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["start", "end", "speaker", "text"])
+    for seg in segments:
+        writer.writerow([_fmt_ts(seg["start"]), _fmt_ts(seg["end"]), seg.get("speaker", ""), seg["text"]])
+    return output.getvalue()

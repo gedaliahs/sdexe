@@ -1,10 +1,4 @@
 /* ── Hash Routing ── */
-function showTab(tab) {
-    document.querySelectorAll(".pdf-section").forEach(s => s.classList.remove("active"));
-    const el = document.getElementById("tab-" + tab);
-    (el || document.querySelector(".pdf-section")).classList.add("active");
-    window.scrollTo(0, 0);
-}
 showTab(location.hash.slice(1) || "wordcount");
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "wordcount"));
 
@@ -221,7 +215,7 @@ async function doHashFile() {
     const results = document.getElementById("hash-results");
     const err = document.getElementById("hash-error");
     err.hidden = true;
-    results.innerHTML = `<p style="font-size:.85rem;color:var(--text-secondary);">Hashing ${file.name} (${(file.size / 1024).toFixed(1)} KB)...</p>`;
+    results.innerHTML = `<p style="font-size:.85rem;color:var(--text-secondary);">Hashing ${esc(file.name)} (${(file.size / 1024).toFixed(1)} KB)...</p>`;
 
     if (!algos.length) {
         err.textContent = "Select at least one algorithm";
@@ -240,7 +234,7 @@ async function doHashFile() {
             const row = document.createElement("div");
             row.style.cssText = "margin-bottom: 12px;";
             row.innerHTML = `
-                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">${algo} <span style="color:var(--text-muted);">— ${file.name}</span></div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">${algo} <span style="color:var(--text-muted);">— ${esc(file.name)}</span></div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <code style="font-size: 0.78rem; word-break: break-all; flex: 1; padding: 6px 10px; background: var(--surface-2); border-radius: 6px;">${hex}</code>
                     <button class="btn-copy" onclick="navigator.clipboard.writeText('${hex}');this.classList.add('copied');this.innerHTML='Copied!';setTimeout(()=>{this.classList.remove('copied');this.innerHTML='Copy'},1500)">Copy</button>

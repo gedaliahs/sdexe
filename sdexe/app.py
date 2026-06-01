@@ -5,6 +5,7 @@ import time
 import tempfile
 import threading
 import json
+import shutil
 import subprocess
 import zipfile
 import atexit
@@ -19,6 +20,19 @@ from sdexe import __version__
 from sdexe import tools
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB upload limit
+
+
+@app.before_request
+def csrf_check():
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return
+    origin = request.headers.get("Origin") or ""
+    if origin:
+        from urllib.parse import urlparse as _urlparse
+        h = _urlparse(origin).hostname
+        if h not in ("127.0.0.1", "localhost", "[::1]"):
+            return jsonify({"error": "Forbidden"}), 403
 
 
 @app.context_processor
@@ -44,15 +58,17 @@ atexit.register(_cleanup_on_exit)
 _download_timestamps: list = []
 _DOWNLOAD_RATE_LIMIT = 12
 _DOWNLOAD_RATE_WINDOW = 10.0
+_rate_lock = threading.Lock()
 
 def _check_download_rate() -> bool:
     global _download_timestamps
     now = time.time()
-    _download_timestamps = [t for t in _download_timestamps if now - t < _DOWNLOAD_RATE_WINDOW]
-    if len(_download_timestamps) >= _DOWNLOAD_RATE_LIMIT:
-        return False
-    _download_timestamps.append(now)
-    return True
+    with _rate_lock:
+        _download_timestamps = [t for t in _download_timestamps if now - t < _DOWNLOAD_RATE_WINDOW]
+        if len(_download_timestamps) >= _DOWNLOAD_RATE_LIMIT:
+            return False
+        _download_timestamps.append(now)
+        return True
 
 CONFIG_DIR = Path.home() / ".config" / "sdexe"
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -85,6 +101,26 @@ def save_history(items):
 
 # Stores progress and file info keyed by download ID
 downloads = {}
+_downloads_lock = threading.Lock()
+
+# Stores transcription progress and results keyed by transcription ID
+transcriptions = {}
+_transcriptions_lock = threading.Lock()
+
+
+def _safe_filename(name: str, default: str = "download", max_len: int = 200) -> str:
+    """Sanitize an arbitrary string (e.g. a video title) for use as a download
+    filename: drop directory components, null/control bytes, and reserved chars,
+    and cap the length so it can't break the filesystem or path-traverse."""
+    import re as _re
+    name = (name or "").replace("\x00", "")
+    name = name.replace("\\", "/").split("/")[-1]          # strip any path / traversal
+    name = _re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
+    if not name:
+        return default
+    if len(name) > max_len:
+        name = name[:max_len].rstrip(" .") or default
+    return name
 
 
 def cleanup_old_files(max_age_seconds=3600):
@@ -93,14 +129,15 @@ def cleanup_old_files(max_age_seconds=3600):
     for f in DOWNLOAD_DIR.iterdir():
         if f.is_file() and now - f.stat().st_mtime > max_age_seconds:
             f.unlink(missing_ok=True)
-    stale = [
-        k for k, v in downloads.items()
-        if v.get("status") in ("done", "error")
-        and v.get("filename")
-        and not (DOWNLOAD_DIR / v["filename"]).exists()
-    ]
-    for k in stale:
-        downloads.pop(k, None)
+    with _downloads_lock:
+        stale = [
+            k for k, v in list(downloads.items())
+            if v.get("status") in ("done", "error")
+            and v.get("filename")
+            and not (DOWNLOAD_DIR / v["filename"]).exists()
+        ]
+        for k in stale:
+            downloads.pop(k, None)
 
 
 def _validate_folder(path: str):
@@ -121,14 +158,20 @@ def _validate_folder(path: str):
 
 def set_file_metadata(filepath, metadata):
     """Embed metadata into a media file using ffmpeg."""
+    allowed_keys = {"title", "artist", "album", "date", "comment"}
     args = []
     for key, value in metadata.items():
+        if key not in allowed_keys:
+            continue
         if value and value.strip():
             args.extend(["-metadata", f"{key}={value.strip()}"])
     if not args:
         return
+    exe = tools.ffmpeg_path()
+    if not exe:
+        return
     tmp = filepath.parent / f"_meta_{filepath.name}"
-    cmd = ["ffmpeg", "-y", "-i", str(filepath), "-codec", "copy", "-map", "0"] + args + [str(tmp)]
+    cmd = [exe, "-y", "-i", str(filepath), "-codec", "copy", "-map", "0"] + args + [str(tmp)]
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=120)
         if result.returncode == 0:
@@ -173,6 +216,13 @@ def av_page():
 def text_page():
     return render_template("text.html")
 
+@app.route("/transcribe")
+def transcribe_page():
+    whisper_ok, diarize_ok = tools._check_transcribe_deps()
+    return render_template("transcribe.html",
+                           whisper_available=whisper_ok,
+                           diarize_available=diarize_ok)
+
 @app.route("/about")
 def about_page():
     return render_template("about.html")
@@ -181,18 +231,17 @@ def about_page():
 @app.route("/settings")
 def settings_page():
     import sys as _sys
+    ffmpeg_ver = tools.ffmpeg_version()
+    resolved = tools.ffmpeg_path()
+    if ffmpeg_ver and resolved and resolved != shutil.which("ffmpeg"):
+        ffmpeg_ver = f"{ffmpeg_ver} (bundled)"
     info = {
         "python_ver": f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}",
-        "ffmpeg_ver": "not found",
+        "ffmpeg_ver": ffmpeg_ver or "not found",
         "ytdlp_ver": "unknown",
         "tool_count": sum(1 for r in app.url_map.iter_rules() if r.endpoint != "static"),
         "config_dir": str(CONFIG_DIR),
     }
-    try:
-        out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
-        info["ffmpeg_ver"] = out.stdout.split("\n")[0].split("version ")[-1].split(" ")[0] if out.returncode == 0 else "not found"
-    except Exception:
-        pass
     try:
         info["ytdlp_ver"] = yt_dlp.version.__version__
     except Exception:
@@ -231,10 +280,10 @@ def add_history():
         return jsonify({"error": "title required"}), 400
     items = load_history()
     items.insert(0, {
-        "title": item.get("title", ""),
-        "format": item.get("format", ""),
-        "id": item.get("id", ""),
-        "url": item.get("url", ""),
+        "title": str(item.get("title", ""))[:500],
+        "format": str(item.get("format", ""))[:20],
+        "id": str(item.get("id", ""))[:100],
+        "url": str(item.get("url", ""))[:2000],
         "ts": time.time(),
     })
     items = items[:50]
@@ -266,9 +315,17 @@ def open_file():
     path = (request.json or {}).get("path", "").strip()
     if not path:
         return jsonify({"error": "No path provided"}), 400
-    p = Path(path).expanduser()
+    p = Path(path).expanduser().resolve()
     if not p.exists():
         return jsonify({"error": "File not found"}), 404
+    # Only allow opening files in the configured output folder or temp download dir
+    cfg = load_config()
+    output_dir = cfg.get("output_folder", "").strip()
+    allowed = [DOWNLOAD_DIR.resolve()]
+    if output_dir:
+        allowed.append(Path(output_dir).expanduser().resolve())
+    if not any(str(p).startswith(str(d)) for d in allowed):
+        return jsonify({"error": "Access denied"}), 403
     import sys as _sys
     if _sys.platform == "darwin":
         subprocess.Popen(["open", str(p)])
@@ -357,6 +414,44 @@ def run_update():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/install-ffmpeg", methods=["POST"])
+def install_ffmpeg_route():
+    """Attempt to install a full system ffmpeg via the platform package manager."""
+    ok, msg = install_ffmpeg()
+    return jsonify({"ok": ok, "message": msg, "ffmpeg": tools.ffmpeg_available()}), (200 if ok else 500)
+
+
+@app.route("/api/deps", methods=["GET"])
+def deps():
+    """Report availability of optional runtime dependencies for the web UI."""
+    whisper_ok, diarize_ok = tools._check_transcribe_deps()
+    ytdlp_ver = "unknown"
+    try:
+        ytdlp_ver = yt_dlp.version.__version__
+    except Exception:
+        pass
+    resolved = tools.ffmpeg_path()
+    system = shutil.which("ffmpeg")
+    return jsonify({
+        "ffmpeg": resolved is not None,
+        "ffmpeg_version": tools.ffmpeg_version(),
+        # True when we fell back to the bundled binary (no system ffmpeg, or it's broken)
+        "ffmpeg_bundled": bool(resolved) and resolved != system,
+        "ffprobe": tools.ffprobe_available(),
+        "ytdlp_version": ytdlp_ver,
+        "whisper": whisper_ok,
+        "diarize": diarize_ok,
+    })
+
+
+def _ffmpeg_missing_response():
+    """Structured 503 telling the UI ffmpeg is unavailable (so it can offer to install)."""
+    return jsonify({
+        "error": "ffmpeg is required for this tool but isn't available.",
+        "code": "ffmpeg_missing",
+    }), 503
+
+
 # ── Media API ──
 
 @app.route("/api/info", methods=["POST"])
@@ -364,6 +459,8 @@ def info():
     url = request.json.get("url", "").strip()
     if not url:
         return jsonify({"error": "No URL provided"}), 400
+    if not url.startswith(("http://", "https://")):
+        return jsonify({"error": "Only http and https URLs are supported"}), 400
 
     # Normalise YouTube video+list URLs to pure playlist URLs
     parsed = urlparse(url)
@@ -422,12 +519,17 @@ def info():
         thumbnail = data["thumbnails"][0].get("url", "")
     if not thumbnail and vid and ("youtube" in url or "youtu.be" in url):
         thumbnail = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+    upload_date = data.get("upload_date") or ""
+    if upload_date and len(upload_date) == 8:
+        upload_date = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:]}"
     return jsonify({
         "type": "video",
         "title": data.get("title"),
         "thumbnail": thumbnail,
         "duration": data.get("duration"),
         "uploader": data.get("uploader") or data.get("channel"),
+        "description": data.get("description") or "",
+        "upload_date": upload_date,
         "url": data.get("webpage_url") or url,
     })
 
@@ -444,6 +546,8 @@ def download():
 
     if not url:
         return jsonify({"error": "No URL provided"}), 400
+    if not url.startswith(("http://", "https://")):
+        return jsonify({"error": "Only http and https URLs are supported"}), 400
 
     if not _check_download_rate():
         return jsonify({"error": "Too many downloads — slow down a bit."}), 429
@@ -451,18 +555,19 @@ def download():
     cleanup_old_files()
 
     dl_id = str(uuid.uuid4())
-    downloads[dl_id] = {
-        "progress": 0,
-        "status": "starting",
-        "filename": None,
-        "download_name": None,
-        "error": None,
-        "detail": "",
-        "pp_step": 0,
-        "auto_saved": False,
-        "saved_path": None,
-        "cancelled": False,
-    }
+    with _downloads_lock:
+        downloads[dl_id] = {
+            "progress": 0,
+            "status": "starting",
+            "filename": None,
+            "download_name": None,
+            "error": None,
+            "detail": "",
+            "pp_step": 0,
+            "auto_saved": False,
+            "saved_path": None,
+            "cancelled": False,
+        }
 
     PP_NAMES = {
         "FFmpegExtractAudio": f"Converting to {fmt.upper()}",
@@ -522,6 +627,11 @@ def download():
         "noplaylist": True,
         "writethumbnail": True,
     }
+    # Use the resolved ffmpeg (system, or the bundled fallback) for post-processing,
+    # so audio/video downloads work even without a working system ffmpeg.
+    _ffmpeg = tools.ffmpeg_path()
+    if _ffmpeg:
+        common_hooks["ffmpeg_location"] = _ffmpeg
 
     if fmt == "mp4":
         if quality == "1080p":
@@ -598,16 +708,13 @@ def download():
                     ext = f.suffix.lstrip(".")
                     tmpl = load_config().get("output_template", "") or ""
                     if tmpl:
-                        import re as _re
                         try:
                             base_name = tmpl.format(title=title, artist=artist, album=album, uploader=uploader)
                         except (KeyError, ValueError):
                             base_name = title
-                        base_name = _re.sub(r'[<>:"/\\|?*]', "_", base_name).strip(" .")
-                        if not base_name:
-                            base_name = "download"
                     else:
                         base_name = title
+                    base_name = _safe_filename(base_name, "download")
                     downloads[dl_id]["download_name"] = f"{base_name}.{ext}"
                     break
 
@@ -615,6 +722,14 @@ def download():
             for f in DOWNLOAD_DIR.iterdir():
                 if f.stem == dl_id and f.suffix.lower() in thumb_exts:
                     f.unlink(missing_ok=True)
+
+            # Verify an actual output file was produced before continuing
+            out_name = downloads[dl_id].get("filename")
+            out_path_check = DOWNLOAD_DIR / out_name if out_name else None
+            if not out_name or not out_path_check.exists() or out_path_check.stat().st_size == 0:
+                downloads[dl_id]["status"] = "error"
+                downloads[dl_id]["error"] = "Download finished but produced no output file."
+                return
 
             # Embed metadata if provided
             meta = {}
@@ -624,6 +739,14 @@ def download():
                 meta["artist"] = metadata["artist"]
             if metadata.get("album"):
                 meta["album"] = metadata["album"]
+            description = metadata.get("description") or vid_info.get("description") or ""
+            if description:
+                meta["comment"] = description
+            upload_date = vid_info.get("upload_date") or ""
+            if upload_date and len(upload_date) == 8:
+                upload_date = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:]}"
+            if upload_date:
+                meta["date"] = upload_date
             if meta and downloads[dl_id].get("filename"):
                 downloads[dl_id]["status"] = "metadata"
                 filepath = DOWNLOAD_DIR / downloads[dl_id]["filename"]
@@ -676,6 +799,7 @@ def download():
 @app.route("/api/progress/<dl_id>")
 def progress(dl_id):
     def stream():
+        start = time.time()
         while True:
             info = downloads.get(dl_id)
             if not info:
@@ -684,7 +808,12 @@ def progress(dl_id):
 
             yield f"data: {json.dumps(info)}\n\n"
 
-            if info["status"] in ("done", "error"):
+            if info.get("status") in ("done", "error", "cancelled"):
+                break
+
+            # Safety cap: never stream forever if a worker hangs without a
+            # terminal status. (Client disconnects also end the generator.)
+            if time.time() - start > 7200:
                 break
 
             time.sleep(0.5)
@@ -1334,38 +1463,6 @@ def image_watermark():
         return jsonify({"error": str(e)}), 400
 
 
-@app.route("/api/images/info", methods=["POST"])
-def image_info_route():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No image provided"}), 400
-    try:
-        img = Image.open(f.stream)
-        return jsonify(tools.image_info(img))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-@app.route("/api/images/adjust", methods=["POST"])
-def image_adjust():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No image provided"}), 400
-    try:
-        brightness = float(request.form.get("brightness", 1.0))
-        contrast = float(request.form.get("contrast", 1.0))
-        sharpness = float(request.form.get("sharpness", 1.0))
-    except ValueError:
-        return jsonify({"error": "Invalid adjustment values"}), 400
-    try:
-        img = Image.open(f.stream)
-        adjusted = tools.adjust_image(img, brightness=brightness,
-                                      contrast=contrast, sharpness=sharpness)
-        return _image_response(adjusted, f.filename, "adjusted")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
 @app.route("/api/images/qr-generate", methods=["POST"])
 def qr_generate():
     data = request.json or {}
@@ -1558,6 +1655,8 @@ def av_convert_audio():
     try:
         result = tools.convert_audio(f.stream.read(), ext, fmt)
         return send_file(io.BytesIO(result), as_attachment=True, download_name=f"{base}.{fmt}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1577,6 +1676,8 @@ def av_trim_audio():
         result = tools.trim_audio(f.stream.read(), ext, start, end)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_trimmed.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1598,6 +1699,8 @@ def av_audio_speed():
         result = tools.audio_speed(f.stream.read(), ext, speed_f)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_{speed}x.{out_ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1616,6 +1719,8 @@ def av_extract_audio():
         result = tools.extract_audio(f.stream.read(), ext, fmt)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_audio.{fmt}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1635,6 +1740,8 @@ def av_trim_video():
         result = tools.trim_video(f.stream.read(), ext, start, end)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_trimmed.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1651,6 +1758,8 @@ def av_compress_video():
         result = tools.compress_video(f.stream.read(), ext, quality)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_compressed.mp4")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1669,6 +1778,8 @@ def av_convert_video():
         result = tools.convert_video(f.stream.read(), ext, fmt)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}.{fmt}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1684,6 +1795,8 @@ def av_merge_audio():
         result = tools.merge_audio_files(files_data, fmt)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"merged.{fmt}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1699,6 +1812,8 @@ def av_normalize_volume():
         result = tools.normalize_volume(f.stream.read(), ext)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_normalized.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1719,6 +1834,8 @@ def av_video_to_gif():
         result = tools.video_to_gif(f.stream.read(), ext, fps=fps, width=width)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}.gif", mimetype="image/gif")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1734,6 +1851,8 @@ def av_reverse_audio():
         result = tools.reverse_audio(f.stream.read(), ext)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_reversed.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1753,6 +1872,8 @@ def av_change_pitch():
         result = tools.change_pitch(f.stream.read(), ext, semitones)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_pitch.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1774,6 +1895,8 @@ def av_audio_equalizer():
         result = tools.audio_equalizer(f.stream.read(), ext, bass, mid, treble)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_eq.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1795,6 +1918,8 @@ def av_audio_fade():
         result = tools.audio_fade(f.stream.read(), ext, fade_in, fade_out, duration)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_faded.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1819,6 +1944,8 @@ def av_crop_video():
         result = tools.crop_video(f.stream.read(), ext, width, height, x, y)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_cropped.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1840,6 +1967,8 @@ def av_rotate_video():
         result = tools.rotate_video(f.stream.read(), ext, angle)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_rotated.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1862,6 +1991,8 @@ def av_resize_video():
         result = tools.resize_video(f.stream.read(), ext, width, height)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_resized.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1877,6 +2008,8 @@ def av_reverse_video():
         result = tools.reverse_video(f.stream.read(), ext)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_reversed.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1896,6 +2029,8 @@ def av_loop_video():
         result = tools.loop_video(f.stream.read(), ext, count)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_looped.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1911,6 +2046,8 @@ def av_mute_video():
         result = tools.mute_video(f.stream.read(), ext)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_muted.{ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1931,6 +2068,8 @@ def av_add_audio():
                                           audio.stream.read(), audio_ext)
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_with_audio.{video_ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1950,6 +2089,8 @@ def av_burn_subtitles():
                                       subtitles.stream.read())
         return send_file(io.BytesIO(result), as_attachment=True,
                          download_name=f"{base}_subtitled.{video_ext}")
+    except tools.FFmpegMissingError:
+        return _ffmpeg_missing_response()
     except Exception as e:
         return jsonify({"error": str(e)[-500:]}), 500
 
@@ -1991,48 +2132,228 @@ def convert_unzip():
         return jsonify({"error": str(e)}), 400
 
 
+# ── Transcription API ──
+
+@app.route("/api/transcribe/check", methods=["GET"])
+def transcribe_check():
+    whisper_ok, diarize_ok = tools._check_transcribe_deps()
+    return jsonify({"whisper": whisper_ok, "diarize": diarize_ok})
+
+
+@app.route("/api/transcribe", methods=["POST"])
+def transcribe():
+    whisper_ok, _ = tools._check_transcribe_deps()
+    if not whisper_ok:
+        return jsonify({"error": "Transcription not available. Install with: pip install sdexe[transcribe]"}), 400
+
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No file provided"}), 400
+
+    model = request.form.get("model", "base")
+    language = request.form.get("language", "").strip() or None
+    diarize = request.form.get("diarize", "false") == "true"
+    hf_token = request.form.get("hf_token", "").strip()
+    num_speakers_str = request.form.get("num_speakers", "").strip()
+    num_speakers = int(num_speakers_str) if num_speakers_str else None
+
+    valid_models = ("tiny", "base", "small", "medium", "large-v3")
+    if model not in valid_models:
+        return jsonify({"error": f"Invalid model. Choose from: {', '.join(valid_models)}"}), 400
+
+    t_id = str(uuid.uuid4())[:12]
+    ext = tools._ext_from_filename(f.filename, "mp3")
+    input_path = str(DOWNLOAD_DIR / f"{t_id}_input.{ext}")
+    f.save(input_path)
+
+    transcriptions[t_id] = {
+        "progress": 0, "status": "starting",
+        "detail": "Preparing audio...", "segments": None, "language": None,
+    }
+
+    def do_transcribe():
+        wav_path = str(DOWNLOAD_DIR / f"{t_id}_audio.wav")
+        try:
+            def progress_cb(pct, status, detail):
+                transcriptions[t_id]["progress"] = pct
+                transcriptions[t_id]["status"] = status
+                transcriptions[t_id]["detail"] = detail
+
+            progress_cb(2, "preparing", "Extracting audio...")
+            tools.extract_audio_for_transcription(input_path, wav_path)
+
+            segments, detected_lang = tools.transcribe_audio(
+                wav_path, model_size=model, language=language, progress_cb=progress_cb
+            )
+            transcriptions[t_id]["language"] = detected_lang
+
+            _, diarize_ok = tools._check_transcribe_deps()
+            if diarize and diarize_ok and hf_token:
+                diar_segments = tools.diarize_audio(
+                    wav_path, hf_token=hf_token,
+                    num_speakers=num_speakers, progress_cb=progress_cb
+                )
+                segments = tools.merge_transcription_and_diarization(segments, diar_segments)
+            elif diarize and not diarize_ok:
+                transcriptions[t_id]["detail"] = "Diarization skipped (pyannote.audio not installed)"
+            elif diarize and not hf_token:
+                transcriptions[t_id]["detail"] = "Diarization skipped (no HuggingFace token)"
+
+            progress_cb(95, "finalizing", "Preparing results...")
+            transcriptions[t_id]["segments"] = segments
+            transcriptions[t_id]["progress"] = 100
+            transcriptions[t_id]["status"] = "done"
+            transcriptions[t_id]["detail"] = "Transcription complete"
+
+        except Exception as e:
+            transcriptions[t_id]["status"] = "error"
+            transcriptions[t_id]["error"] = str(e)[:500]
+        finally:
+            Path(input_path).unlink(missing_ok=True)
+            Path(wav_path).unlink(missing_ok=True)
+
+    thread = threading.Thread(target=do_transcribe, daemon=True)
+    thread.start()
+    return jsonify({"id": t_id})
+
+
+@app.route("/api/transcribe/progress/<t_id>")
+def transcribe_progress(t_id):
+    def stream():
+        while True:
+            info = transcriptions.get(t_id)
+            if not info:
+                yield f"data: {json.dumps({'error': 'Unknown transcription'})}\n\n"
+                break
+            yield f"data: {json.dumps(info)}\n\n"
+            if info["status"] in ("done", "error"):
+                break
+            time.sleep(0.5)
+    return Response(stream(), mimetype="text/event-stream")
+
+
+@app.route("/api/transcribe/export", methods=["POST"])
+def transcribe_export():
+    data = request.json or {}
+    segments = data.get("segments", [])
+    fmt = data.get("format", "txt")
+    include_speakers = data.get("include_speakers", True)
+
+    if not segments:
+        return jsonify({"error": "No segments to export"}), 400
+
+    if fmt == "txt":
+        content = tools.export_transcript_txt(segments, include_speakers)
+        mimetype, filename = "text/plain", "transcript.txt"
+    elif fmt == "srt":
+        content = tools.export_transcript_srt(segments)
+        mimetype, filename = "application/x-subrip", "transcript.srt"
+    elif fmt == "vtt":
+        content = tools.export_transcript_vtt(segments)
+        mimetype, filename = "text/vtt", "transcript.vtt"
+    elif fmt == "csv":
+        content = tools.export_transcript_csv(segments)
+        mimetype, filename = "text/csv", "transcript.csv"
+    else:
+        return jsonify({"error": f"Unsupported format: {fmt}"}), 400
+
+    return send_file(
+        io.BytesIO(content.encode("utf-8")),
+        as_attachment=True, download_name=filename, mimetype=mimetype,
+    )
+
+
 # ── Startup helpers ──
 
-def _check_ffmpeg(console):
+def _install_transcribe_deps():
+    """Install transcription dependencies. Detects pipx vs pip."""
     import shutil
     import sys
-    import subprocess
+    from rich.console import Console
+
+    console = Console()
+    deps = ["faster-whisper", "pyannote.audio"]
+
+    whisper_ok, _ = tools._check_transcribe_deps()
+    if whisper_ok:
+        console.print("  [green]Transcription dependencies already installed.[/green]")
+        return
+
+    console.print(f"\n  Installing transcription support ({', '.join(deps)})...\n")
+
+    if shutil.which("pipx"):
+        cmd = ["pipx", "inject", "sdexe"] + deps
+    else:
+        cmd = [sys.executable, "-m", "pip", "install"] + deps
+
+    console.print(f"  [dim]Running: {' '.join(cmd)}[/dim]\n")
+    result = subprocess.run(cmd)
+    if result.returncode == 0:
+        console.print("\n  [green]Transcription support installed successfully.[/green]")
+    else:
+        console.print("\n  [red]Installation failed.[/red] Try manually: pip install faster-whisper pyannote.audio")
+
+
+def install_ffmpeg():
+    """Install a system ffmpeg via the platform package manager (non-interactive).
+
+    Returns (ok, message). A bundled ffmpeg (imageio-ffmpeg) already covers most
+    needs; this is for users who want a full-featured system ffmpeg. Uses
+    non-interactive sudo on Linux so a web-triggered call can never hang on a
+    password prompt.
+    """
+    import sys
+    platform = sys.platform
+    try:
+        if platform == "darwin":
+            if not shutil.which("brew"):
+                return False, "Homebrew not found. Install it from https://brew.sh, then run: brew install ffmpeg"
+            r = subprocess.run(["brew", "install", "ffmpeg"], capture_output=True, text=True, timeout=900)
+        elif platform.startswith("linux"):
+            if shutil.which("apt-get"):
+                r = subprocess.run(["sudo", "-n", "apt-get", "install", "-y", "ffmpeg"], capture_output=True, text=True, timeout=900)
+            elif shutil.which("dnf"):
+                r = subprocess.run(["sudo", "-n", "dnf", "install", "-y", "ffmpeg"], capture_output=True, text=True, timeout=900)
+            else:
+                return False, "No supported package manager found. Install ffmpeg manually."
+        elif platform.startswith("win"):
+            if shutil.which("winget"):
+                r = subprocess.run(["winget", "install", "-e", "--id", "Gyan.FFmpeg",
+                                    "--accept-source-agreements", "--accept-package-agreements"],
+                                   capture_output=True, text=True, timeout=900)
+            elif shutil.which("choco"):
+                r = subprocess.run(["choco", "install", "ffmpeg", "-y"], capture_output=True, text=True, timeout=900)
+            else:
+                return False, "No package manager (winget/choco) found. Install ffmpeg from https://ffmpeg.org/download.html"
+        else:
+            return False, "Unsupported platform. Install ffmpeg from https://ffmpeg.org/download.html"
+    except subprocess.TimeoutExpired:
+        return False, "ffmpeg install timed out."
+    except Exception as e:
+        return False, f"ffmpeg install failed: {e}"
+
+    tools._reset_ffmpeg_cache()
+    if r.returncode == 0 and shutil.which("ffmpeg"):
+        return True, "ffmpeg installed."
+    detail = (r.stderr or r.stdout or "Installation failed.").strip()
+    return False, detail[-400:]
+
+
+def _check_ffmpeg(console):
+    """CLI startup check. Silent when ffmpeg is usable (system or bundled);
+    otherwise offers to install a system ffmpeg."""
     from rich.prompt import Confirm
 
-    if shutil.which("ffmpeg"):
+    if tools.ffmpeg_available():
         return
 
-    console.print("  [yellow]⚠[/yellow]  [bold]ffmpeg[/bold] not found — needed for media downloads.\n")
-
+    console.print("  [yellow]⚠[/yellow]  [bold]ffmpeg[/bold] not available — needed for audio/video tools.\n")
     if not Confirm.ask("  Install ffmpeg now?", default=True):
-        console.print("  [dim]Skipping. Media downloads may not work.[/dim]\n")
+        console.print("  [dim]Skipping. Audio/video tools may not work.[/dim]\n")
         return
-
-    platform = sys.platform
-    success = False
-
-    if platform == "darwin" and shutil.which("brew"):
-        with console.status("  Installing via Homebrew...", spinner="dots"):
-            r = subprocess.run(["brew", "install", "ffmpeg"], capture_output=True)
-            success = r.returncode == 0
-    elif platform == "darwin":
-        console.print("  [dim]Homebrew not found. Run:[/dim] [cyan]brew install ffmpeg[/cyan]\n")
-        return
-    elif platform.startswith("linux"):
-        with console.status("  Installing via apt...", spinner="dots"):
-            r = subprocess.run(
-                ["sudo", "apt-get", "install", "-y", "ffmpeg"],
-                capture_output=True,
-            )
-            success = r.returncode == 0
-    else:
-        console.print("  [dim]Install ffmpeg from[/dim] [cyan]https://ffmpeg.org/download.html[/cyan]\n")
-        return
-
-    if success:
-        console.print("  [green]✓[/green]  ffmpeg installed!\n")
-    else:
-        console.print("  [red]✗[/red]  Installation failed. Please install ffmpeg manually.\n")
+    with console.status("  Installing ffmpeg...", spinner="dots"):
+        ok, msg = install_ffmpeg()
+    console.print(f"  [green]✓[/green]  {msg}\n" if ok else f"  [red]✗[/red]  {msg}\n")
 
 
 def _check_for_updates(console):
@@ -2129,16 +2450,10 @@ def _print_startup_info(console, host, port):
     import sys
     from rich.table import Table
 
-    ffmpeg_ver = "not found"
-    if shutil.which("ffmpeg"):
-        try:
-            r = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
-            line = r.stdout.split("\n")[0] if r.stdout else ""
-            parts = line.split()
-            if len(parts) >= 3:
-                ffmpeg_ver = parts[2]
-        except Exception:
-            ffmpeg_ver = "installed"
+    ffmpeg_ver = tools.ffmpeg_version() or "not found"
+    resolved = tools.ffmpeg_path()
+    if resolved and resolved != shutil.which("ffmpeg"):
+        ffmpeg_ver = f"{ffmpeg_ver} (bundled)"
 
     ytdlp_ver = "unknown"
     try:
@@ -2183,8 +2498,13 @@ def main():
     parser.add_argument("--no-tray", action="store_true", help="skip system tray, run Flask on main thread")
     parser.add_argument("-q", "--quiet", action="store_true", help="suppress startup banner")
     parser.add_argument("--open", metavar="PAGE", help="open specific page (e.g. pdf, images, text)")
+    parser.add_argument("command", nargs="?", help="subcommand (e.g. 'transcribe' to install transcription deps)")
 
     args = parser.parse_args()
+
+    if args.command == "transcribe":
+        _install_transcribe_deps()
+        return
 
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
@@ -2256,4 +2576,4 @@ def main():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(port=5001)
