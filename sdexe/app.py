@@ -660,20 +660,28 @@ def download():
         common_hooks["ffmpeg_location"] = _ffmpeg
 
     if fmt == "mp4":
+        # Codec-agnostic: take the highest-bitrate stream at/under the chosen
+        # resolution (H.264 / VP9 / AV1), merged to mp4. The [ext=mp4] filter is
+        # intentionally dropped — it made yt-dlp fall back to a low-bitrate stream
+        # (or a 360p progressive file) when an mp4-codec 1080p wasn't offered.
         if quality == "1080p":
-            format_str = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best"
+            format_str = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
         elif quality == "720p":
-            format_str = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best"
+            format_str = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
         elif quality == "480p":
-            format_str = "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best"
+            format_str = "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
         else:
-            format_str = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            format_str = "bestvideo+bestaudio/best"
 
         mp4_postprocessors = [{"key": "EmbedThumbnail"}]
         if subtitles:
             mp4_postprocessors.append({"key": "FFmpegEmbedSubtitle", "already_have_subtitle": False})
         ydl_opts = {
             "format": format_str,
+            # Prefer resolution, then raw bitrate, over yt-dlp's default codec-
+            # efficiency ranking — so we get the best-looking stream, not the
+            # smallest one.
+            "format_sort": ["res", "br"],
             "merge_output_format": "mp4",
             "outtmpl": outtmpl,
             "postprocessors": mp4_postprocessors,
