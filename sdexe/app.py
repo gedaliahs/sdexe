@@ -19,6 +19,32 @@ from PIL import Image
 from sdexe import __version__
 from sdexe import tools
 
+
+def _ensure_ca_bundle():
+    """Point OpenSSL at certifi's CA bundle when the interpreter has none.
+
+    Framework/Homebrew Python on macOS frequently ships without a usable CA
+    bundle, so every HTTPS verification (yt-dlp downloads, the update check)
+    fails with CERTIFICATE_VERIFY_FAILED. If no system bundle is found and the
+    env var isn't already set, fall back to certifi so networking just works.
+    """
+    import ssl
+    if os.environ.get("SSL_CERT_FILE"):
+        return
+    paths = ssl.get_default_verify_paths()
+    if (paths.cafile and os.path.exists(paths.cafile)) or (paths.capath and os.path.isdir(paths.capath)):
+        return
+    try:
+        import certifi
+        bundle = certifi.where()
+        if os.path.exists(bundle):
+            os.environ["SSL_CERT_FILE"] = bundle
+    except Exception:
+        pass
+
+
+_ensure_ca_bundle()
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB upload limit
 
