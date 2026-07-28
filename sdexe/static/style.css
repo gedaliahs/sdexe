@@ -528,7 +528,17 @@ select:disabled { opacity: .35; cursor: not-allowed; }
     transition: background .15s;
 }
 .entry-save:hover { background: var(--green-bg); }
-.entry-error { font-size: .72rem; color: var(--danger); font-weight: 500; }
+.entry-error {
+    font-size: .72rem;
+    color: var(--danger);
+    font-weight: 500;
+    max-width: 260px;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+}
 .entry-queued { font-size: .7rem; color: var(--text-muted); font-style: italic; }
 .entry-processing { font-size: .7rem; color: var(--accent); }
 

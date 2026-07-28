@@ -2,6 +2,7 @@ let currentUrl = "";
 let playlistEntries = [];
 let completedIds = [];
 let outputFolder = "";
+let lastEntryError = "";
 const downloadHistory = [];
 
 /* ── Toast ── */
@@ -723,7 +724,9 @@ function finishSummary(total, done, failed) {
     const summary = document.getElementById("p-summary");
     summary.classList.add("is-done");
 
-    document.getElementById("bs-label").textContent = failed > 0 ? "Finished with errors" : "All downloads complete";
+    document.getElementById("bs-label").textContent = failed > 0
+        ? (lastEntryError ? `Finished with errors: ${lastEntryError}` : "Finished with errors")
+        : "All downloads complete";
     document.getElementById("bs-counter").textContent = `${done} / ${total}`;
     document.getElementById("bs-fill").style.width = "100%";
     document.getElementById("bs-now").textContent = "";
@@ -847,7 +850,9 @@ async function startPlaylistDownload() {
                 });
                 const data = await res.json();
                 if (!res.ok) {
-                    status.innerHTML = `<span class="entry-error">Error</span>`;
+                    const reason = data.error || `Request failed (${res.status})`;
+                    status.innerHTML = `<span class="entry-error" title="${esc(reason)}">${esc(reason)}</span>`;
+                    lastEntryError = reason;
                     failed++;
                 } else {
                     const ok = await trackEntryProgress(data.id, status);
@@ -859,7 +864,9 @@ async function startPlaylistDownload() {
                     } else { failed++; }
                 }
             } catch {
-                status.innerHTML = `<span class="entry-error">Failed</span>`;
+                const reason = "Could not reach sdexe";
+                status.innerHTML = `<span class="entry-error" title="${esc(reason)}">${esc(reason)}</span>`;
+                lastEntryError = reason;
                 failed++;
             }
 
@@ -899,7 +906,11 @@ function trackEntryProgress(id, statusEl, retries = 0) {
                 resolve(true);
             } else if (d.status === "error") {
                 source.close();
-                statusEl.innerHTML = `<span class="entry-error">Failed</span>`;
+                // Show the real reason. A bare "Failed" makes a broken playlist
+                // impossible to diagnose.
+                const reason = d.error || "Failed";
+                statusEl.innerHTML = `<span class="entry-error" title="${esc(reason)}">${esc(reason)}</span>`;
+                lastEntryError = reason;
                 resolve(false);
             }
         };
@@ -908,7 +919,8 @@ function trackEntryProgress(id, statusEl, retries = 0) {
             if (retries < 2) {
                 setTimeout(() => trackEntryProgress(id, statusEl, retries + 1).then(resolve), 1200);
             } else {
-                statusEl.innerHTML = `<span class="entry-error">Failed</span>`;
+                statusEl.innerHTML = `<span class="entry-error" title="Lost connection to sdexe">Connection lost</span>`;
+                lastEntryError = "Lost connection to sdexe";
                 resolve(false);
             }
         };
