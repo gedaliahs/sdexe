@@ -1,5 +1,7 @@
 import os
 import io
+import re
+import logging
 import uuid
 import time
 import tempfile
@@ -49,6 +51,8 @@ _ensure_ca_bundle()
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB upload limit
 
+
+logger = logging.getLogger("sdexe")
 
 _LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1", "[::1]")
 
@@ -120,6 +124,84 @@ def _ytdlp_is_stale() -> bool:
     except Exception:
         return False
     return (datetime.now() - released).days > _YTDLP_STALE_DAYS
+
+
+# yt-dlp writes colored output, so its exception text carries ANSI escapes that
+# render as literal "[0;31m" noise in the browser.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+
+
+def _clean_error(msg: str) -> str:
+    text = _ANSI_RE.sub("", msg or "").strip()
+    # yt-dlp prefixes its own messages, which means nothing to a user.
+    for prefix in ("ERROR: ", "error: "):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    # Drop the "[youtube:tab] dQw4w9WgXcQ: " extractor tag.
+    text = re.sub(r"^\[[a-z0-9:_.-]+\]\s*", "", text.strip(), flags=re.IGNORECASE)
+    text = re.sub(r"^[A-Za-z0-9_-]{6,20}:\s*", "", text)
+    # Drop the trailing "(caused by ...)" chain.
+    text = re.sub(r"\s*\(caused by .*$", "", text, flags=re.DOTALL)
+    return text.strip()
+
+
+def _friendly_download_error(raw: str, cancelled: bool = False) -> str:
+    """Map a download failure to a message safe and useful to show a user.
+
+    The raw text is logged for the operator. It is never returned as-is: it
+    carries ANSI escapes, internal URLs, and yt-dlp argument advice.
+    """
+    err = _clean_error(raw)
+    low = err.lower()
+    logger.error("download failed: %s", err[:2000])
+
+    if cancelled or "cancelled by user" in low:
+        return "Download cancelled."
+    if "sign in to confirm" in low or "not a bot" in low or "confirm you" in low:
+        return ("YouTube is asking this machine to confirm it is not a bot. "
+                "Sign in to YouTube in your browser, then try again shortly.")
+    if "drm" in low:
+        return "This video is DRM protected, so it cannot be downloaded."
+    if "this video is not available" in low or "video is not available" in low:
+        # Distinct from "Video unavailable". YouTube returns this for DRM
+        # protected and licence-restricted titles that still play in a browser.
+        return ("This video cannot be downloaded. It is usually DRM protected or "
+                "licence restricted, even though it plays in a browser.")
+    if "private" in low and "video" in low:
+        return "This video is private."
+    if "members-only" in low or "members only" in low or "join this channel" in low:
+        return "Members-only video. An eligible channel membership is required."
+    if "age" in low and any(w in low for w in ("restrict", "confirm", "gate")):
+        return "Age-restricted. Sign in to download."
+    if "not available in your country" in low or "geo-restricted" in low:
+        return "Not available in your country (geo-restricted)."
+    if "premieres in" in low or "live event will begin" in low or "not started" in low:
+        return "This has not premiered yet."
+    if "429" in err or "rate limit" in low or "too many requests" in low:
+        return "YouTube is rate limiting this machine. Wait a few minutes, then try again."
+    if "copyright" in low or "blocked" in low:
+        return "Blocked due to copyright."
+    if "ffmpeg" in low and ("not found" in low or "no such file" in low):
+        return "ffmpeg not found. Run `sdexe` once to install it."
+    if ("video unavailable" in low or "unable to extract" in low
+            or "requested format is not available" in low
+            or "player response" in low or "nsig" in low):
+        if _ytdlp_is_stale():
+            return ("Could not read this video. The downloader engine is out of date, "
+                    "which is the usual cause. Update it in Settings, then try again.")
+        return "Video unavailable or deleted."
+    if any(w in low for w in ("timed out", "timeout", "connection", "network", "resolve")):
+        return "Network problem while downloading. Check your connection and try again."
+    if "unable to download api page" in low or "http error 40" in low:
+        return "YouTube refused that request. The link may be private, removed, or region locked."
+    if "does not exist" in low or "not found" in low:
+        return "That link could not be found."
+
+    # Unrecognized. Show a short, cleaned first line rather than a raw dump.
+    first_line = err.splitlines()[0] if err else ""
+    if len(first_line) > 160:
+        first_line = first_line[:157] + "..."
+    return first_line or "Download failed."
 
 
 CONFIG_DIR = Path.home() / ".config" / "sdexe"
@@ -583,11 +665,10 @@ def info():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             data = ydl.extract_info(url, download=False)
     except Exception as e:
-        msg = str(e)
-        if _ytdlp_is_stale():
-            msg = ("Could not read that link. The downloader engine is out of date, "
-                   "which is the usual cause. Update it in Settings, then try again.")
-        return jsonify({"error": msg, "ytdlp_stale": _ytdlp_is_stale()}), 400
+        return jsonify({
+            "error": _friendly_download_error(str(e)),
+            "ytdlp_stale": _ytdlp_is_stale(),
+        }), 400
 
     entries_raw = data.get("entries")
     if entries_raw is not None:
@@ -894,33 +975,10 @@ def download():
             downloads[dl_id]["status"] = "done"
             downloads[dl_id]["progress"] = 100
         except Exception as e:
-            err = str(e)
-            err_lower = err.lower()
-            if downloads[dl_id].get("cancelled") or "cancelled by user" in err_lower:
-                friendly = "Download cancelled."
-            elif "private" in err_lower and "video" in err_lower:
-                friendly = "This video is private."
-            elif "age" in err_lower and any(w in err_lower for w in ("restrict", "confirm", "gate")):
-                friendly = "Age-restricted. Sign in to download."
-            elif "not available in your country" in err_lower or "geo-restricted" in err_lower:
-                friendly = "Not available in your country (geo-restricted)."
-            elif ("video unavailable" in err_lower or "unable to extract" in err_lower
-                    or "requested format is not available" in err_lower
-                    or "player response" in err_lower or "nsig" in err_lower):
-                friendly = "Video unavailable or deleted."
-                if _ytdlp_is_stale():
-                    friendly = ("Could not read this video. The downloader engine is out of date, "
-                                "which is the usual cause. Update it in Settings, then try again.")
-            elif "copyright" in err_lower or "blocked" in err_lower:
-                friendly = "Blocked due to copyright."
-            elif "429" in err or "rate limit" in err_lower:
-                friendly = "Rate limited. Try again in a moment."
-            elif "ffmpeg" in err_lower and ("not found" in err_lower or "no such file" in err_lower):
-                friendly = "ffmpeg not found. Run `sdexe` once to install it."
-            else:
-                friendly = err
             downloads[dl_id]["status"] = "error"
-            downloads[dl_id]["error"] = friendly
+            downloads[dl_id]["error"] = _friendly_download_error(
+                str(e), cancelled=bool(downloads[dl_id].get("cancelled"))
+            )
 
     thread = threading.Thread(target=do_download, daemon=True)
     thread.start()
