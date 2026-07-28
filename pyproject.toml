@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sdexe"
 version = "0.2.17"
-description = "Suite for Downloading, Editing & eXporting Everything — local tools for media, PDF, images, AV, file conversion, and text"
+description = "Suite for Downloading, Editing & eXporting Everything: local tools for media, PDF, images, AV, file conversion, and text"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -25,7 +25,10 @@ classifiers = [
 ]
 dependencies = [
     "flask",
-    "yt-dlp",
+    # Floor pin, not an exact pin. YouTube breaks older yt-dlp releases within
+    # weeks, and the failure looks like a missing video, so an upgrade of sdexe
+    # must also pull a current engine.
+    "yt-dlp>=2026.7.4",
     "pypdf",
     "Pillow",
     "markdown",
