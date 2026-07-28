@@ -49,6 +49,8 @@ function requestNotifPermission() {
 
 /* ── Helpers ── */
 function timeAgo(ts) {
+    // The server stores epoch seconds, the client writes epoch milliseconds.
+    if (ts && ts < 1e12) ts *= 1000;
     const diff = (Date.now() - ts) / 1000;
     if (diff < 60) return 'just now';
     if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
@@ -145,7 +147,7 @@ function renderHistory() {
             </div>
             ${item.ts ? `<span class="history-time">${timeAgo(item.ts)}</span>` : ""}
             ${item.url ? `<button class="history-refetch" title="Re-fetch this URL" onclick="refetchUrl(${JSON.stringify(item.url)})">&#x21A9;</button>` : ""}
-            <a href="/api/file/${encodeURIComponent(item.id)}" class="history-save">Save</a>
+            ${item.restored ? "" : `<a href="/api/file/${encodeURIComponent(item.id)}" class="history-save">Save</a>`}
         </div>
     `).join("");
 }
@@ -170,7 +172,9 @@ async function loadConfig() {
         const items = await res.json();
         if (Array.isArray(items) && items.length) {
             downloadHistory.length = 0;
-            items.forEach(i => downloadHistory.push(i));
+            // Temp files do not survive a restart, so a Save link on a restored
+            // item would just navigate to a "File not found" JSON body.
+            items.forEach(i => downloadHistory.push({ ...i, restored: true }));
             renderHistory();
         }
     } catch {}
@@ -330,7 +334,7 @@ async function fetchInfo() {
     const btn = document.getElementById("fetch-btn");
     btn.disabled = true;
     btn.querySelector(".btn-text").textContent = "Loading";
-    document.title = "Fetching\u2026 \u2014 sdexe";
+    document.title = "Fetching\u2026 sdexe";
 
     try {
         if (urls.length > 1) {
@@ -354,12 +358,12 @@ async function fetchInfo() {
             }
         }
     } catch (e) {
-        showError("Network error \u2014 is the server running?");
+        showError("Network error. Is the server running?");
     } finally {
         hideSkeleton();
         btn.disabled = false;
         btn.querySelector(".btn-text").textContent = "Fetch";
-        document.title = "Media Downloader \u2014 sdexe";
+        document.title = "Media Downloader, sdexe";
         document.querySelector(".search-bar").classList.remove("is-loading");
     }
 }
@@ -639,7 +643,7 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
             hideCancelBtn();
             const steps = (d.pp_step || 0) + (hasMetadata ? 1 : 0);
             if (statusEl) {
-                statusEl.innerHTML = '<span class="progress-complete-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span> Complete' + (steps > 0 ? ` \u2014 ${steps} post-processing step${steps === 1 ? "" : "s"}` : "");
+                statusEl.innerHTML = '<span class="progress-complete-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span> Complete' + (steps > 0 ? `, ${steps} post-processing step${steps === 1 ? "" : "s"}` : "");
             }
             if (pctEl) pctEl.textContent = "";
             if (detailEl) detailEl.textContent = "";
@@ -661,7 +665,7 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
                 const link = document.getElementById("v-save");
                 link.href = `/api/file/${id}`;
                 link.hidden = false;
-                showToast(`${title} ready \u2014 click Save File`);
+                showToast(`${title} ready. Click Save File`);
             }
             sendNotification("sdexe", `Downloaded: ${title}`);
             resetBtn(btn, "Download");
@@ -679,11 +683,11 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
     source.onerror = () => {
         source.close();
         if (retries < 3) {
-            if (statusEl) statusEl.textContent = `Connection lost \u2014 retrying (${retries + 1}/3)...`;
+            if (statusEl) statusEl.textContent = `Connection lost, retrying (${retries + 1}/3)...`;
             if (pctEl) pctEl.textContent = "";
             setTimeout(() => trackSingleProgress(id, hasMetadata, retries + 1), 1500);
         } else {
-            if (statusEl) statusEl.textContent = "Connection lost \u2014 check download history";
+            if (statusEl) statusEl.textContent = "Connection lost. Check download history";
             if (pctEl) pctEl.textContent = "";
             hideCancelBtn();
             resetBtn(btn, "Download");

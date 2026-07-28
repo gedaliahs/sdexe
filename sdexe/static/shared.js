@@ -1,4 +1,4 @@
-/* shared.js — helpers used by every tool page.
+/* shared.js: helpers used by every tool page.
    Loaded by base.html before each page's own script, so these globals are
    defined first. Extracted from per-page copies that had drifted apart. */
 
@@ -48,17 +48,46 @@ function setupPageDropOverlay() {
         e.preventDefault(); if (++dc === 1) ov.classList.add("visible");
     });
     document.addEventListener("dragover", function(e) { e.preventDefault(); });
-    document.addEventListener("dragleave", function() { if (--dc === 0) ov.classList.remove("visible"); });
+    document.addEventListener("dragleave", function(e) {
+        // Must mirror the dragenter filter. Counting text and link drags here
+        // drove dc negative, which left the overlay permanently hidden.
+        if (!e.dataTransfer || !e.dataTransfer.types.includes("Files")) return;
+        if (--dc <= 0) { dc = 0; ov.classList.remove("visible"); }
+    });
     document.addEventListener("drop", function(e) {
         dc = 0; ov.classList.remove("visible");
         if (!e.dataTransfer.files.length) return;
         var handlers = window._pageDropHandlers || [];
+        var visible = [];
         for (var i = 0; i < handlers.length; i++) {
             var zone = document.getElementById(handlers[i].zoneId);
-            if (zone && zone.closest(".pdf-section.active")) {
-                e.preventDefault(); handlers[i].handler(e.dataTransfer.files); return;
+            // A hidden subsection's zone must not swallow the drop.
+            if (zone && zone.closest(".pdf-section.active") && zone.offsetParent !== null) {
+                visible.push({ zone: zone, handler: handlers[i].handler });
             }
         }
+        var file = e.dataTransfer.files[0];
+        // Prefer a zone whose accept list matches the dropped file.
+        for (var j = 0; j < visible.length; j++) {
+            var input = visible[j].zone.querySelector("input[type=file]");
+            var accept = input && input.accept ? input.accept : "";
+            if (accept && file && _acceptMatches(accept, file)) {
+                e.preventDefault(); visible[j].handler(e.dataTransfer.files); return;
+            }
+        }
+        if (visible.length) { e.preventDefault(); visible[0].handler(e.dataTransfer.files); return; }
         if (handlers.length) { e.preventDefault(); handlers[0].handler(e.dataTransfer.files); }
+    });
+}
+
+function _acceptMatches(accept, file) {
+    var name = (file.name || "").toLowerCase();
+    var type = (file.type || "").toLowerCase();
+    return accept.split(",").some(function(rule) {
+        rule = rule.trim().toLowerCase();
+        if (!rule) return false;
+        if (rule.startsWith(".")) return name.endsWith(rule);
+        if (rule.endsWith("/*")) return type.startsWith(rule.slice(0, -1));
+        return type === rule;
     });
 }

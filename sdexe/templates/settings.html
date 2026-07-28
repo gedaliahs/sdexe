@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Settings — sdexe{% endblock %}
+{% block title %}Settings, sdexe{% endblock %}
 {% block nav_settings %}active{% endblock %}
 
 {% block content %}
@@ -29,7 +29,7 @@
                         </div>
                         <div class="sys-info-item">
                             <span class="sys-info-label">yt-dlp</span>
-                            <span class="sys-info-value">{{ info.ytdlp_ver }}</span>
+                            <span class="sys-info-value">{{ info.ytdlp_ver }}{% if info.ytdlp_stale %} (out of date){% endif %}</span>
                         </div>
                         <div class="sys-info-item">
                             <span class="sys-info-label">Tools</span>
@@ -68,10 +68,10 @@
                         <div class="field">
                             <label>Default format</label>
                             <select id="default-format" onchange="updateDefaultQuality()">
-                                <option value="mp3">MP3 — Audio</option>
-                                <option value="mp4">MP4 — Video</option>
-                                <option value="flac">FLAC — Audio</option>
-                                <option value="wav">WAV — Audio</option>
+                                <option value="mp3">MP3 (Audio)</option>
+                                <option value="mp4">MP4 (Video)</option>
+                                <option value="flac">FLAC (Audio)</option>
+                                <option value="wav">WAV (Audio)</option>
                             </select>
                         </div>
                         <div class="field">
@@ -121,10 +121,14 @@
                         <h2>About</h2>
                     </div>
                     <p class="meta">sdexe v{{ version }} &middot; <a href="https://github.com/gedaliahs/sdexe" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">GitHub</a></p>
-                    <div style="margin-top: 14px; display: flex; align-items: center; gap: 12px;">
+                    <div style="margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <button id="update-btn" class="btn-settings-save" onclick="runUpdate()">Check for updates</button>
+                        <button id="ytdlp-btn" class="btn-settings-save" onclick="updateYtdlp()">Update downloader engine</button>
                         <span id="update-status" class="settings-status"></span>
                     </div>
+                    {% if info.ytdlp_stale %}
+                    <p class="meta" style="margin-top:10px;">The downloader engine is out of date. That is the usual cause of a "Video unavailable" error on a video that plays fine in a browser.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -140,8 +144,10 @@ function updateDefaultQuality() {
         q.innerHTML = `<option value="best">Best</option><option value="1080p">1080p</option><option value="720p">720p</option><option value="480p">480p</option>`;
         q.disabled = false;
     } else if (fmt === "mp3") {
-        q.innerHTML = `<option value="best">Best (320kbps)</option>`;
-        q.disabled = true;
+        // Mirrors the media page. A single "best" option here overwrote a
+        // 320/192/128 choice made there.
+        q.innerHTML = `<option value="320">320 kbps</option><option value="192">192 kbps</option><option value="128">128 kbps</option>`;
+        q.disabled = false;
     } else {
         q.innerHTML = `<option value="best">Lossless</option>`;
         q.disabled = true;
@@ -190,6 +196,31 @@ async function runUpdate() {
     btn.textContent = "Check for updates";
 }
 
+async function updateYtdlp() {
+    const btn = document.getElementById("ytdlp-btn");
+    const status = document.getElementById("update-status");
+    btn.disabled = true;
+    btn.textContent = "Updating…";
+    status.textContent = "Updating the downloader engine…";
+    status.className = "settings-status";
+    try {
+        const res = await fetch("/api/update-ytdlp", { method: "POST" });
+        const data = await res.json();
+        if (data.ok) {
+            status.textContent = "Downloader engine updated. Restart sdexe to apply.";
+            status.className = "settings-status saved";
+        } else {
+            status.textContent = data.error || "Update failed";
+            status.className = "settings-status error";
+        }
+    } catch {
+        status.textContent = "Network error";
+        status.className = "settings-status error";
+    }
+    btn.disabled = false;
+    btn.textContent = "Update downloader engine";
+}
+
 async function loadSettings() {
     const res = await fetch("/api/config");
     const cfg = await res.json();
@@ -215,7 +246,7 @@ async function loadSettings() {
         notifEl.checked = true;
     } else if (Notification.permission === "denied") {
         notifEl.disabled = true;
-        statusEl.textContent = "Notifications blocked — enable in browser/system settings.";
+        statusEl.textContent = "Notifications blocked. Enable in browser or system settings.";
     }
 }
 
@@ -240,7 +271,9 @@ async function saveSettings() {
         status.className = "settings-status error";
     } else {
         localStorage.setItem("sdexe_format", fmt);
-        localStorage.setItem("sdexe_quality", quality);
+        if (!document.getElementById("default-quality").disabled) {
+            localStorage.setItem("sdexe_quality", quality);
+        }
         status.textContent = "Saved";
         status.className = "settings-status saved";
         setTimeout(() => { status.textContent = ""; }, 2500);
@@ -253,7 +286,7 @@ document.getElementById("notif-enabled").addEventListener("change", async (e) =>
         const perm = await Notification.requestPermission();
         e.target.checked = perm === "granted";
         if (perm === "denied") {
-            statusEl.textContent = "Notifications blocked — enable in system settings.";
+            statusEl.textContent = "Notifications blocked. Enable in system settings.";
             e.target.disabled = true;
         }
     }

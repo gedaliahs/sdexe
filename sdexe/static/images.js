@@ -100,7 +100,7 @@ async function doResize() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?$/);
+            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
             const name = ct.includes("zip") ? "resized_images.zip" : (match ? match[1] : "resized.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -372,7 +372,7 @@ async function doRotate() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?$/);
+            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
             const name = ct.includes("zip") ? "rotated_images.zip" : (match ? match[1] : "rotated.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -603,7 +603,7 @@ async function doFlip() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?$/);
+            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
             const name = ct.includes("zip") ? "flipped_images.zip" : (match ? match[1] : "flipped.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -666,7 +666,7 @@ async function doGrayscale() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?$/);
+            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
             const name = ct.includes("zip") ? "grayscale_images.zip" : (match ? match[1] : "grayscale.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -792,7 +792,7 @@ async function doBlur() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?$/);
+            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
             const name = ct.includes("zip") ? "blurred_images.zip" : (match ? match[1] : "blurred.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);

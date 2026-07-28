@@ -1,8 +1,10 @@
 """Pure tool functions shared between web routes and CLI subcommands."""
 
 import io
+import re
 import csv
 import json
+import logging
 import shutil
 import tempfile
 import subprocess
@@ -20,6 +22,8 @@ try:
     _YAML_AVAILABLE = True
 except ImportError:
     _YAML_AVAILABLE = False
+
+logger = logging.getLogger("sdexe")
 
 
 # ── Dependency resolution ──
@@ -82,8 +86,73 @@ def ffmpeg_available() -> bool:
     return ffmpeg_path() is not None
 
 
+_filter_cache: dict[str, set] = {}
+
+
+def _ffmpeg_filters(exe: str) -> set:
+    """Filter names a given ffmpeg build provides."""
+    if exe in _filter_cache:
+        return _filter_cache[exe]
+    names = set()
+    try:
+        r = subprocess.run([exe, "-hide_banner", "-filters"],
+                           capture_output=True, text=True, timeout=20)
+        for line in r.stdout.splitlines():
+            parts = line.split()
+            if len(parts) > 1:
+                names.add(parts[1])
+    except Exception:
+        pass
+    _filter_cache[exe] = names
+    return names
+
+
+def ffmpeg_exe_with_filter(name: str) -> str | None:
+    """An ffmpeg that provides `name`, preferring the resolved default.
+
+    A Homebrew ffmpeg built without libass has no `subtitles` filter, while the
+    bundled imageio-ffmpeg build does, so fall back to it rather than failing.
+    """
+    candidates = []
+    default = ffmpeg_path()
+    if default:
+        candidates.append(default)
+    try:
+        import imageio_ffmpeg
+        bundled = imageio_ffmpeg.get_ffmpeg_exe()
+        if bundled and bundled not in candidates and _binary_runs(bundled):
+            candidates.append(bundled)
+    except Exception:
+        pass
+    for exe in candidates:
+        if name in _ffmpeg_filters(exe):
+            return exe
+    return None
+
+
 def ffprobe_available() -> bool:
     return shutil.which("ffprobe") is not None
+
+
+def probe_duration(data: bytes, ext: str) -> float:
+    """Duration of a media blob in seconds, or 0 when it cannot be determined."""
+    exe = _ffmpeg_exe()
+    tmp = tempfile.NamedTemporaryFile(suffix=f".{ext.lstrip('.')}", delete=False)
+    try:
+        tmp.write(data)
+        tmp.close()
+        # ffprobe may be absent when only the bundled ffmpeg is available, so
+        # read the duration off ffmpeg's own stderr instead.
+        r = subprocess.run([exe, "-i", tmp.name], capture_output=True, text=True, timeout=60)
+        match = re.search(r"Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)", r.stderr or "")
+        if not match:
+            return 0.0
+        hours, minutes, seconds = match.groups()
+        return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    except Exception:
+        return 0.0
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
 
 
 def ffmpeg_version() -> str | None:
@@ -169,15 +238,24 @@ def split_pdf(stream: BinaryIO, ranges_str: str = "") -> list[tuple[str, bytes]]
     if ranges_str:
         for part in ranges_str.split(","):
             part = part.strip()
-            if "-" in part:
-                start, end = part.split("-", 1)
-                start = max(1, int(start.strip()))
-                end = min(total, int(end.strip()))
-                page_groups.append(list(range(start - 1, end)))
-            else:
-                p = int(part.strip())
-                if 1 <= p <= total:
-                    page_groups.append([p - 1])
+            if not part:
+                continue
+            try:
+                if "-" in part:
+                    start_str, end_str = part.split("-", 1)
+                    start = max(1, int(start_str.strip()))
+                    end = min(total, int(end_str.strip()))
+                else:
+                    start = end = int(part.strip())
+            except ValueError:
+                raise ValueError(f"Invalid page range: {part}")
+            # A reversed or out-of-range group would otherwise produce a
+            # zero-page PDF that looks like a successful split.
+            if start > end or start > total:
+                raise ValueError(f"Page range out of bounds for a {total}-page PDF: {part}")
+            page_groups.append(list(range(start - 1, end)))
+        if not page_groups:
+            raise ValueError("No valid page ranges provided")
     else:
         page_groups = [[i] for i in range(total)]
 
@@ -359,65 +437,107 @@ def set_pdf_metadata(stream: BinaryIO, title: str = "", author: str = "",
     return buf.getvalue()
 
 
+# Helvetica advance widths (1/1000 em) for ASCII 32 to 126, so text can be
+# centered without embedding a font.
+_HELVETICA_WIDTHS = (
+    278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278,
+    556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556,
+    1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
+    667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556,
+    333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556,
+    556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
+)
+
+
+def _helvetica_width(text: str, size: float) -> float:
+    total = 0
+    for ch in text:
+        code = ord(ch)
+        total += _HELVETICA_WIDTHS[code - 32] if 32 <= code <= 126 else 556
+    return total * size / 1000.0
+
+
+def _pdf_escape(text: str) -> bytes:
+    """Encode text for a PDF literal string using WinAnsi (standard-font) encoding."""
+    raw = text.encode("cp1252", "replace")
+    out = bytearray()
+    for byte in raw:
+        if byte in (0x28, 0x29, 0x5C):  # ( ) backslash
+            out += b"\\"
+        out.append(byte)
+    return bytes(out)
+
+
+def _text_overlay_pdf(width: float, height: float, items: list) -> bytes:
+    """Build a one-page PDF containing only text, with a transparent background.
+
+    Each item is (x, y, size, text, gray, alpha) with y measured from the bottom
+    in PDF user space. The page has no background fill, so merging it over a
+    real page leaves the original content visible.
+    """
+    ops = bytearray()
+    for x, y, size, text, gray, alpha in items:
+        ops += b"q\n/GS0 gs\n" if alpha < 1 else b"q\n"
+        ops += f"BT\n/F1 {size:.2f} Tf\n{gray:.3f} g\n{x:.2f} {y:.2f} Td\n".encode("ascii")
+        ops += b"(" + _pdf_escape(text) + b") Tj\nET\nQ\n"
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width:.2f} {height:.2f}] "
+         f"/Resources << /Font << /F1 4 0 R >> /ExtGState << /GS0 5 0 R >> >> "
+         f"/Contents 6 0 R >>").encode("ascii"),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+        f"<< /Type /ExtGState /ca {min(items[0][5] if items else 1, 1):.3f} >>".encode("ascii"),
+        b"<< /Length " + str(len(ops)).encode("ascii") + b" >>\nstream\n" + bytes(ops) + b"\nendstream",
+    ]
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n".encode("ascii") + body + b"\nendobj\n"
+
+    xref_pos = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n".encode("ascii")
+    out += b"0000000000 65535 f \n"
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode("ascii")
+    out += (f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+            f"startxref\n{xref_pos}\n%%EOF\n").encode("ascii")
+    return bytes(out)
+
+
 def watermark_pdf(stream: BinaryIO, text: str, font_size: int = 36,
                   opacity: float = 0.3, position: str = "center") -> bytes:
-    """Add text watermark to every page of a PDF."""
+    """Add a text watermark to every page of a PDF."""
     reader = PdfReader(stream)
     writer = PdfWriter()
+    alpha = max(0.02, min(1.0, float(opacity)))
 
     for page in reader.pages:
         box = page.mediabox
         w = float(box.width)
         h = float(box.height)
 
-        # Create watermark as a PDF page using reportlab-free approach:
-        # Build a small single-page PDF with the watermark text
-        wm_img = Image.new("RGBA", (int(w), int(h)), (255, 255, 255, 0))
-        draw = ImageDraw.Draw(wm_img)
-        alpha = max(1, min(255, int(opacity * 255)))
+        tw = _helvetica_width(text, font_size)
+        # Cap-height baseline offset, close enough for placement.
+        th = font_size * 0.72
+        margin = 40.0
 
-        font = None
-        for fp in [
-            "/System/Library/Fonts/Helvetica.ttc",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-        ]:
-            try:
-                font = ImageFont.truetype(fp, font_size)
-                break
-            except Exception:
-                continue
-        if font is None:
-            font = ImageFont.load_default()
-
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-
-        if position == "center":
-            x, y = (w - tw) / 2, (h - th) / 2
-        elif position == "top-left":
-            x, y = 40, 40
+        if position == "top-left":
+            x, y = margin, h - margin - th
         elif position == "top-right":
-            x, y = w - tw - 40, 40
+            x, y = w - tw - margin, h - margin - th
         elif position == "bottom-left":
-            x, y = 40, h - th - 40
+            x, y = margin, margin
         elif position == "bottom-right":
-            x, y = w - tw - 40, h - th - 40
-        else:
+            x, y = w - tw - margin, margin
+        else:  # center
             x, y = (w - tw) / 2, (h - th) / 2
 
-        draw.text((x, y), text, fill=(128, 128, 128, alpha), font=font)
-
-        # Convert watermark image to PDF page
-        wm_rgb = Image.new("RGB", wm_img.size, (255, 255, 255))
-        wm_rgb.paste(wm_img, mask=wm_img.split()[3])
-        wm_buf = io.BytesIO()
-        wm_rgb.save(wm_buf, "PDF")
-        wm_buf.seek(0)
-        wm_page = PdfReader(wm_buf).pages[0]
-
-        page.merge_page(wm_page)
+        overlay = _text_overlay_pdf(w, h, [(x, y, float(font_size), text, 0.5, alpha)])
+        page.merge_page(PdfReader(io.BytesIO(overlay)).pages[0])
         writer.add_page(page)
 
     buf = io.BytesIO()
@@ -667,14 +787,14 @@ def json_to_csv_str(text: str) -> str:
 
 def yaml_to_json_str(text: str) -> str:
     if not _YAML_AVAILABLE:
-        raise RuntimeError("PyYAML not installed — run: pip install PyYAML")
+        raise RuntimeError("PyYAML not installed. Run: pip install PyYAML")
     data = _yaml.safe_load(text)
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
 def json_to_yaml_str(text: str) -> str:
     if not _YAML_AVAILABLE:
-        raise RuntimeError("PyYAML not installed — run: pip install PyYAML")
+        raise RuntimeError("PyYAML not installed. Run: pip install PyYAML")
     data = json.loads(text)
     return _yaml.dump(data, default_flow_style=False, allow_unicode=True)
 
@@ -728,6 +848,26 @@ class FFmpegMissingError(RuntimeError):
     """Raised when no usable ffmpeg binary is available."""
 
 
+def _friendly_ffmpeg_error(stderr: str) -> str:
+    """Map ffmpeg stderr to a short message safe to show a user."""
+    low = stderr.lower()
+    if "invalid data found" in low or "moov atom not found" in low:
+        return "That file could not be read. It may be corrupt or an unsupported format."
+    if "no such file or directory" in low:
+        return "The media file could not be opened."
+    if "does not contain any stream" in low or "stream map" in low:
+        return "That file has no usable audio or video stream."
+    if "not divisible by 2" in low or "width/height" in low:
+        return "Those dimensions are not valid for this video format. Try an even width and height."
+    if "permission denied" in low:
+        return "Permission denied while writing the output file."
+    if "unknown encoder" in low or "encoder not found" in low:
+        return "This ffmpeg build cannot write that output format."
+    if "conversion failed" in low:
+        return "Conversion failed. The input may be unsupported or damaged."
+    return "The media operation failed. Check that the file is a valid, complete media file."
+
+
 def run_ffmpeg(input_data: bytes, in_suffix: str, out_suffix: str,
                ffmpeg_args: list[str], timeout: int = 300,
                pre_input_args: list[str] | None = None) -> bytes:
@@ -748,7 +888,10 @@ def run_ffmpeg(input_data: bytes, in_suffix: str, out_suffix: str,
             raise FFmpegMissingError("ffmpeg is not installed")
         if result.returncode != 0:
             stderr = result.stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(stderr[-800:] if len(stderr) > 800 else stderr)
+            # Log the real output for the operator, show the user a readable
+            # line instead of an ffmpeg build banner.
+            logger.error("ffmpeg failed: %s | stderr: %s", " ".join(cmd), stderr[-2000:])
+            raise RuntimeError(_friendly_ffmpeg_error(stderr))
         return Path(out_path).read_bytes()
     finally:
         Path(inf_path).unlink(missing_ok=True)
@@ -809,11 +952,28 @@ def extract_audio(data: bytes, in_ext: str, out_fmt: str) -> bytes:
                       ["-vn", "-map", "0:a"] + AUDIO_CODEC_MAP[out_fmt])
 
 
+def parse_timestamp(value: str) -> float:
+    """Parse SS, MM:SS, or HH:MM:SS (fractional seconds allowed) into seconds."""
+    parts = str(value).strip().split(":")
+    if len(parts) > 3:
+        raise ValueError(f"Invalid timestamp: {value}")
+    total = 0.0
+    for part in parts:
+        total = total * 60 + float(part or 0)
+    return total
+
+
 def trim_video(data: bytes, ext: str, start: str, end: str = "") -> bytes:
+    # A pre-input -ss rebases output timestamps to zero, so -to would be measured
+    # from the cut point and produce a clip of length `end` instead of
+    # `end - start`. Convert the range to an explicit duration instead.
     pre = ["-ss", start]
     args = []
     if end:
-        args += ["-to", end]
+        duration = parse_timestamp(end) - parse_timestamp(start)
+        if duration <= 0:
+            raise ValueError("End time must be after start time")
+        args += ["-t", f"{duration:.3f}"]
     args += ["-c", "copy"]
     return run_ffmpeg(data, f".{ext}", f".{ext}", args, timeout=300, pre_input_args=pre)
 
@@ -848,7 +1008,23 @@ def extract_zip(data: bytes) -> list[tuple[str, bytes]]:
     """Extract ZIP. Returns list of (filename, data) tuples."""
     zf = zipfile.ZipFile(io.BytesIO(data))
     members = [m for m in zf.namelist() if not m.endswith("/")]
-    return [(Path(m).name, zf.read(m)) for m in members]
+    results = []
+    used = set()
+    for m in members:
+        # Keep the directory structure. Collapsing to the basename made
+        # "a/config.json" and "b/config.json" collide and lose a file.
+        parts = [p for p in Path(m.replace("\\", "/")).parts
+                 if p not in ("", ".", "..", "/")]
+        name = "/".join(parts) or Path(m).name
+        if name in used:
+            stem, dot, suffix = name.rpartition(".")
+            n = 2
+            while name in used:
+                name = f"{stem}_{n}{dot}{suffix}" if dot else f"{name}_{n}"
+                n += 1
+        used.add(name)
+        results.append((name, zf.read(m)))
+    return results
 
 
 # ── Additional PDF Tools ──
@@ -890,47 +1066,19 @@ def number_pdf_pages(stream: BinaryIO, start: int = 1,
         w = float(box.width)
         h = float(box.height)
 
-        stamp_img = Image.new("RGBA", (int(w), int(h)), (255, 255, 255, 0))
-        draw = ImageDraw.Draw(stamp_img)
-
-        font = None
-        for fp in [
-            "/System/Library/Fonts/Helvetica.ttc",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-        ]:
-            try:
-                font = ImageFont.truetype(fp, font_size)
-                break
-            except Exception:
-                continue
-        if font is None:
-            font = ImageFont.load_default()
-
         text = str(page_num)
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw = bbox[2] - bbox[0]
+        tw = _helvetica_width(text, font_size)
+        y = 28.0  # from the bottom edge, in PDF user space
 
-        if position == "bottom-center":
-            x, y = (w - tw) / 2, h - 36
-        elif position == "bottom-right":
-            x, y = w - tw - 40, h - 36
+        if position == "bottom-right":
+            x = w - tw - 40
         elif position == "bottom-left":
-            x, y = 40, h - 36
-        else:
-            x, y = (w - tw) / 2, h - 36
+            x = 40.0
+        else:  # bottom-center
+            x = (w - tw) / 2
 
-        draw.text((x, y), text, fill=(0, 0, 0, 200), font=font)
-
-        stamp_rgb = Image.new("RGB", stamp_img.size, (255, 255, 255))
-        stamp_rgb.paste(stamp_img, mask=stamp_img.split()[3])
-        stamp_buf = io.BytesIO()
-        stamp_rgb.save(stamp_buf, "PDF")
-        stamp_buf.seek(0)
-        stamp_page = PdfReader(stamp_buf).pages[0]
-
-        page.merge_page(stamp_page)
+        overlay = _text_overlay_pdf(w, h, [(x, y, float(font_size), text, 0.0, 1.0)])
+        page.merge_page(PdfReader(io.BytesIO(overlay)).pages[0])
         writer.add_page(page)
 
     buf = io.BytesIO()
@@ -1003,7 +1151,10 @@ def change_pitch(data: bytes, ext: str, semitones: float) -> bytes:
         raise ValueError("Semitones must be between -12 and 12")
     semitone_ratio = 2 ** (semitones / 12)
     tempo_correction = 1 / semitone_ratio
-    af = f"asetrate=44100*{semitone_ratio:.6f},atempo={tempo_correction:.6f}"
+    # asetrate needs the real sample rate. Resample to a known rate first so the
+    # shift is correct for 48 kHz sources, then restore it after the tempo fix.
+    af = (f"aresample=44100,asetrate=44100*{semitone_ratio:.6f},"
+          f"atempo={tempo_correction:.6f},aresample=44100")
     return run_ffmpeg(data, f".{ext}", f".{ext}",
                       ["-map", "0:a", "-af", af])
 
@@ -1035,7 +1186,13 @@ def audio_fade(data: bytes, ext: str, fade_in: float = 0,
     filters = []
     if fade_in > 0:
         filters.append(f"afade=t=in:st=0:d={fade_in}")
-    if fade_out > 0 and duration > 0:
+    if fade_out > 0:
+        # A fade-out needs the total length. Callers often omit it, and silently
+        # dropping the fade would report success without applying it.
+        if duration <= 0:
+            duration = probe_duration(data, ext)
+        if duration <= 0:
+            raise ValueError("Could not determine audio length for the fade-out")
         fade_start = max(0, duration - fade_out)
         filters.append(f"afade=t=out:st={fade_start}:d={fade_out}")
     if not filters:
@@ -1052,6 +1209,11 @@ def crop_video(data: bytes, ext: str, width: int, height: int,
     width/height: output dimensions in pixels.
     x/y: top-left corner offset of the crop area.
     """
+    # h264 rejects odd dimensions, so round the crop box down to even.
+    width -= width % 2
+    height -= height % 2
+    if width <= 0 or height <= 0:
+        raise ValueError("Crop width and height must be at least 2 pixels")
     vf = f"crop={width}:{height}:{x}:{y}"
     return run_ffmpeg(data, f".{ext}", f".{ext}",
                       ["-vf", vf, "-c:a", "copy"], timeout=300)
@@ -1081,10 +1243,13 @@ def resize_video(data: bytes, ext: str, width: int, height: int = -1) -> bytes:
     """Resize video to specified dimensions.
 
     width/height: target dimensions. Use -1 for either to auto-calculate
-    based on aspect ratio. Both values are rounded to nearest even number
-    by the scale filter.
+    based on aspect ratio.
     """
-    vf = f"scale={width}:{height}"
+    # -2 keeps the auto-computed side even. h264 rejects odd dimensions, and a
+    # -1 side lands on an odd number for most non-16:9 inputs.
+    w = width if width <= 0 else width - (width % 2)
+    h = height if height <= 0 else height - (height % 2)
+    vf = f"scale={w if w > 0 else -2}:{h if h > 0 else -2}"
     return run_ffmpeg(data, f".{ext}", f".{ext}",
                       ["-vf", vf, "-c:a", "copy"], timeout=300)
 
@@ -1177,11 +1342,18 @@ def burn_subtitles(video_data: bytes, video_ext: str, srt_data: bytes) -> bytes:
         Path(video_path).write_bytes(video_data)
         Path(srt_path).write_bytes(srt_data)
 
+        exe = ffmpeg_exe_with_filter("subtitles")
+        if not exe:
+            raise RuntimeError(
+                "This ffmpeg build cannot burn in subtitles. Install an ffmpeg "
+                "built with libass, then try again."
+            )
+
         # Escape special characters in path for ffmpeg subtitles filter
         escaped_srt = srt_path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
         cmd = [
-            _ffmpeg_exe(), "-y",
+            exe, "-y",
             "-i", video_path,
             "-vf", f"subtitles={escaped_srt}",
             "-c:a", "copy",
@@ -1189,7 +1361,9 @@ def burn_subtitles(video_data: bytes, video_ext: str, srt_data: bytes) -> bytes:
         ]
         result = subprocess.run(cmd, capture_output=True, timeout=300)
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
+            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            logger.error("burn_subtitles failed: %s", stderr[-2000:])
+            raise RuntimeError(_friendly_ffmpeg_error(stderr))
 
         return Path(out_path).read_bytes()
     finally:

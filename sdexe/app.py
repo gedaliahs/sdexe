@@ -10,6 +10,7 @@ import subprocess
 import zipfile
 import atexit
 from pathlib import Path
+from datetime import datetime
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from flask import Flask, render_template, request, jsonify, send_file, Response
@@ -49,15 +50,25 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB upload limit
 
 
+_LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1", "[::1]")
+
+
 @app.before_request
 def csrf_check():
+    # Reject a Host that is not loopback. Without this, any website the user
+    # visits can point its own domain at 127.0.0.1 (DNS rebinding) and read
+    # local endpoints such as the download history and configured paths.
+    host = (request.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]")
+    if host and host not in ("127.0.0.1", "localhost", "::1"):
+        return jsonify({"error": "Forbidden"}), 403
+
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return
     origin = request.headers.get("Origin") or ""
     if origin:
         from urllib.parse import urlparse as _urlparse
         h = _urlparse(origin).hostname
-        if h not in ("127.0.0.1", "localhost", "[::1]"):
+        if h not in _LOCAL_HOSTS:
             return jsonify({"error": "Forbidden"}), 403
 
 
@@ -95,6 +106,21 @@ def _check_download_rate() -> bool:
             return False
         _download_timestamps.append(now)
         return True
+
+
+# yt-dlp ships date-stamped releases (2026.07.04). YouTube breaks older ones
+# within weeks, and the failure looks like a missing video rather than a stale
+# engine, so extraction errors get checked against this.
+_YTDLP_STALE_DAYS = 45
+
+def _ytdlp_is_stale() -> bool:
+    try:
+        parts = yt_dlp.version.__version__.split(".")[:3]
+        released = datetime(int(parts[0]), int(parts[1]), int(parts[2]))
+    except Exception:
+        return False
+    return (datetime.now() - released).days > _YTDLP_STALE_DAYS
+
 
 CONFIG_DIR = Path.home() / ".config" / "sdexe"
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -164,6 +190,11 @@ def cleanup_old_files(max_age_seconds=3600):
         ]
         for k in stale:
             downloads.pop(k, None)
+    # Finished transcriptions hold the full segment payload, so drop them once
+    # the client has had time to fetch the result.
+    for k, v in list(transcriptions.items()):
+        if v.get("status") in ("done", "error") and now - v.get("created", now) > max_age_seconds:
+            transcriptions.pop(k, None)
 
 
 def _validate_folder(path: str):
@@ -267,6 +298,7 @@ def settings_page():
         "ytdlp_ver": "unknown",
         "tool_count": sum(1 for r in app.url_map.iter_rules() if r.endpoint != "static"),
         "config_dir": str(CONFIG_DIR),
+        "ytdlp_stale": _ytdlp_is_stale(),
     }
     try:
         info["ytdlp_ver"] = yt_dlp.version.__version__
@@ -350,7 +382,9 @@ def open_file():
     allowed = [DOWNLOAD_DIR.resolve()]
     if output_dir:
         allowed.append(Path(output_dir).expanduser().resolve())
-    if not any(str(p).startswith(str(d)) for d in allowed):
+    # is_relative_to compares path segments. A plain string prefix would also
+    # accept a sibling directory such as "<output>-private".
+    if not any(p.is_relative_to(d) for d in allowed):
         return jsonify({"error": "Access denied"}), 403
     import sys as _sys
     if _sys.platform == "darwin":
@@ -423,19 +457,55 @@ def browse_folder():
 
 @app.route("/api/update", methods=["POST"])
 def run_update():
+    """Upgrade sdexe, then force-upgrade yt-dlp inside the same venv.
+
+    `pipx upgrade sdexe` leaves yt-dlp pinned at whatever version was resolved
+    at install time. YouTube breaks older yt-dlp releases within weeks, and the
+    failure surfaces as a false "Video unavailable", so yt-dlp gets its own
+    upgrade step.
+    """
+    outputs = []
     try:
         result = subprocess.run(
             ["pipx", "upgrade", "sdexe"],
             capture_output=True, text=True, timeout=120,
         )
-        if result.returncode == 0:
-            return jsonify({"ok": True, "output": result.stdout.strip()})
-        else:
+        if result.returncode != 0:
             return jsonify({"error": result.stderr.strip() or result.stdout.strip()}), 500
+        outputs.append(result.stdout.strip())
+
+        ytdlp = subprocess.run(
+            ["pipx", "runpip", "sdexe", "install", "-U", "yt-dlp"],
+            capture_output=True, text=True, timeout=180,
+        )
+        if ytdlp.returncode == 0:
+            outputs.append("yt-dlp updated.")
+        else:
+            outputs.append("sdexe updated, but yt-dlp could not be updated.")
+        return jsonify({"ok": True, "output": "\n".join(p for p in outputs if p)})
     except subprocess.TimeoutExpired:
         return jsonify({"error": "Update timed out"}), 504
     except FileNotFoundError:
-        return jsonify({"error": "pipx not found — install sdexe via pipx to use auto-update"}), 501
+        return jsonify({"error": "pipx not found. Install sdexe via pipx to use auto-update"}), 501
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/update-ytdlp", methods=["POST"])
+def update_ytdlp():
+    """Upgrade only yt-dlp. This is the fix for most 'Video unavailable' errors."""
+    try:
+        result = subprocess.run(
+            ["pipx", "runpip", "sdexe", "install", "-U", "yt-dlp"],
+            capture_output=True, text=True, timeout=180,
+        )
+        if result.returncode != 0:
+            return jsonify({"error": result.stderr.strip() or result.stdout.strip()}), 500
+        return jsonify({"ok": True, "output": "yt-dlp updated. Restart sdexe to use it."})
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Update timed out"}), 504
+    except FileNotFoundError:
+        return jsonify({"error": "pipx not found. Install sdexe via pipx to update yt-dlp"}), 501
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -465,6 +535,7 @@ def deps():
         "ffmpeg_bundled": bool(resolved) and resolved != system,
         "ffprobe": tools.ffprobe_available(),
         "ytdlp_version": ytdlp_ver,
+        "ytdlp_stale": _ytdlp_is_stale(),
         "whisper": whisper_ok,
         "diarize": diarize_ok,
     })
@@ -488,11 +559,18 @@ def info():
     if not url.startswith(("http://", "https://")):
         return jsonify({"error": "Only http and https URLs are supported"}), 400
 
-    # Normalise YouTube video+list URLs to pure playlist URLs
+    # Normalise YouTube video+list URLs to pure playlist URLs.
+    # Mixes (RD...), Watch Later (WL), and Liked (LL) are not viewable as
+    # standalone playlists, so for those keep the single video instead.
     parsed = urlparse(url)
     if parsed.hostname in ("www.youtube.com", "youtube.com") and "list" in parse_qs(parsed.query):
         qs = parse_qs(parsed.query)
-        url = urlunparse(parsed._replace(path="/playlist", query=urlencode({"list": qs["list"][0]})))
+        list_id = qs["list"][0]
+        if list_id.startswith(("RD", "WL", "LL")):
+            if "v" in qs:
+                url = urlunparse(parsed._replace(query=urlencode({"v": qs["v"][0]})))
+        else:
+            url = urlunparse(parsed._replace(path="/playlist", query=urlencode({"list": list_id})))
 
     ydl_opts = {
         "quiet": True,
@@ -505,13 +583,27 @@ def info():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             data = ydl.extract_info(url, download=False)
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        msg = str(e)
+        if _ytdlp_is_stale():
+            msg = ("Could not read that link. The downloader engine is out of date, "
+                   "which is the usual cause. Update it in Settings, then try again.")
+        return jsonify({"error": msg, "ytdlp_stale": _ytdlp_is_stale()}), 400
 
     entries_raw = data.get("entries")
     if entries_raw is not None:
         entries = []
+        skipped = 0
         for entry in entries_raw:
             if not entry:
+                continue
+            # Flat playlist extraction still lists members the viewer cannot
+            # fetch. Downloading one fails with "Video unavailable", so drop
+            # them here and report the count instead.
+            title_raw = entry.get("title") or ""
+            availability = entry.get("availability")
+            if title_raw in ("[Private video]", "[Deleted video]", "[Unavailable video]") or \
+                    availability in ("private", "needs_auth", "subscriber_only", "premium_only"):
+                skipped += 1
                 continue
             vid = entry.get("id", "")
             thumb = entry.get("thumbnail") or ""
@@ -536,6 +628,7 @@ def info():
             "title": data.get("title") or "Playlist",
             "uploader": data.get("uploader") or data.get("channel"),
             "count": len(entries),
+            "skipped": skipped,
             "entries": entries,
         })
 
@@ -576,7 +669,7 @@ def download():
         return jsonify({"error": "Only http and https URLs are supported"}), 400
 
     if not _check_download_rate():
-        return jsonify({"error": "Too many downloads — slow down a bit."}), 429
+        return jsonify({"error": "Too many downloads. Slow down a bit."}), 429
 
     cleanup_old_files()
 
@@ -662,7 +755,7 @@ def download():
     if fmt == "mp4":
         # Codec-agnostic: take the highest-bitrate stream at/under the chosen
         # resolution (H.264 / VP9 / AV1), merged to mp4. The [ext=mp4] filter is
-        # intentionally dropped — it made yt-dlp fall back to a low-bitrate stream
+        # intentionally dropped, it made yt-dlp fall back to a low-bitrate stream
         # (or a 360p progressive file) when an mp4-codec 1080p wasn't offered.
         if quality == "1080p":
             format_str = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
@@ -679,7 +772,7 @@ def download():
         ydl_opts = {
             "format": format_str,
             # Prefer resolution, then raw bitrate, over yt-dlp's default codec-
-            # efficiency ranking — so we get the best-looking stream, not the
+            # efficiency ranking, so we get the best-looking stream, not the
             # smallest one.
             "format_sort": ["res", "br"],
             "merge_output_format": "mp4",
@@ -808,17 +901,22 @@ def download():
             elif "private" in err_lower and "video" in err_lower:
                 friendly = "This video is private."
             elif "age" in err_lower and any(w in err_lower for w in ("restrict", "confirm", "gate")):
-                friendly = "Age-restricted — sign in to download."
-            elif "not available in your country" in err_lower or "geo" in err_lower:
+                friendly = "Age-restricted. Sign in to download."
+            elif "not available in your country" in err_lower or "geo-restricted" in err_lower:
                 friendly = "Not available in your country (geo-restricted)."
-            elif "video unavailable" in err_lower:
+            elif ("video unavailable" in err_lower or "unable to extract" in err_lower
+                    or "requested format is not available" in err_lower
+                    or "player response" in err_lower or "nsig" in err_lower):
                 friendly = "Video unavailable or deleted."
+                if _ytdlp_is_stale():
+                    friendly = ("Could not read this video. The downloader engine is out of date, "
+                                "which is the usual cause. Update it in Settings, then try again.")
             elif "copyright" in err_lower or "blocked" in err_lower:
                 friendly = "Blocked due to copyright."
             elif "429" in err or "rate limit" in err_lower:
-                friendly = "Rate limited — try again in a moment."
+                friendly = "Rate limited. Try again in a moment."
             elif "ffmpeg" in err_lower and ("not found" in err_lower or "no such file" in err_lower):
-                friendly = "ffmpeg not found — run `sdexe` once to install it."
+                friendly = "ffmpeg not found. Run `sdexe` once to install it."
             else:
                 friendly = err
             downloads[dl_id]["status"] = "error"
@@ -2189,7 +2287,12 @@ def transcribe():
     diarize = request.form.get("diarize", "false") == "true"
     hf_token = request.form.get("hf_token", "").strip()
     num_speakers_str = request.form.get("num_speakers", "").strip()
-    num_speakers = int(num_speakers_str) if num_speakers_str else None
+    try:
+        num_speakers = int(num_speakers_str) if num_speakers_str else None
+    except ValueError:
+        return jsonify({"error": "Number of speakers must be a whole number"}), 400
+    if num_speakers is not None and num_speakers < 1:
+        return jsonify({"error": "Number of speakers must be at least 1"}), 400
 
     valid_models = ("tiny", "base", "small", "medium", "large-v3")
     if model not in valid_models:
@@ -2200,9 +2303,12 @@ def transcribe():
     input_path = str(DOWNLOAD_DIR / f"{t_id}_input.{ext}")
     f.save(input_path)
 
+    # "error" is pre-created so the worker thread never resizes this dict while
+    # the SSE generator is serializing it.
     transcriptions[t_id] = {
         "progress": 0, "status": "starting",
         "detail": "Preparing audio...", "segments": None, "language": None,
+        "error": None, "created": time.time(),
     }
 
     def do_transcribe():
@@ -2381,7 +2487,7 @@ def _check_ffmpeg(console):
     if tools.ffmpeg_available():
         return
 
-    console.print("  [yellow]⚠[/yellow]  [bold]ffmpeg[/bold] not available — needed for audio/video tools.\n")
+    console.print("  [yellow]⚠[/yellow]  [bold]ffmpeg[/bold] not available, needed for audio/video tools.\n")
     if not Confirm.ask("  Install ffmpeg now?", default=True):
         console.print("  [dim]Skipping. Audio/video tools may not work.[/dim]\n")
         return
@@ -2451,6 +2557,9 @@ def _run_tray(port):
         def quit_app(icon, item):
             icon.stop()
             import os
+            # os._exit skips atexit handlers, so the temp download dir would be
+            # left behind on every quit.
+            _cleanup_on_exit()
             os._exit(0)
 
         menu = pystray.Menu(
@@ -2598,13 +2707,19 @@ def main():
         app.run(host=host, port=port, use_reloader=False)
     else:
         try:
-            import pystray  # noqa: F401 — just checking availability
+            import pystray  # noqa: F401, just checking availability
             flask_thread = threading.Thread(
                 target=lambda: app.run(host=host, port=port, use_reloader=False),
                 daemon=True,
             )
             flask_thread.start()
-            _run_tray(port)
+            # The tray fails to start on a headless session or a missing
+            # backend. Flask runs on a daemon thread, so returning here would
+            # kill the server the moment main() ends. Block instead.
+            if not _run_tray(port):
+                if not args.quiet:
+                    console.print("  [yellow]System tray unavailable, running without it.[/yellow]\n")
+                flask_thread.join()
         except ImportError:
             app.run(host=host, port=port, use_reloader=False)
 

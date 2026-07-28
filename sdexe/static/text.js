@@ -234,7 +234,7 @@ async function doHashFile() {
             const row = document.createElement("div");
             row.style.cssText = "margin-bottom: 12px;";
             row.innerHTML = `
-                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">${algo} <span style="color:var(--text-muted);">— ${esc(file.name)}</span></div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">${algo} <span style="color:var(--text-muted);">${esc(file.name)}</span></div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <code style="font-size: 0.78rem; word-break: break-all; flex: 1; padding: 6px 10px; background: var(--surface-2); border-radius: 6px;">${hex}</code>
                     <button class="btn-copy" onclick="navigator.clipboard.writeText('${hex}');this.classList.add('copied');this.innerHTML='Copied!';setTimeout(()=>{this.classList.remove('copied');this.innerHTML='Copy'},1500)">Copy</button>
@@ -644,7 +644,7 @@ function doPassword() {
     else if (entropy >= 80) strength = "Strong";
     else if (entropy >= 60) strength = "Good";
     else if (entropy >= 40) strength = "Fair";
-    document.getElementById("pw-strength").textContent = `${entropy} bits of entropy — ${strength}`;
+    document.getElementById("pw-strength").textContent = `${entropy} bits of entropy, ${strength}`;
 
     const fill = document.getElementById("pw-strength-fill");
     const pct = Math.min(100, (entropy / 128) * 100);
