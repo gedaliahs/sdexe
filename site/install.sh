@@ -77,7 +77,11 @@ ensure_brew() {
     [ -n "$TTY" ] || fail "Homebrew is missing and this shell has no terminal to ask for your password." \
         "Install it from https://brew.sh, then run this installer again."
     info "Homebrew is not installed. Installing it now (this is the official installer from brew.sh)."
-    info "It will ask for your Mac login password. Nothing is typed for you."
+    # Homebrew's non-interactive mode checks sudo with -n, which never prompts,
+    # so ask for the password ourselves first and let it find the cached auth.
+    printf '    Enter your Mac login password so Homebrew can install (nothing shows as you type).\n'
+    run_tty sudo -v || fail "Could not get admin access." \
+        "Your account must be an Administrator (System Settings -> Users & Groups)."
     NONINTERACTIVE=1 run_tty /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
         || fail "Homebrew did not install." "Try again, or install it by hand from https://brew.sh"
     load_brew
