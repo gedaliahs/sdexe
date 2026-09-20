@@ -4,14 +4,19 @@
 #   curl -fsSL https://sdexe.com/install.sh | bash
 #
 # Installs everything sdexe needs on a fresh machine, in order:
-#   macOS:  Homebrew (if missing) -> Python 3.12 -> pipx -> ffmpeg -> sdexe
-#   Linux:  python3 + pipx + ffmpeg via apt/dnf/pacman/zypper -> sdexe
+#   macOS:  Homebrew (if missing) -> Python 3.12 -> ffmpeg -> sdexe
+#   Linux:  python3 + ffmpeg via apt/dnf/pacman/zypper -> sdexe
+# sdexe lives in its own private environment at ~/.sdexe and is linked into
+# ~/.local/bin, so nothing else on the system is touched.
 # Safe to re-run: existing pieces are skipped, sdexe is upgraded.
+# Later, `sdexe update` upgrades it in place.
 
 set -euo pipefail
 
 MIN_MINOR=10          # Python 3.10+
 BREW_PY="python@3.12"
+SDEXE_HOME="$HOME/.sdexe"
+BIN_DIR="$HOME/.local/bin"
 
 # ── output helpers ────────────────────────────────────────────────────────────
 if [ -t 1 ] && [ "${TERM:-dumb}" != "dumb" ]; then
@@ -127,12 +132,6 @@ install_mac() {
         ok "Python $("$PY" -c 'import sys;print(".".join(map(str,sys.version_info[:3])))')"
     fi
 
-    step "Checking pipx"
-    if have pipx; then ok "pipx already installed"
-    else
-        brew_install pipx pipx || fail "pipx did not install." "See /tmp/sdexe-brew.log"
-    fi
-
     step "Checking ffmpeg"
     if have ffmpeg; then ok "ffmpeg already installed"
     else
@@ -146,7 +145,7 @@ SUDO=""
 need_sudo() {
     if [ "$(id -u)" = "0" ]; then SUDO=""; return; fi
     have sudo || fail "This needs root to install packages, and sudo is not available." \
-        "Install python3 (3.$MIN_MINOR+), pipx and ffmpeg with your package manager, then re-run."
+        "Install python3 (3.$MIN_MINOR+) and ffmpeg with your package manager, then re-run."
     SUDO="sudo"
     [ -n "$TTY" ] || info "sudo may need your password; run this from a terminal if it fails."
 }
@@ -162,16 +161,16 @@ install_linux() {
     step "Checking package manager"
     if have apt-get; then
         PKG=apt; PKG_CMD=(apt-get install -y)
-        PY_PKGS=(python3 python3-venv python3-pip); PIPX_PKG=pipx; FF_PKG=ffmpeg
+        PY_PKGS=(python3 python3-venv python3-pip); FF_PKG=ffmpeg
     elif have dnf; then
         PKG=dnf; PKG_CMD=(dnf install -y)
-        PY_PKGS=(python3 python3-pip); PIPX_PKG=pipx; FF_PKG=ffmpeg-free
+        PY_PKGS=(python3 python3-pip); FF_PKG=ffmpeg-free
     elif have pacman; then
         PKG=pacman; PKG_CMD=(pacman -S --noconfirm --needed)
-        PY_PKGS=(python python-pip); PIPX_PKG=python-pipx; FF_PKG=ffmpeg
+        PY_PKGS=(python python-pip); FF_PKG=ffmpeg
     elif have zypper; then
         PKG=zypper; PKG_CMD=(zypper install -y)
-        PY_PKGS=(python3 python3-pip); PIPX_PKG=python3-pipx; FF_PKG=ffmpeg
+        PY_PKGS=(python3 python3-pip); FF_PKG=ffmpeg
     else
         PKG=""; warn "No supported package manager found (apt, dnf, pacman, zypper)."
     fi
@@ -192,18 +191,9 @@ install_linux() {
             "Install a newer Python (for example via https://github.com/pyenv/pyenv), then re-run."
     fi
 
-    step "Checking pipx"
-    if have pipx || "$PY" -m pipx --version > /dev/null 2>&1; then
-        ok "pipx already installed"
-    else
-        if [ -n "$PKG" ] && pkg_install "pipx" "$PIPX_PKG"; then :
-        else
-            info "Installing pipx with pip instead..."
-            "$PY" -m pip install --user --quiet pipx 2>/dev/null \
-                || "$PY" -m pip install --user --quiet --break-system-packages pipx \
-                || fail "pipx did not install." "Try: $PY -m pip install --user pipx"
-            ok "pipx installed"
-        fi
+    # Debian/Ubuntu split venv out of python3; make sure it is there.
+    if [ "$PKG" = apt ] && ! "$PY" -m venv --help > /dev/null 2>&1; then
+        pkg_install "python3-venv" python3-venv || warn "python3-venv did not install; the next step may fail."
     fi
 
     step "Checking ffmpeg"
@@ -215,42 +205,64 @@ install_linux() {
     fi
 }
 
-# ── shared: install sdexe with pipx ───────────────────────────────────────────
-pipx_cmd() {
-    if have pipx; then pipx "$@"; else "$PY" -m pipx "$@"; fi
-}
-
+# ── shared: install sdexe into its own private environment ────────────────────
 install_sdexe() {
     step "Installing sdexe"
-    export PATH="$HOME/.local/bin:$PATH"
-    if pipx_cmd list --short 2>/dev/null | grep -q '^sdexe '; then
-        info "sdexe is already installed, upgrading to the latest version..."
-        pipx_cmd upgrade sdexe > /tmp/sdexe-pipx.log 2>&1 || fail "Upgrade failed." "See /tmp/sdexe-pipx.log"
-        # pipx upgrade leaves yt-dlp pinned; keep the downloader engine current.
-        pipx_cmd runpip sdexe install -U yt-dlp > /dev/null 2>&1 || true
-        ok "sdexe upgraded"
-    else
-        info "Downloading sdexe and its dependencies from PyPI..."
-        pipx_cmd install --python "$PY" sdexe > /tmp/sdexe-pipx.log 2>&1 || fail "sdexe did not install." "See /tmp/sdexe-pipx.log"
-        ok "sdexe installed"
-    fi
-    pipx_cmd ensurepath > /dev/null 2>&1 || true
+    local venv="$SDEXE_HOME/venv" vpy="$SDEXE_HOME/venv/bin/python"
+    mkdir -p "$SDEXE_HOME" "$BIN_DIR"
 
-    local ver
-    ver="$(sdexe --version 2>/dev/null || "$HOME/.local/bin/sdexe" --version 2>/dev/null || true)"
-    printf '\n%s%s✓ Done.%s %s\n' "$BOLD" "$GREEN" "$RESET" "${ver:+sdexe $ver is installed.}"
+    if [ -x "$vpy" ] && "$vpy" -c "import sys; sys.exit(0 if sys.version_info >= (3, $MIN_MINOR) else 1)" 2>/dev/null; then
+        info "Found existing install at $SDEXE_HOME, upgrading..."
+    else
+        [ -d "$venv" ] && rm -rf "$venv"
+        info "Creating a private Python environment at $SDEXE_HOME..."
+        "$PY" -m venv "$venv" > /tmp/sdexe-venv.log 2>&1 \
+            || fail "Could not create the environment." "See /tmp/sdexe-venv.log"
+    fi
+    "$vpy" -m pip install --quiet --upgrade pip > /dev/null 2>&1 || true
+    info "Downloading sdexe and its dependencies from PyPI..."
+    "$vpy" -m pip install --quiet --upgrade sdexe yt-dlp > /tmp/sdexe-pip.log 2>&1 \
+        || fail "sdexe did not install." "See /tmp/sdexe-pip.log"
+
+    # Expose the command. Replace whatever is there (an older link, a pipx link).
+    ln -sf "$venv/bin/sdexe" "$BIN_DIR/sdexe"
+    ok "sdexe $("$venv/bin/sdexe" --version 2>/dev/null | awk '{print $2}') installed"
+
+    # Make ~/.local/bin reachable in future shells.
+    case ":$PATH:" in
+        *":$BIN_DIR:"*) ;;
+        *)
+            local profile
+            case "$(basename "${SHELL:-/bin/zsh}")" in
+                zsh)  profile="$HOME/.zprofile" ;;
+                bash) profile="$HOME/.bash_profile"; [ "$PLATFORM" = linux ] && profile="$HOME/.bashrc" ;;
+                *)    profile="$HOME/.profile" ;;
+            esac
+            if ! grep -qs '.local/bin' "$profile" 2>/dev/null; then
+                printf '\n# sdexe (added by the sdexe installer)\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$profile"
+                info "Added $BIN_DIR to PATH in $profile"
+            fi
+            ;;
+    esac
+    export PATH="$BIN_DIR:$PATH"
+
+    if have pipx && pipx list --short 2>/dev/null | grep -q '^sdexe '; then
+        info "An older pipx copy of sdexe is no longer used. Remove it with: pipx uninstall sdexe"
+    fi
+
+    printf '\n%s%s✓ Done.%s Update any time with %ssdexe update%s\n' "$BOLD" "$GREEN" "$RESET" "$BOLD" "$RESET"
 }
 
 launch() {
     printf '\nRun %ssdexe%s from any terminal to start it. It opens in your browser at http://localhost:5001\n' "$BOLD" "$RESET"
-    if ! have sdexe && [ ! -x "$HOME/.local/bin/sdexe" ]; then return; fi
+    [ -x "$BIN_DIR/sdexe" ] || return 0
     if [ -n "$TTY" ]; then
         printf '\n%sLaunch sdexe now? [Y/n]%s ' "$BOLD" "$RESET" > "$TTY"
         local ans=""
         read -r ans < "$TTY" || ans=""
         case "$ans" in
             n|N|no|NO) printf '%sOpen a new terminal window first so the sdexe command is found.%s\n' "$DIM" "$RESET" ;;
-            *) printf '\n'; if have sdexe; then exec sdexe; else exec "$HOME/.local/bin/sdexe"; fi ;;
+            *) printf '\n'; exec "$BIN_DIR/sdexe" ;;
         esac
     else
         printf '%sOpen a new terminal window first so the sdexe command is found.%s\n' "$DIM" "$RESET"

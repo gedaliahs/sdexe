@@ -176,13 +176,13 @@ async function runUpdate() {
     const status = document.getElementById("update-status");
     btn.disabled = true;
     btn.textContent = "Updating…";
-    status.textContent = "Running pipx upgrade sdexe…";
+    status.textContent = "Downloading the latest version…";
     status.className = "settings-status";
     try {
         const res = await fetch("/api/update", { method: "POST" });
         const data = await res.json();
         if (data.ok) {
-            status.textContent = "Updated! Restart sdexe to apply.";
+            status.textContent = data.output || "Updated! Restart sdexe to apply.";
             status.className = "settings-status saved";
         } else {
             status.textContent = data.error || "Update failed";

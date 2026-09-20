@@ -3,8 +3,11 @@
 #   irm https://sdexe.com/install.ps1 | iex
 #
 # Installs everything sdexe needs on a fresh PC, in order:
-#   Python 3.12 (via winget, or python.org if winget is missing) -> pipx -> ffmpeg -> sdexe
+#   Python 3.12 (via winget, or python.org if winget is missing) -> ffmpeg -> sdexe
+# sdexe lives in its own private environment at %USERPROFILE%\.sdexe, so
+# nothing else on the system is touched.
 # Safe to re-run: existing pieces are skipped, sdexe is upgraded.
+# Later, `sdexe update` upgrades it in place.
 
 $ErrorActionPreference = "Stop"
 $MinMinor = 10
@@ -92,23 +95,6 @@ if ($py) {
     Write-Ok "Python $ver installed"
 }
 
-# ── pipx ──────────────────────────────────────────────────────────────────────
-Write-Step "Checking pipx"
-$havePipx = $false
-try { Invoke-Py $py -m pipx --version 2>$null | Out-Null; $havePipx = ($LASTEXITCODE -eq 0) } catch {}
-if ($havePipx) {
-    Write-Ok "pipx already installed"
-} else {
-    Write-Info "Installing pipx..."
-    Invoke-Py $py -m pip install --user --quiet --upgrade pipx
-    if ($LASTEXITCODE -ne 0) { Fail "pipx did not install." "Try: python -m pip install --user pipx" }
-    Write-Ok "pipx installed"
-}
-Invoke-Py $py -m pipx ensurepath 2>$null | Out-Null
-Refresh-Path
-$pipxBin = Join-Path $env:USERPROFILE ".local\bin"
-if (Test-Path $pipxBin) { $env:Path = "$pipxBin;$env:Path" }
-
 # ── ffmpeg ────────────────────────────────────────────────────────────────────
 Write-Step "Checking ffmpeg"
 if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
@@ -129,29 +115,44 @@ if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
 
 # ── sdexe ─────────────────────────────────────────────────────────────────────
 Write-Step "Installing sdexe"
-$installed = $false
-try { $list = Invoke-Py $py -m pipx list --short 2>$null; $installed = ($list -match '^sdexe ') } catch {}
-if ($installed) {
-    Write-Info "sdexe is already installed, upgrading to the latest version..."
-    Invoke-Py $py -m pipx upgrade sdexe | Out-Null
-    if ($LASTEXITCODE -ne 0) { Fail "Upgrade failed." "Try: pipx upgrade sdexe" }
-    # pipx upgrade leaves yt-dlp pinned; keep the downloader engine current.
-    Invoke-Py $py -m pipx runpip sdexe install -U yt-dlp 2>$null | Out-Null
-    Write-Ok "sdexe upgraded"
-} else {
-    Write-Info "Downloading sdexe and its dependencies from PyPI..."
-    Invoke-Py $py -m pipx install sdexe | Out-Null
-    if ($LASTEXITCODE -ne 0) { Fail "sdexe did not install." "Try: pipx install sdexe" }
-    Write-Ok "sdexe installed"
-}
-Refresh-Path
-if (Test-Path $pipxBin) { $env:Path = "$pipxBin;$env:Path" }
+$home_ = Join-Path $env:USERPROFILE ".sdexe"
+$venv  = Join-Path $home_ "venv"
+$vpy   = Join-Path $venv "Scripts\python.exe"
+$bin   = Join-Path $home_ "bin"
+New-Item -ItemType Directory -Force -Path $home_, $bin | Out-Null
 
-$sdexe = Get-Command sdexe -ErrorAction SilentlyContinue
+$haveVenv = $false
+if (Test-Path $vpy) { $haveVenv = (Test-PythonOk $vpy) }
+if ($haveVenv) {
+    Write-Info "Found existing install at $home_, upgrading..."
+} else {
+    if (Test-Path $venv) { Remove-Item -Recurse -Force $venv }
+    Write-Info "Creating a private Python environment at $home_..."
+    Invoke-Py $py -m venv $venv
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $vpy)) { Fail "Could not create the environment." "Try: python -m venv $venv" }
+}
+& $vpy -m pip install --quiet --upgrade pip 2>$null | Out-Null
+Write-Info "Downloading sdexe and its dependencies from PyPI..."
+& $vpy -m pip install --quiet --upgrade sdexe yt-dlp
+if ($LASTEXITCODE -ne 0) { Fail "sdexe did not install." "Try: $vpy -m pip install --upgrade sdexe" }
+
+# A tiny launcher in ~\.sdexe\bin so only 'sdexe' lands on PATH, not the venv's python.
+$launcher = Join-Path $bin "sdexe.cmd"
+"@echo off`r`n`"$venv\Scripts\sdexe.exe`" %*" | Set-Content -Path $launcher -Encoding ASCII
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if (($userPath -split ";") -notcontains $bin) {
+    [Environment]::SetEnvironmentVariable("Path", (($userPath.TrimEnd(";")) + ";" + $bin), "User")
+    Write-Info "Added $bin to your PATH"
+}
+$env:Path = "$bin;$env:Path"
+$ver = & "$venv\Scripts\sdexe.exe" --version 2>$null
+Write-Ok "$ver installed"
+
 Write-Host ""
-Write-Host "+ Done." -ForegroundColor Green
+Write-Host "+ Done. Update any time with: sdexe update" -ForegroundColor Green
 Write-Host ""
 Write-Host "Run sdexe from any terminal to start it. It opens in your browser at http://localhost:5001"
+$sdexe = Get-Command sdexe -ErrorAction SilentlyContinue
 if (-not $sdexe) {
     Write-Host "Open a new PowerShell window first so the sdexe command is found." -ForegroundColor DarkGray
     exit 0

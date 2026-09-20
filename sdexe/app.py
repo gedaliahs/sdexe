@@ -537,59 +537,65 @@ def browse_folder():
         return jsonify({"error": str(e)}), 500
 
 
+def _pip():
+    """pip for whatever environment sdexe is running in (the installer's
+    private venv at ~/.sdexe, a pipx venv, or any other venv)."""
+    import sys
+    return [sys.executable, "-m", "pip"]
+
+
+def _pip_install(*pkgs, timeout=300):
+    """Upgrade packages into sdexe's own environment. Returns (ok, output)."""
+    import sys
+    cmd = _pip() + ["install", "--upgrade", "--no-warn-script-location", "-q"]
+    # Outside a venv, pip needs --user (and Homebrew/Debian Python refuses
+    # even that without the override flag).
+    if sys.prefix == sys.base_prefix:
+        cmd += ["--user", "--break-system-packages"]
+    cmd += list(pkgs)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, "Update timed out"
+    except FileNotFoundError:
+        return False, "pip is not available in this Python environment"
+    out = (r.stdout + "\n" + r.stderr).strip()
+    return r.returncode == 0, out
+
+
+def self_update(engine_only=False):
+    """Upgrade sdexe (and always yt-dlp, which YouTube breaks every few weeks).
+
+    Returns (ok, message). Used by `sdexe update` and the Settings page.
+    """
+    if engine_only:
+        ok, out = _pip_install("yt-dlp")
+        return ok, ("Downloader engine updated. Restart sdexe to use it." if ok else out)
+    ok, out = _pip_install("sdexe", "yt-dlp")
+    if not ok:
+        return False, out or "Update failed"
+    try:
+        from importlib.metadata import version as _v
+        new_ver = subprocess.run(_pip() + ["show", "sdexe"], capture_output=True, text=True, timeout=30).stdout
+        new_ver = next((l.split(":", 1)[1].strip() for l in new_ver.splitlines() if l.lower().startswith("version:")), "")
+    except Exception:
+        new_ver = ""
+    if new_ver and new_ver == __version__:
+        return True, f"Already on the latest version ({__version__}). Downloader engine refreshed."
+    return True, f"Updated to sdexe {new_ver or 'latest'}. Restart sdexe to apply."
+
+
 @app.route("/api/update", methods=["POST"])
 def run_update():
-    """Upgrade sdexe, then force-upgrade yt-dlp inside the same venv.
-
-    `pipx upgrade sdexe` leaves yt-dlp pinned at whatever version was resolved
-    at install time. YouTube breaks older yt-dlp releases within weeks, and the
-    failure surfaces as a false "Video unavailable", so yt-dlp gets its own
-    upgrade step.
-    """
-    outputs = []
-    try:
-        result = subprocess.run(
-            ["pipx", "upgrade", "sdexe"],
-            capture_output=True, text=True, timeout=120,
-        )
-        if result.returncode != 0:
-            return jsonify({"error": result.stderr.strip() or result.stdout.strip()}), 500
-        outputs.append(result.stdout.strip())
-
-        ytdlp = subprocess.run(
-            ["pipx", "runpip", "sdexe", "install", "-U", "yt-dlp"],
-            capture_output=True, text=True, timeout=180,
-        )
-        if ytdlp.returncode == 0:
-            outputs.append("yt-dlp updated.")
-        else:
-            outputs.append("sdexe updated, but yt-dlp could not be updated.")
-        return jsonify({"ok": True, "output": "\n".join(p for p in outputs if p)})
-    except subprocess.TimeoutExpired:
-        return jsonify({"error": "Update timed out"}), 504
-    except FileNotFoundError:
-        return jsonify({"error": "pipx not found. Install sdexe via pipx to use auto-update"}), 501
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    ok, msg = self_update()
+    return (jsonify({"ok": True, "output": msg}), 200) if ok else (jsonify({"error": msg}), 500)
 
 
 @app.route("/api/update-ytdlp", methods=["POST"])
 def update_ytdlp():
     """Upgrade only yt-dlp. This is the fix for most 'Video unavailable' errors."""
-    try:
-        result = subprocess.run(
-            ["pipx", "runpip", "sdexe", "install", "-U", "yt-dlp"],
-            capture_output=True, text=True, timeout=180,
-        )
-        if result.returncode != 0:
-            return jsonify({"error": result.stderr.strip() or result.stdout.strip()}), 500
-        return jsonify({"ok": True, "output": "yt-dlp updated. Restart sdexe to use it."})
-    except subprocess.TimeoutExpired:
-        return jsonify({"error": "Update timed out"}), 504
-    except FileNotFoundError:
-        return jsonify({"error": "pipx not found. Install sdexe via pipx to update yt-dlp"}), 501
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    ok, msg = self_update(engine_only=True)
+    return (jsonify({"ok": True, "output": msg}), 200) if ok else (jsonify({"error": msg}), 500)
 
 
 @app.route("/api/install-ffmpeg", methods=["POST"])
@@ -2603,7 +2609,7 @@ def transcribe_export():
 # ── Startup helpers ──
 
 def _install_transcribe_deps():
-    """Install transcription dependencies. Detects pipx vs pip."""
+    """Install transcription dependencies into sdexe's own environment."""
     import shutil
     import sys
     from rich.console import Console
@@ -2618,10 +2624,7 @@ def _install_transcribe_deps():
 
     console.print(f"\n  Installing transcription support ({', '.join(deps)})...\n")
 
-    if shutil.which("pipx"):
-        cmd = ["pipx", "inject", "sdexe"] + deps
-    else:
-        cmd = [sys.executable, "-m", "pip", "install"] + deps
+    cmd = [sys.executable, "-m", "pip", "install"] + deps
 
     console.print(f"  [dim]Running: {' '.join(cmd)}[/dim]\n")
     result = subprocess.run(cmd)
@@ -2702,7 +2705,7 @@ def _check_for_updates(console):
         if latest != __version__:
             console.print(
                 f"  [yellow]↑[/yellow]  Update available: [dim]v{__version__}[/dim] → "
-                f"[bold]v{latest}[/bold]  [dim]Run:[/dim] [cyan]pipx upgrade sdexe[/cyan]\n"
+                f"[bold]v{latest}[/bold]  [dim]Run:[/dim] [cyan]sdexe update[/cyan]\n"
             )
     except Exception:
         pass
@@ -2838,13 +2841,20 @@ def main():
     parser.add_argument("--no-tray", action="store_true", help="skip system tray, run Flask on main thread")
     parser.add_argument("-q", "--quiet", action="store_true", help="suppress startup banner")
     parser.add_argument("--open", metavar="PAGE", help="open specific page (e.g. pdf, images, text)")
-    parser.add_argument("command", nargs="?", help="subcommand (e.g. 'transcribe' to install transcription deps)")
+    parser.add_argument("--update", action="store_true", help="same as 'sdexe update'")
+    parser.add_argument("command", nargs="?", help="'update' to upgrade sdexe, 'transcribe' to install transcription deps")
 
     args = parser.parse_args()
 
     if args.command == "transcribe":
         _install_transcribe_deps()
         return
+    if args.command == "update" or args.update:
+        console = Console()
+        with console.status("  Updating sdexe and its downloader engine...", spinner="dots"):
+            ok, msg = self_update()
+        console.print(f"  [green]✓[/green]  {msg}\n" if ok else f"  [red]✗[/red]  {msg}\n")
+        sys.exit(0 if ok else 1)
 
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
