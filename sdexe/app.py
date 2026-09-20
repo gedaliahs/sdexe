@@ -547,7 +547,9 @@ def _pip():
 def _pip_install(*pkgs, timeout=300):
     """Upgrade packages into sdexe's own environment. Returns (ok, output)."""
     import sys
-    cmd = _pip() + ["install", "--upgrade", "--no-warn-script-location", "-q"]
+    # --no-cache-dir: pip otherwise reuses a cached index page for a while
+    # and misses a release published minutes ago.
+    cmd = _pip() + ["install", "--upgrade", "--no-cache-dir", "--no-warn-script-location", "-q"]
     # Outside a venv, pip needs --user (and Homebrew/Debian Python refuses
     # even that without the override flag).
     if sys.prefix == sys.base_prefix:
@@ -571,18 +573,35 @@ def self_update(engine_only=False):
     if engine_only:
         ok, out = _pip_install("yt-dlp")
         return ok, ("Downloader engine updated. Restart sdexe to use it." if ok else out)
+
+    latest = _latest_pypi_version()
     ok, out = _pip_install("sdexe", "yt-dlp")
     if not ok:
         return False, out or "Update failed"
-    try:
-        from importlib.metadata import version as _v
-        new_ver = subprocess.run(_pip() + ["show", "sdexe"], capture_output=True, text=True, timeout=30).stdout
-        new_ver = next((l.split(":", 1)[1].strip() for l in new_ver.splitlines() if l.lower().startswith("version:")), "")
-    except Exception:
-        new_ver = ""
-    if new_ver and new_ver == __version__:
+    new_ver = _installed_version()
+    if latest and new_ver and new_ver != latest:
+        return True, (f"sdexe {latest} was just published and PyPI is still propagating it. "
+                      f"You have {new_ver}. Try again in a minute.")
+    if new_ver == __version__:
         return True, f"Already on the latest version ({__version__}). Downloader engine refreshed."
     return True, f"Updated to sdexe {new_ver or 'latest'}. Restart sdexe to apply."
+
+
+def _latest_pypi_version():
+    import urllib.request
+    try:
+        with urllib.request.urlopen("https://pypi.org/pypi/sdexe/json", timeout=5) as r:
+            return json.loads(r.read())["info"]["version"]
+    except Exception:
+        return ""
+
+
+def _installed_version():
+    try:
+        out = subprocess.run(_pip() + ["show", "sdexe"], capture_output=True, text=True, timeout=30).stdout
+        return next((l.split(":", 1)[1].strip() for l in out.splitlines() if l.lower().startswith("version:")), "")
+    except Exception:
+        return ""
 
 
 @app.route("/api/update", methods=["POST"])

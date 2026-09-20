@@ -143,7 +143,7 @@
         .os-tab.active svg { opacity: 1; color: var(--accent); }
         .detected { font-size: .72rem; color: var(--text-3); white-space: nowrap; }
 
-        .os-panel { display: none; padding: 28px 32px 24px; }
+        .os-panel { display: none; padding: 26px 32px 22px; }
         .os-panel.active { display: block; }
 
         .quick-hint { font-size: .9rem; color: var(--text-2); margin-bottom: 12px; }
@@ -181,77 +181,8 @@
         .copy-btn:active { transform: scale(.97); }
         .copy-btn.copied { background: var(--green); }
 
-        /* What it sets up */
-        .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; }
-        .chips-label { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); margin-right: 4px; }
-        .chip {
-            display: inline-flex; align-items: center; gap: 5px;
-            font-size: .76rem; font-weight: 500; color: var(--text-2);
-            background: var(--surface-2); border: 1px solid var(--border);
-            padding: 3px 9px 3px 7px; border-radius: 999px;
-        }
-        .chip svg { color: var(--green); }
-
-        .quick-facts { list-style: none; margin-top: 16px; display: flex; flex-direction: column; gap: 5px; }
-        .quick-facts li { font-size: .8rem; color: var(--text-3); padding-left: 14px; position: relative; line-height: 1.5; }
-        .quick-facts code.inl { font-family: "JetBrains Mono", monospace; font-size: .9em; background: var(--surface-2); border: 1px solid var(--border); padding: 0 5px; border-radius: 4px; color: var(--text-2); }
-        .quick-facts li::before { content: ""; position: absolute; left: 0; top: 9px; width: 4px; height: 4px; border-radius: 50%; background: var(--border); }
-
-        /* Manual fallback (collapsed) */
-        .steps { display: flex; flex-direction: column; gap: 20px; position: relative; }
-        .steps::before {
-            content: ''; position: absolute; left: 13px; top: 28px; bottom: 14px; width: 1px;
-            background: linear-gradient(to bottom, var(--border), transparent);
-        }
-        .step { display: flex; gap: 16px; align-items: flex-start; }
-        .manual-steps { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 14px; }
-        .manual-steps summary { cursor: pointer; font-size: .8rem; font-weight: 600; color: var(--text-3); list-style: none; display: flex; align-items: center; gap: 7px; }
-        .manual-steps summary::-webkit-details-marker { display: none; }
-        .manual-steps summary::before { content: ""; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; margin-left: 2px; }
-        .manual-steps[open] summary::before { transform: rotate(45deg); }
-        .manual-steps summary:hover { color: var(--text); }
-        .manual-steps > .steps { margin-top: 18px; }
-        .step-num {
-            flex-shrink: 0; width: 28px; height: 28px;
-            background: #fff; color: var(--accent);
-            border: 1.5px solid var(--accent); border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: .72rem; font-weight: 700;
-            position: relative; z-index: 1;
-            box-shadow: 0 0 0 3px rgba(59,130,246,.08);
-        }
-        .step-body { flex: 1; }
-        .step-body p { font-size: .875rem; color: var(--text-2); line-height: 1.55; margin-bottom: 8px; }
-        .step-body p:last-child { margin-bottom: 0; }
-        .step-body a { color: var(--accent); text-decoration: none; }
-        .step-body a:hover { text-decoration: underline; }
-
-        .cmd-row {
-            display: flex; align-items: center; gap: 10px;
-            background: #1a1a1a; color: #d4d4d4;
-            padding: 12px 16px; border-radius: 8px;
-            font-family: "JetBrains Mono", monospace;
-            font-size: .83rem; cursor: pointer; border: none;
-            transition: background .15s; width: 100%; text-align: left;
-        }
-        .cmd-row:hover { background: #262626; }
-        .cmd-row .prompt { color: var(--accent); user-select: none; margin-right: 2px; }
-        .cmd-copy-icon { color: #555; transition: color .15s; flex-shrink: 0; margin-left: auto; }
-        .cmd-row:hover .cmd-copy-icon { color: #999; }
-        .cmd-row.copied .cmd-copy-icon { color: var(--green); }
-
-        .install-note {
-            display: flex; align-items: center; gap: 10px;
-            padding: 13px 32px;
-            border-top: 1px solid var(--border);
-            background: var(--surface-2);
-            font-size: .78rem; color: var(--text-3); line-height: 1.5;
-        }
-        .note-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; box-shadow: 0 0 0 3px rgba(16,185,129,.15); }
-        .install-note code {
-            font-family: "JetBrains Mono", monospace; font-size: .8em;
-            background: var(--border); padding: 1px 5px; border-radius: 4px; color: var(--text-2);
-        }
+        .quick-after { margin-top: 12px; font-size: .84rem; color: var(--text-3); }
+        .quick-after code.inl, .quick-facts code.inl { font-family: "JetBrains Mono", monospace; font-size: .9em; background: var(--surface-2); border: 1px solid var(--border); padding: 0 5px; border-radius: 4px; color: var(--text-2); }
 
         @media (max-width: 680px) {
             .container { padding: 0 20px; }
@@ -262,7 +193,6 @@
             .detected { display: none; }
             .cmd-box { font-size: .78rem; padding: 12px; gap: 8px; }
             .copy-btn span { display: none; }
-            .install-note { padding: 12px 18px; }
         }
     </style>
 </head>
@@ -316,47 +246,7 @@
                         <span>Copy</span>
                     </button>
                 </div>
-                <div class="chips"><span class="chips-label">Sets up</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Homebrew</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Python 3.12</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>ffmpeg</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>sdexe</span></div>
-                <ul class="quick-facts">
-                    <li>Asks for your password once if something needs installing</li>
-                    <li>A few minutes on a fresh machine, then it offers to launch</li>
-                    <li>Keeps everything in one private folder. Update later with <code class="inl">sdexe update</code></li>
-                </ul>
-                <details class="manual-steps">
-                    <summary>Prefer to install by hand?</summary>
-                <div class="steps">
-                    <div class="step">
-                        <div class="step-num">1</div>
-                        <div class="step-body">
-                            <p>Install Python 3.10 or later. With <a href="https://brew.sh" target="_blank" rel="noopener">Homebrew</a>:</p>
-                            <button class="cmd-row" onclick="copyCmd(this, 'brew install python ffmpeg')">
-                                <span class="prompt">$</span> <span>brew install python ffmpeg</span>
-                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="step">
-                        <div class="step-num">2</div>
-                        <div class="step-body">
-                            <p>Put sdexe in its own environment and install it:</p>
-                            <button class="cmd-row" onclick="copyCmd(this, 'python3 -m venv ~/.sdexe/venv && ~/.sdexe/venv/bin/pip install sdexe')">
-                                <span class="prompt">$</span> <span>python3 -m venv ~/.sdexe/venv && ~/.sdexe/venv/bin/pip install sdexe</span>
-                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="step">
-                        <div class="step-num">3</div>
-                        <div class="step-body">
-                            <p>Launch it. Add <code style="font-family:JetBrains Mono,monospace;font-size:.8em;background:var(--surface-2);padding:1px 5px;border-radius:4px;">~/.sdexe/venv/bin</code> to your PATH to just type <strong>sdexe</strong>.</p>
-                            <button class="cmd-row" onclick="copyCmd(this, '~/.sdexe/venv/bin/sdexe')">
-                                <span class="prompt">$</span> <span>~/.sdexe/venv/bin/sdexe</span>
-                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                </details>
+                <p class="quick-after">Installs Homebrew, Python, ffmpeg and sdexe. Then just run <code class="inl">sdexe</code>.</p>
             </div>
 
             <div class="os-panel" id="panel-win">
@@ -369,43 +259,7 @@
                         <span>Copy</span>
                     </button>
                 </div>
-                <div class="chips"><span class="chips-label">Sets up</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Python 3.12</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>ffmpeg</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>sdexe</span></div>
-                <ul class="quick-facts">
-                    <li>Asks for your password once if something needs installing</li>
-                    <li>A few minutes on a fresh machine, then it offers to launch</li>
-                    <li>Keeps everything in one private folder. Update later with <code class="inl">sdexe update</code></li>
-                </ul>
-                <details class="manual-steps">
-                    <summary>Prefer to install by hand?</summary>
-                <div class="steps">
-                    <div class="step">
-                        <div class="step-num">1</div>
-                        <div class="step-body">
-                            <p>Download and install <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3.10 or later</a>. Tick <strong>"Add python.exe to PATH"</strong> in the installer.</p>
-                        </div>
-                    </div>
-                    <div class="step">
-                        <div class="step-num">2</div>
-                        <div class="step-body">
-                            <p>In PowerShell, put sdexe in its own environment and install it:</p>
-                            <button class="cmd-row" onclick="copyCmd(this, 'py -m venv $HOME\\.sdexe\\venv; &amp; $HOME\\.sdexe\\venv\\Scripts\\pip install sdexe')">
-                                <span class="prompt">&gt;</span> <span>py -m venv $HOME\\.sdexe\\venv; &amp; $HOME\\.sdexe\\venv\\Scripts\\pip install sdexe</span>
-                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="step">
-                        <div class="step-num">3</div>
-                        <div class="step-body">
-                            <p>Launch it:</p>
-                            <button class="cmd-row" onclick="copyCmd(this, '&amp; $HOME\\.sdexe\\venv\\Scripts\\sdexe')">
-                                <span class="prompt">&gt;</span> <span>&amp; $HOME\\.sdexe\\venv\\Scripts\\sdexe</span>
-                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                </details>
+                <p class="quick-after">Installs Python, ffmpeg and sdexe. Then just run <code class="inl">sdexe</code>.</p>
             </div>
 
             <div class="os-panel" id="panel-linux">
@@ -418,52 +272,7 @@
                         <span>Copy</span>
                     </button>
                 </div>
-                <div class="chips"><span class="chips-label">Sets up</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Python 3</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>ffmpeg</span><span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>sdexe</span></div>
-                <ul class="quick-facts">
-                    <li>Asks for your password once if something needs installing</li>
-                    <li>A few minutes on a fresh machine, then it offers to launch</li>
-                    <li>Keeps everything in one private folder. Update later with <code class="inl">sdexe update</code></li>
-                </ul>
-                <details class="manual-steps">
-                    <summary>Prefer to install by hand?</summary>
-                <div class="steps">
-                    <div class="step">
-                        <div class="step-num">1</div>
-                        <div class="step-body">
-                            <p>Install Python 3.10+ with venv support. On Ubuntu or Debian:</p>
-                            <button class="cmd-row" onclick="copyCmd(this, 'sudo apt install python3 python3-venv ffmpeg')">
-                                <span class="prompt">$</span> <span>sudo apt install python3 python3-venv ffmpeg</span>
-                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="step">
-                        <div class="step-num">2</div>
-                        <div class="step-body">
-                            <p>Put sdexe in its own environment and install it:</p>
-                            <button class="cmd-row" onclick="copyCmd(this, 'python3 -m venv ~/.sdexe/venv && ~/.sdexe/venv/bin/pip install sdexe')">
-                                <span class="prompt">$</span> <span>python3 -m venv ~/.sdexe/venv && ~/.sdexe/venv/bin/pip install sdexe</span>
-                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="step">
-                        <div class="step-num">3</div>
-                        <div class="step-body">
-                            <p>Launch it:</p>
-                            <button class="cmd-row" onclick="copyCmd(this, '~/.sdexe/venv/bin/sdexe')">
-                                <span class="prompt">$</span> <span>~/.sdexe/venv/bin/sdexe</span>
-                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                </details>
-            </div>
-
-            <div class="install-note">
-                <span class="note-dot"></span>
-                Then type <code>sdexe</code> any time to start it. It opens at <code>localhost:5001</code> and runs entirely on your machine.
+                <p class="quick-after">Installs Python, ffmpeg and sdexe. Then just run <code class="inl">sdexe</code>.</p>
             </div>
         </div>
 
@@ -534,18 +343,6 @@ function cycleHero() {
 }
 setInterval(cycleHero, 2600);
 
-function copyCmd(btn, text) {
-    navigator.clipboard.writeText(text).then(() => {
-        btn.classList.add('copied');
-        const icon = btn.querySelector('.cmd-copy-icon');
-        const orig = icon.outerHTML;
-        icon.outerHTML = `<svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-        setTimeout(() => {
-            btn.classList.remove('copied');
-            btn.querySelector('.cmd-copy-icon').outerHTML = orig;
-        }, 1600);
-    }).catch(() => {});
-}
 </script>
 
 </body>
