@@ -291,8 +291,10 @@ def compress_pdf(stream: BinaryIO) -> bytes:
     reader = PdfReader(stream)
     writer = PdfWriter()
     for page in reader.pages:
-        page.compress_content_streams()
         writer.add_page(page)
+    # pypdf >= 5 only compresses pages that already belong to a writer.
+    for page in writer.pages:
+        page.compress_content_streams()
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()

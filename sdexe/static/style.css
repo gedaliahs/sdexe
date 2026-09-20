@@ -78,7 +78,7 @@ nav {
     transition: color .15s, background .15s;
     white-space: nowrap;
 }
-.nav-link:hover { color: #ffffff; background: var(--nav-hover); }
+.nav-link:hover { color: #ffffff; background: rgba(255,255,255,.06); }
 .nav-link.active { color: #ffffff; }
 
 /* Nav Group (dropdown) */
@@ -91,7 +91,7 @@ nav {
     transition: color .15s, background .15s;
 }
 .nav-group-trigger:hover,
-.nav-group:hover .nav-group-trigger { color: #ffffff; background: var(--nav-hover); }
+.nav-group:hover .nav-group-trigger { color: #ffffff; background: rgba(255,255,255,.06); }
 .nav-group.active .nav-group-trigger { color: #ffffff; }
 .nav-group-trigger svg { transition: transform .2s; flex-shrink: 0; }
 .nav-group:hover .nav-group-trigger svg { transform: rotate(180deg); }
@@ -102,11 +102,12 @@ nav {
     position: absolute;
     top: 100%;
     left: 0;
-    background: var(--nav-hover);
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0,0,0,.25);
-    padding: 8px;
+    background: var(--nav-bg);
+    border: 1px solid rgba(255,255,255,.1);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    padding: 6px;
     min-width: 190px;
     z-index: 300;
     animation: dropIn .15s ease-out;
