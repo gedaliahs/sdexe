@@ -7,3 +7,9 @@ dist/
 build/
 .DS_Store
 .vercel
+
+# local-only notes, never pushed
+update.md
+CLAUDE.md
+TODO.md
+sdexe-video-script.md

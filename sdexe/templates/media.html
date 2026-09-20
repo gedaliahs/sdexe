@@ -74,7 +74,15 @@
                     </div>
                 </div>
                 <div class="controls">
-                    <div class="format-pills">
+                    <div id="v-format-picker" class="format-picker" hidden>
+                        <div class="fp-tabs">
+                            <button type="button" class="fp-tab active" data-kind="video" onclick="switchFormatTab('video')">Video</button>
+                            <button type="button" class="fp-tab" data-kind="audio" onclick="switchFormatTab('audio')">Audio</button>
+                        </div>
+                        <div class="fp-head"><span>Quality</span><span>Format</span><span>Size</span><span></span></div>
+                        <div id="v-format-rows" class="fp-rows"></div>
+                    </div>
+                    <div id="v-pills-wrap" class="format-pills">
                         <div class="pill-group" data-target="v-format">
                             <span class="pill-label">Format</span>
                             <div class="pills">

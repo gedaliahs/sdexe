@@ -1658,3 +1658,38 @@ select:hover { border-color: var(--border-hover); }
     .transcript-segment-meta { flex-direction: row; gap: 10px; }
     .transcript-search input { width: 100%; }
 }
+
+/* ── Format picker (per-stream table on the media page) ── */
+.format-picker { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); }
+.fp-tabs { display: flex; border-bottom: 1px solid var(--border); }
+.fp-tab {
+    flex: 1; padding: 12px 0; background: none; border: 0; border-bottom: 2px solid transparent;
+    font: inherit; font-weight: 600; font-size: .9rem; color: var(--text-muted); cursor: pointer;
+    transition: color .15s, border-color .15s;
+}
+.fp-tab:hover { color: var(--text); }
+.fp-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.fp-head, .fp-row {
+    display: grid; grid-template-columns: 1.1fr 1fr 1.3fr auto; align-items: center; gap: 12px; padding: 0 16px;
+}
+.fp-head {
+    padding-top: 8px; padding-bottom: 8px; background: var(--surface-2);
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); font-weight: 500;
+}
+.fp-row { padding-top: 10px; padding-bottom: 10px; border-top: 1px solid var(--border); }
+.fp-row:hover { background: var(--accent-bg); }
+.fp-quality { font-weight: 700; color: var(--text); }
+.fp-fmt { color: var(--text-secondary); font-size: .85rem; }
+.fp-size { color: var(--text-muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.fp-btn {
+    padding: 8px 18px; background: var(--accent); color: #fff; border: 0; border-radius: var(--radius-md);
+    font: inherit; font-weight: 600; font-size: .82rem; cursor: pointer; white-space: nowrap;
+    transition: background .15s, transform .1s;
+}
+.fp-btn:hover { background: var(--accent-hover); }
+.fp-btn:active { transform: scale(.97); }
+.fp-btn:disabled { background: var(--surface-3); color: var(--text-muted); cursor: not-allowed; transform: none; }
+@media (max-width: 600px) {
+    .fp-head, .fp-row { grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; padding-left: 12px; padding-right: 12px; }
+    .fp-btn { padding: 7px 12px; font-size: .75rem; }
+}

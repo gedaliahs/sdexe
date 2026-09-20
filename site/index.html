@@ -158,6 +158,13 @@
             background: linear-gradient(to bottom, var(--border), transparent);
         }
         .step { display: flex; gap: 16px; align-items: flex-start; }
+        .manual-steps { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 14px; }
+        .manual-steps summary { cursor: pointer; font-size: .83rem; font-weight: 600; color: var(--text-3); list-style: none; display: flex; align-items: center; gap: 6px; }
+        .manual-steps summary::-webkit-details-marker { display: none; }
+        .manual-steps summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+        .manual-steps[open] summary::before { transform: rotate(45deg); }
+        .manual-steps summary:hover { color: var(--text); }
+        .manual-steps > .steps { margin-top: 18px; }
         .step-num {
             flex-shrink: 0;
             width: 28px; height: 28px;
@@ -303,6 +310,27 @@
 
             <!-- Mac -->
             <div class="os-panel active" id="panel-mac">
+                <div class="steps quick-steps">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <div class="step-body">
+                            <p>Open <strong>Terminal</strong> (press <kbd style="background:var(--surface-2);border:1px solid var(--border);padding:1px 5px;border-radius:4px;font-size:.8em;">Cmd Space</kbd>, type Terminal, hit Enter).</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-body">
+                            <p>Paste this and press Enter. It installs everything for you: Homebrew, Python, ffmpeg and sdexe.</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'curl -fsSL https://sdexe.com/install.sh | bash')">
+                                <span class="prompt">$</span> <span>curl -fsSL https://sdexe.com/install.sh | bash</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                            <p style="margin-top:8px;">It asks for your password once if something needs installing, then offers to launch sdexe. Takes a few minutes on a fresh machine.</p>
+                        </div>
+                    </div>
+                </div>
+                <details class="manual-steps">
+                    <summary>Prefer to install by hand?</summary>
                 <div class="steps">
                     <div class="step">
                         <div class="step-num">1</div>
@@ -343,10 +371,32 @@
                         </div>
                     </div>
                 </div>
+                </details>
             </div>
 
             <!-- Windows -->
             <div class="os-panel" id="panel-win">
+                <div class="steps quick-steps">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <div class="step-body">
+                            <p>Open <strong>PowerShell</strong> (press <kbd style="background:var(--surface-2);border:1px solid var(--border);padding:1px 5px;border-radius:4px;font-size:.8em;">Win X</kbd>, then choose Terminal or PowerShell).</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-body">
+                            <p>Paste this and press Enter. It installs everything for you: Python, ffmpeg and sdexe.</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'irm https://sdexe.com/install.ps1 | iex')">
+                                <span class="prompt">&gt;</span> <span>irm https://sdexe.com/install.ps1 | iex</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                            <p style="margin-top:8px;">It asks for your password once if something needs installing, then offers to launch sdexe. Takes a few minutes on a fresh machine.</p>
+                        </div>
+                    </div>
+                </div>
+                <details class="manual-steps">
+                    <summary>Prefer to install by hand?</summary>
                 <div class="steps">
                     <div class="step">
                         <div class="step-num">1</div>
@@ -386,10 +436,32 @@
                         </div>
                     </div>
                 </div>
+                </details>
             </div>
 
             <!-- Linux -->
             <div class="os-panel" id="panel-linux">
+                <div class="steps quick-steps">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <div class="step-body">
+                            <p>Open a terminal.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-body">
+                            <p>Paste this and press Enter. It installs everything for you: Python, pipx, ffmpeg and sdexe via your package manager.</p>
+                            <button class="cmd-row" onclick="copyCmd(this, 'curl -fsSL https://sdexe.com/install.sh | bash')">
+                                <span class="prompt">$</span> <span>curl -fsSL https://sdexe.com/install.sh | bash</span>
+                                <svg class="cmd-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                            <p style="margin-top:8px;">It asks for your password once if something needs installing, then offers to launch sdexe. Takes a few minutes on a fresh machine.</p>
+                        </div>
+                    </div>
+                </div>
+                <details class="manual-steps">
+                    <summary>Prefer to install by hand?</summary>
                 <div class="steps">
                     <div class="step">
                         <div class="step-num">1</div>
@@ -424,6 +496,7 @@
                         </div>
                     </div>
                 </div>
+                </details>
             </div>
 
             <div class="install-note">

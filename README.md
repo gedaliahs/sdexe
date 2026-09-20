@@ -10,20 +10,32 @@ Local tools for media downloads, PDF manipulation, image processing, and file co
 
 ## Install
 
+One command sets up everything on a fresh machine (Homebrew on macOS, Python 3.12, pipx, ffmpeg, then sdexe). Safe to re-run; it upgrades an existing install.
+
+macOS / Linux:
+
+```
+curl -fsSL https://sdexe.com/install.sh | bash
+```
+
+Windows (PowerShell):
+
+```
+irm https://sdexe.com/install.ps1 | iex
+```
+
+Already have Python 3.10+ and pipx? Then just:
+
 ```
 pipx install sdexe
 ```
 
-Or with pip:
-
-```
-pip install sdexe
-```
+Or with pip: `pip install sdexe`
 
 ### Requirements
 
-- Python 3.10+
-- [ffmpeg](https://ffmpeg.org/): sdexe will offer to install it automatically on first run
+- Python 3.10+ (the installer handles this)
+- [ffmpeg](https://ffmpeg.org/): installed by the installer; otherwise sdexe falls back to a bundled copy and offers to install the full one on first run
 
 ## Usage
 

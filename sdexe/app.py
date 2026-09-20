@@ -633,6 +633,92 @@ def _ffmpeg_missing_response():
 
 # ── Media API ──
 
+def _summarize_formats(data):
+    """Collapse yt-dlp's format list into one row per resolution and a short
+    list of native audio streams, for the download picker on the media page.
+
+    Video rows keep only the highest-bitrate stream at each height, whatever
+    its codec, so 4K/2K usually come back as WebM (VP9/AV1) and 1080p and
+    below as MP4. Sizes add the best audio stream so they reflect the merged
+    file the user actually gets.
+    """
+    formats = data.get("formats") or []
+    if not formats:
+        return {"video": [], "audio": []}
+
+    def size_of(f):
+        return f.get("filesize") or f.get("filesize_approx") or 0
+
+    def rate_of(f):
+        return f.get("tbr") or f.get("vbr") or f.get("abr") or 0
+
+    audio_only = [f for f in formats
+                  if f.get("acodec") not in (None, "none") and f.get("vcodec") in (None, "none")
+                  and f.get("format_id") and not f.get("has_drm")]
+    audio_only.sort(key=lambda f: (f.get("abr") or rate_of(f), size_of(f)), reverse=True)
+    best_audio = audio_only[0] if audio_only else None
+    best_audio_size = size_of(best_audio) if best_audio else 0
+
+    by_height = {}
+    for f in formats:
+        if f.get("vcodec") in (None, "none") or not f.get("format_id") or f.get("has_drm"):
+            continue
+        h = f.get("height")
+        if not h:
+            continue
+        # Storyboards and other image-only "formats" have no bitrate.
+        if not rate_of(f) and not size_of(f):
+            continue
+        cur = by_height.get(h)
+        if cur is None or (rate_of(f), size_of(f)) > (rate_of(cur), size_of(cur)):
+            by_height[h] = f
+
+    video_rows = []
+    for h in sorted(by_height, reverse=True):
+        f = by_height[h]
+        if h >= 2160:
+            label = "4K"
+        elif h >= 1440:
+            label = "2K"
+        else:
+            label = f"{h}p"
+        ext = (f.get("ext") or "mp4").lower()
+        merged = f.get("acodec") not in (None, "none")
+        size = size_of(f) + (0 if merged else best_audio_size)
+        video_rows.append({
+            "label": label,
+            "height": h,
+            "format_id": f["format_id"],
+            "ext": "mp4" if ext in ("mp4", "m4v", "mov") else ("webm" if ext in ("webm", "mkv") else ext),
+            "size": size or None,
+            "fps": f.get("fps"),
+        })
+
+    audio_rows = []
+    seen = set()
+    for f in audio_only:
+        ext = (f.get("ext") or "").lower()
+        # FFmpegExtractAudio with preferredcodec "best" remuxes without
+        # re-encoding, so these are the containers the user ends up with.
+        out_ext = "m4a" if ext in ("m4a", "mp4") else ("opus" if ext in ("webm", "opus", "ogg") else ext)
+        abr = int(round(f.get("abr") or rate_of(f) or 0))
+        key = (out_ext, abr // 16)
+        if key in seen or not abr:
+            continue
+        seen.add(key)
+        audio_rows.append({
+            "label": f"{abr} kbps",
+            "abr": abr,
+            "format_id": f["format_id"],
+            "ext": out_ext,
+            "size": size_of(f) or None,
+        })
+        if len(audio_rows) >= 4:
+            break
+
+    return {"video": video_rows, "audio": audio_rows}
+
+
 @app.route("/api/info", methods=["POST"])
 def info():
     url = request.json.get("url", "").strip()
@@ -731,6 +817,7 @@ def info():
         "description": data.get("description") or "",
         "upload_date": upload_date,
         "url": data.get("webpage_url") or url,
+        "formats": _summarize_formats(data),
     })
 
 
@@ -743,11 +830,17 @@ def download():
     subtitles = request.json.get("subtitles", False)
     clip_start = request.json.get("clip_start")
     clip_end = request.json.get("clip_end")
+    # A specific stream picked from the format table. "ext" is the container
+    # the row promised (mp4/webm for video, m4a/opus for audio).
+    format_id = (request.json.get("format_id") or "").strip()
+    picked_ext = (request.json.get("ext") or "").strip().lower()
 
     if not url:
         return jsonify({"error": "No URL provided"}), 400
     if not url.startswith(("http://", "https://")):
         return jsonify({"error": "Only http and https URLs are supported"}), 400
+    if format_id and not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", format_id):
+        return jsonify({"error": "Invalid format id"}), 400
 
     if not _check_download_rate():
         return jsonify({"error": "Too many downloads. Slow down a bit."}), 429
@@ -770,7 +863,7 @@ def download():
         }
 
     PP_NAMES = {
-        "FFmpegExtractAudio": f"Converting to {fmt.upper()}",
+        "FFmpegExtractAudio": "Extracting audio" if fmt == "audio" else f"Converting to {fmt.upper()}",
         "FFmpegMerger": "Merging video + audio",
         "FFmpegVideoConvertor": "Converting video",
         "FFmpegMetadata": "Writing metadata",
@@ -833,7 +926,36 @@ def download():
     if _ffmpeg:
         common_hooks["ffmpeg_location"] = _ffmpeg
 
-    if fmt == "mp4":
+    if format_id and fmt == "video":
+        # Exact stream from the picker, merged with the best audio. Keep the
+        # container the picker showed (WebM for VP9/AV1, MP4 for H.264) so
+        # there is no re-encode.
+        container = "webm" if picked_ext == "webm" else "mp4"
+        video_postprocessors = []
+        if container == "mp4":
+            video_postprocessors.append({"key": "EmbedThumbnail"})
+        if subtitles:
+            video_postprocessors.append({"key": "FFmpegEmbedSubtitle", "already_have_subtitle": False})
+        ydl_opts = {
+            "format": f"{format_id}+bestaudio/{format_id}/best",
+            "merge_output_format": container,
+            "outtmpl": outtmpl,
+            "postprocessors": video_postprocessors,
+            **({"writesubtitles": True, "writeautomaticsub": True, "subtitleslangs": ["en"]} if subtitles else {}),
+            **common_hooks,
+        }
+    elif format_id and fmt == "audio":
+        # Native audio stream, remuxed (not re-encoded) into m4a/opus.
+        ydl_opts = {
+            "format": f"{format_id}/bestaudio/best",
+            "outtmpl": outtmpl,
+            "postprocessors": [
+                {"key": "FFmpegExtractAudio", "preferredcodec": "best"},
+                {"key": "EmbedThumbnail"},
+            ],
+            **common_hooks,
+        }
+    elif fmt == "mp4":
         # Codec-agnostic: take the highest-bitrate stream at/under the chosen
         # resolution (H.264 / VP9 / AV1), merged to mp4. The [ext=mp4] filter is
         # intentionally dropped, it made yt-dlp fall back to a low-bitrate stream

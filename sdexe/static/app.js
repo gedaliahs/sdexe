@@ -248,7 +248,7 @@ function updateQuality(prefix) {
         q.innerHTML = `<option value="best">Lossless</option>`;
         q.disabled = true;
     }
-    if (prefix === "v") {
+    if (prefix === "v" && document.getElementById("v-format-picker")?.hidden !== false) {
         const subWrap = document.getElementById("v-subtitle-wrap");
         if (subWrap) subWrap.style.display = fmt === "mp4" ? "block" : "none";
     }
@@ -445,6 +445,79 @@ function addRecentFolder(path) {
 }
 
 /* ── Render Single Video ── */
+/* ── Format Picker (per-stream table) ── */
+let currentFormats = null;
+let currentDuration = 0;
+let activeDlBtn = null;
+let activeFmtLabel = "";
+
+function formatBytes(n) {
+    if (!n) return "";
+    if (n >= 1073741824) return (n / 1073741824).toFixed(2) + " GB";
+    if (n >= 1048576) return (n / 1048576).toFixed(2) + " MB";
+    return (n / 1024).toFixed(0) + " KB";
+}
+
+function renderFormatPicker(data) {
+    currentFormats = data.formats || null;
+    currentDuration = data.duration || 0;
+    const picker = document.getElementById("v-format-picker");
+    const pills = document.getElementById("v-pills-wrap");
+    const mainBtn = document.getElementById("v-dl-btn");
+    const hasRows = currentFormats && (currentFormats.video.length || currentFormats.audio.length);
+    if (!hasRows) {
+        picker.hidden = true;
+        pills.style.display = "";
+        mainBtn.style.display = "";
+        return;
+    }
+    picker.hidden = false;
+    pills.style.display = "none";
+    mainBtn.style.display = "none";
+    const savedTab = localStorage.getItem("sdexe_format_tab");
+    switchFormatTab(savedTab === "audio" || !currentFormats.video.length ? "audio" : "video");
+}
+
+function switchFormatTab(kind) {
+    document.querySelectorAll(".fp-tab").forEach(t => t.classList.toggle("active", t.dataset.kind === kind));
+    localStorage.setItem("sdexe_format_tab", kind);
+    const subWrap = document.getElementById("v-subtitle-wrap");
+    if (subWrap) subWrap.style.display = kind === "video" ? "block" : "none";
+
+    const rows = [];
+    if (kind === "video") {
+        for (const f of currentFormats.video) {
+            rows.push({label: f.label, fmt: f.ext.toUpperCase(), size: formatBytes(f.size),
+                       pick: {kind: "video", format_id: f.format_id, ext: f.ext}});
+        }
+    } else {
+        for (const f of currentFormats.audio) {
+            rows.push({label: f.label, fmt: f.ext.toUpperCase(), size: formatBytes(f.size),
+                       pick: {kind: "audio", format_id: f.format_id, ext: f.ext}});
+        }
+        // Converted options via the existing ffmpeg pipeline. Sizes are
+        // estimates from duration x bitrate.
+        const est = kbps => currentDuration ? "~" + formatBytes(currentDuration * kbps * 125) : "";
+        rows.push({label: "320 kbps", fmt: "MP3", size: est(320), pick: {fmt: "mp3", quality: "320"}});
+        rows.push({label: "192 kbps", fmt: "MP3", size: est(192), pick: {fmt: "mp3", quality: "192"}});
+        rows.push({label: "128 kbps", fmt: "MP3", size: est(128), pick: {fmt: "mp3", quality: "128"}});
+        rows.push({label: "Lossless", fmt: "FLAC", size: "", pick: {fmt: "flac", quality: "best"}});
+        rows.push({label: "Lossless", fmt: "WAV", size: est(1411), pick: {fmt: "wav", quality: "best"}});
+    }
+
+    const container = document.getElementById("v-format-rows");
+    container.innerHTML = rows.map((r, i) => `
+        <div class="fp-row">
+            <span class="fp-quality">${esc(r.label)}</span>
+            <span class="fp-fmt">${esc(r.fmt)}</span>
+            <span class="fp-size">${esc(r.size)}</span>
+            <button type="button" class="fp-btn" data-idx="${i}">Download</button>
+        </div>`).join("");
+    container.querySelectorAll(".fp-btn").forEach(btn => {
+        btn.addEventListener("click", () => startSingleDownload(rows[btn.dataset.idx].pick, btn));
+    });
+}
+
 function renderVideo(data) {
     document.getElementById("v-thumb").src = data.thumbnail || "";
     document.getElementById("v-duration").textContent = formatDuration(data.duration);
@@ -465,6 +538,7 @@ function renderVideo(data) {
     }
     document.getElementById("video-card").hidden = false;
     restoreFormatPrefs("v");
+    renderFormatPicker(data);
     // Clip controls
     const clipWrap = document.getElementById("v-clip-wrap");
     const clipToggle = document.getElementById("v-clip-toggle");
@@ -530,12 +604,25 @@ function updateCount() {
 }
 
 /* ── Single Video Download ── */
-async function startSingleDownload() {
+async function startSingleDownload(pick = null, rowBtn = null) {
     hideError();
     document.getElementById("v-save").hidden = true;
 
-    const fmt = document.getElementById("v-format").value;
-    const quality = document.getElementById("v-quality").value;
+    // pick comes from the format table: either an exact stream
+    // ({kind, format_id, ext}) or a converted format ({fmt, quality}).
+    let fmt = document.getElementById("v-format").value;
+    let quality = document.getElementById("v-quality").value;
+    let formatId = null, pickedExt = null;
+    if (pick && pick.format_id) {
+        fmt = pick.kind;
+        quality = "best";
+        formatId = pick.format_id;
+        pickedExt = pick.ext;
+    } else if (pick && pick.fmt) {
+        fmt = pick.fmt;
+        quality = pick.quality;
+    }
+    activeFmtLabel = pickedExt || fmt;
     const subtitles = document.getElementById("v-subtitles")?.checked ?? false;
     const metadata = {
         title: document.getElementById("v-title").value.trim(),
@@ -549,7 +636,9 @@ async function startSingleDownload() {
     const clipStart = clipEnabled ? parseTime(document.getElementById("v-clip-start").value) : null;
     const clipEnd = clipEnabled ? parseTime(document.getElementById("v-clip-end").value) : null;
 
-    const btn = document.getElementById("v-dl-btn");
+    const btn = rowBtn || document.getElementById("v-dl-btn");
+    activeDlBtn = btn;
+    if (rowBtn) document.querySelectorAll(".fp-btn").forEach(b => { b.disabled = true; });
     btn.disabled = true;
     btn.textContent = "Starting...";
     requestNotifPermission();
@@ -567,6 +656,7 @@ async function startSingleDownload() {
 
     try {
         const body = {url: currentUrl, format: fmt, quality, metadata, subtitles};
+        if (formatId) { body.format_id = formatId; body.ext = pickedExt; }
         if (clipStart !== null) body.clip_start = clipStart;
         if (clipEnd !== null) body.clip_end = clipEnd;
         const res = await fetch("/api/download", {
@@ -615,7 +705,7 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
     const statusEl = document.getElementById("v-progress-status");
     const pctEl = document.getElementById("v-progress-pct");
     const detailEl = document.getElementById("v-progress-text");
-    const btn = document.getElementById("v-dl-btn");
+    const btn = activeDlBtn || document.getElementById("v-dl-btn");
     const source = new EventSource(`/api/progress/${id}`);
 
     source.onmessage = (ev) => {
@@ -649,7 +739,7 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
             if (pctEl) pctEl.textContent = "";
             if (detailEl) detailEl.textContent = "";
             const title = document.getElementById("v-title").value.trim() || "Download";
-            const fmt = document.getElementById("v-format").value;
+            const fmt = activeFmtLabel || document.getElementById("v-format").value;
             addToHistory(title, fmt, id);
             if (d.auto_saved && d.saved_path) {
                 const filename = d.saved_path.split("/").pop();
@@ -697,6 +787,10 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
 }
 
 function resetBtn(btn, label) {
+    if (btn.classList.contains("fp-btn")) {
+        document.querySelectorAll(".fp-btn").forEach(b => { b.disabled = false; b.textContent = "Download"; });
+        return;
+    }
     btn.disabled = false;
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> ${label}`;
 }
