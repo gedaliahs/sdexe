@@ -99,6 +99,7 @@ function showError(msg) {
 function hideError() { document.getElementById("error").hidden = true; }
 
 function hideAll() {
+    document.querySelector("main")?.classList.remove("has-result");
     document.getElementById("video-card").hidden = true;
     document.getElementById("playlist-panel").hidden = true;
     document.getElementById("v-progress").hidden = true;
@@ -445,6 +446,13 @@ function addRecentFolder(path) {
 }
 
 /* ── Render Single Video ── */
+document.addEventListener("DOMContentLoaded", () => {
+    const t = document.getElementById("v-title");
+    if (t) t.addEventListener("input", () => {
+        document.getElementById("v-title-display").textContent = t.value.trim() || "Untitled";
+    });
+});
+
 /* ── Format Picker (per-stream table) ── */
 let currentFormats = null;
 let currentDuration = 0;
@@ -487,7 +495,9 @@ function switchFormatTab(kind) {
     const rows = [];
     if (kind === "video") {
         for (const f of currentFormats.video) {
-            rows.push({label: f.label, fmt: f.ext.toUpperCase(), size: formatBytes(f.size),
+            const tag = f.fps && f.fps >= 48 ? `<span class="fp-tag">${f.fps}fps</span>` : "";
+            rows.push({label: f.label, tag, fmt: f.ext.toUpperCase(),
+                       size: (f.approx && f.size ? "~" : "") + formatBytes(f.size),
                        pick: {kind: "video", format_id: f.format_id, ext: f.ext}});
         }
     } else {
@@ -508,7 +518,7 @@ function switchFormatTab(kind) {
     const container = document.getElementById("v-format-rows");
     container.innerHTML = rows.map((r, i) => `
         <div class="fp-row">
-            <span class="fp-quality">${esc(r.label)}</span>
+            <span class="fp-quality">${esc(r.label)}${r.tag || ""}</span>
             <span class="fp-fmt">${esc(r.fmt)}</span>
             <span class="fp-size">${esc(r.size)}</span>
             <button type="button" class="fp-btn" data-idx="${i}">Download</button>
@@ -518,11 +528,23 @@ function switchFormatTab(kind) {
     });
 }
 
+function toggleDetails() {
+    const d = document.getElementById("v-details");
+    d.hidden = !d.hidden;
+    document.getElementById("v-edit-toggle").textContent = d.hidden ? "Edit details" : "Hide details";
+    if (!d.hidden) document.getElementById("v-title").focus();
+}
+
 function renderVideo(data) {
     document.getElementById("v-thumb").src = data.thumbnail || "";
     document.getElementById("v-duration").textContent = formatDuration(data.duration);
     document.getElementById("v-title").value = data.title || "";
     document.getElementById("v-artist").value = data.uploader || "";
+    document.getElementById("v-title-display").textContent = data.title || "Untitled";
+    const sub = [data.uploader, data.upload_date].filter(Boolean).join(" · ");
+    document.getElementById("v-subline").textContent = sub;
+    document.getElementById("v-details").hidden = true;
+    document.getElementById("v-edit-toggle").textContent = "Edit details";
     document.getElementById("v-album").value = "";
     const descWrap = document.getElementById("v-description-wrap");
     const descField = document.getElementById("v-description");
@@ -537,6 +559,7 @@ function renderVideo(data) {
         descWrap.hidden = true;
     }
     document.getElementById("video-card").hidden = false;
+    document.querySelector("main")?.classList.add("has-result");
     restoreFormatPrefs("v");
     renderFormatPicker(data);
     // Clip controls

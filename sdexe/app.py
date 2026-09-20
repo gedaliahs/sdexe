@@ -659,6 +659,16 @@ def _summarize_formats(data):
     best_audio = audio_only[0] if audio_only else None
     best_audio_size = size_of(best_audio) if best_audio else 0
 
+    duration = data.get("duration") or 0
+
+    def is_hls(f):
+        return "m3u8" in (f.get("protocol") or "")
+
+    def video_rank(f):
+        # Direct downloads with a known size beat HLS streams. YouTube's HLS
+        # variants report a higher bitrate but no size, and merge slower.
+        return (bool(size_of(f)), not is_hls(f), rate_of(f), size_of(f))
+
     by_height = {}
     for f in formats:
         if f.get("vcodec") in (None, "none") or not f.get("format_id") or f.get("has_drm"):
@@ -670,7 +680,7 @@ def _summarize_formats(data):
         if not rate_of(f) and not size_of(f):
             continue
         cur = by_height.get(h)
-        if cur is None or (rate_of(f), size_of(f)) > (rate_of(cur), size_of(cur)):
+        if cur is None or video_rank(f) > video_rank(cur):
             by_height[h] = f
 
     video_rows = []
@@ -684,14 +694,21 @@ def _summarize_formats(data):
             label = f"{h}p"
         ext = (f.get("ext") or "mp4").lower()
         merged = f.get("acodec") not in (None, "none")
-        size = size_of(f) + (0 if merged else best_audio_size)
+        approx = False
+        vsize = size_of(f)
+        if not vsize and rate_of(f) and duration:
+            # No size reported (HLS, live-ish): estimate from bitrate.
+            vsize = int(rate_of(f) * 125 * duration)
+            approx = True
+        size = vsize + (0 if merged else best_audio_size) if vsize else 0
         video_rows.append({
             "label": label,
             "height": h,
             "format_id": f["format_id"],
             "ext": "mp4" if ext in ("mp4", "m4v", "mov") else ("webm" if ext in ("webm", "mkv") else ext),
             "size": size or None,
-            "fps": f.get("fps"),
+            "approx": approx,
+            "fps": int(round(f.get("fps") or 0)) or None,
         })
 
     audio_rows = []

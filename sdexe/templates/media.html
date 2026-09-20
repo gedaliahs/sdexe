@@ -54,12 +54,19 @@
 
         <!-- Single Video -->
         <div id="video-card" class="card" hidden>
-            <div class="card-media">
-                <img id="v-thumb" alt="">
-                <span id="v-duration" class="badge"></span>
+            <div class="card-head">
+                <div class="card-media card-media-sm">
+                    <img id="v-thumb" alt="">
+                    <span id="v-duration" class="badge"></span>
+                </div>
+                <div class="card-head-text">
+                    <h2 id="v-title-display"></h2>
+                    <p id="v-subline" class="meta"></p>
+                    <button type="button" id="v-edit-toggle" class="link-btn" onclick="toggleDetails()">Edit details</button>
+                </div>
             </div>
             <div class="card-body">
-                <div class="meta-fields">
+                <div id="v-details" class="meta-fields" hidden>
                     <div class="field">
                         <label>Title</label>
                         <input type="text" id="v-title" placeholder="Title">
@@ -115,10 +122,11 @@
                             </select>
                         </div>
                     </div>
+                    <div class="options-row">
                     <div id="v-subtitle-wrap" style="display:none;">
                         <label class="check-label">
                             <input type="checkbox" id="v-subtitles">
-                            Download subtitles (English)
+                            Subtitles (English)
                         </label>
                     </div>
                     <div id="v-clip-wrap" class="clip-wrap" hidden>
@@ -131,6 +139,7 @@
                             <span>to</span>
                             <input type="text" id="v-clip-end" placeholder="end" class="clip-time">
                         </div>
+                    </div>
                     </div>
                     <button id="v-dl-btn" class="btn-download" onclick="startSingleDownload()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
