@@ -140,16 +140,17 @@ function renderHistory() {
         return;
     }
     panel.hidden = false;
-    if (toggle) toggle.textContent = `Recent (${downloadHistory.length})`;
+    if (toggle) toggle.innerHTML = `Recent downloads <span class="history-count">${downloadHistory.length}</span>`;
     list.innerHTML = downloadHistory.map(item => `
         <div class="history-item">
             <div class="history-info">
                 <span class="history-title">${esc(item.title)}</span>
-                <span class="history-fmt">${esc(item.format.toUpperCase())}</span>
+                <span class="history-meta"><span class="history-fmt">${esc(item.format.toUpperCase())}</span>${item.ts ? `<span class="history-time">${timeAgo(item.ts)}</span>` : ""}</span>
             </div>
-            ${item.ts ? `<span class="history-time">${timeAgo(item.ts)}</span>` : ""}
-            ${item.url ? `<button class="history-refetch" title="Re-fetch this URL" onclick="refetchUrl(${JSON.stringify(item.url)})">&#x21A9;</button>` : ""}
-            ${item.restored ? "" : `<a href="/api/file/${encodeURIComponent(item.id)}" class="history-save">Save</a>`}
+            <div class="history-actions">
+                ${item.url ? `<button type="button" class="history-refetch" title="Fetch this link again" onclick="refetchUrl(${JSON.stringify(item.url)})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>` : ""}
+                ${item.restored ? "" : `<a href="/api/file/${encodeURIComponent(item.id)}" class="history-save"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 3v12M6 9l6 6 6-6"/><path d="M5 21h14"/></svg>Save</a>`}
+            </div>
         </div>
     `).join("");
 }
@@ -661,7 +662,11 @@ async function startSingleDownload(pick = null, rowBtn = null) {
 
     const btn = rowBtn || document.getElementById("v-dl-btn");
     activeDlBtn = btn;
-    if (rowBtn) document.querySelectorAll(".fp-btn").forEach(b => { b.disabled = true; });
+    if (rowBtn) {
+        document.querySelectorAll(".fp-btn").forEach(b => { b.disabled = true; });
+        document.querySelectorAll(".fp-row").forEach(r => r.classList.remove("is-active"));
+        rowBtn.closest(".fp-row")?.classList.add("is-active");
+    }
     btn.disabled = true;
     btn.textContent = "Starting...";
     requestNotifPermission();
@@ -711,6 +716,8 @@ function showCancelBtn(dlId) {
         progressPanel.appendChild(cancelBtn);
     }
     cancelBtn.hidden = false;
+    cancelBtn.disabled = false;
+    cancelBtn.textContent = "Cancel";
     cancelBtn.onclick = async () => {
         cancelBtn.disabled = true;
         cancelBtn.textContent = "Cancelling...";
@@ -812,6 +819,7 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
 function resetBtn(btn, label) {
     if (btn.classList.contains("fp-btn")) {
         document.querySelectorAll(".fp-btn").forEach(b => { b.disabled = false; b.textContent = "Download"; });
+        document.querySelectorAll(".fp-row").forEach(r => r.classList.remove("is-active"));
         return;
     }
     btn.disabled = false;

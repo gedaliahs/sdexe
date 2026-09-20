@@ -65,6 +65,23 @@
                     <button type="button" id="v-edit-toggle" class="link-btn" onclick="toggleDetails()">Edit details</button>
                 </div>
             </div>
+            <div id="v-progress-wrap" class="card-progress">
+                <div id="v-progress" class="progress-panel" hidden>
+                    <div class="progress-row">
+                        <span id="v-progress-status" class="progress-status">Starting...</span>
+                        <span class="progress-right">
+                            <span id="v-progress-text" class="progress-detail-text"></span>
+                            <span id="v-progress-pct" class="progress-pct"></span>
+                            <button type="button" id="v-cancel-btn" class="btn-cancel" hidden>Cancel</button>
+                        </span>
+                    </div>
+                    <div class="progress-track"><div id="v-progress-fill" class="progress-fill"></div></div>
+                </div>
+                <a id="v-save" class="btn-save" hidden>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                    Save File
+                </a>
+            </div>
             <div class="card-body">
                 <div id="v-details" class="meta-fields" hidden>
                     <div class="field">
@@ -146,18 +163,6 @@
                         Download
                     </button>
                 </div>
-                <div id="v-progress" class="progress-panel" hidden>
-                    <div class="progress-track"><div id="v-progress-fill" class="progress-fill"></div></div>
-                    <div class="progress-details">
-                        <span id="v-progress-status" class="progress-status">Starting...</span>
-                        <span id="v-progress-pct" class="progress-pct"></span>
-                    </div>
-                    <p id="v-progress-text" class="progress-detail-text"></p>
-                </div>
-                <a id="v-save" class="btn-save" hidden>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
-                    Save File
-                </a>
             </div>
         </div>
 
