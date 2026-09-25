@@ -35,6 +35,8 @@ dependencies = [
     "Pillow",
     "markdown",
     "rich",
+    # The clickable terminal app `sdexe` opens.
+    "textual>=1.0",
     "pystray",
     "PyYAML",
     "qrcode",

@@ -91,6 +91,8 @@ _QUALITIES = (
 )
 
 SETTINGS = [
+    Setting("terminal_app", "Startup", "Clickable terminal app", "bool", True,
+            "Off: sdexe prints its address and waits, like before. sdexe --classic does that once."),
     Setting("open_browser", "Startup", "Open the browser when sdexe starts", "bool", True,
             "Off: sdexe prints its address instead. sdexe --browser / --no-browser override one run."),
     Setting("port", "Startup", "Web app port", "int", 5001,

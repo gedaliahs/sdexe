@@ -204,8 +204,16 @@ def fmt_size(n) -> str:
         n /= 1024
 
 
+_SEARCH_RE = re.compile(r"(ytsearch|scsearch)(\d*):.+", re.I | re.S)
+
+
+def is_search(url: str) -> bool:
+    """yt-dlp search pseudo-links: "ytsearch:words" is the top YouTube hit."""
+    return bool(_SEARCH_RE.fullmatch(url or ""))
+
+
 def normalize_url(token: str) -> str | None:
-    if re.match(r"https?://", token, re.I):
+    if re.match(r"https?://", token, re.I) or is_search(token):
         return token
     # youtu.be/abc, www.youtube.com/watch?v=..., soundcloud.com/x/y
     if re.match(r"^[\w-]+(\.[\w-]+)+(/\S*)?$", token) and not token.lower().endswith(tuple("." + e for e in MEDIA_EXTS)):
@@ -452,7 +460,8 @@ def ydl_base_opts(args, log=None) -> dict:
 
 
 class Downloader:
-    def __init__(self, urls, spec, args, out_dir, out_file=None, clip=(None, None), defaults=None):
+    def __init__(self, urls, spec, args, out_dir, out_file=None, clip=(None, None), defaults=None,
+                 silent=False):
         self.defaults = defaults or download_defaults()
         self.items = [Item(u, thumbnail=bool(self.defaults["cover_art"])) for u in urls]
         self.spec = spec
@@ -470,13 +479,14 @@ class Downloader:
         self.stdout_tty = sys.stdout.isatty()
         self.live = None
         self.console = None
-        if self.stderr_tty and not args.quiet:
+        self.silent = silent
+        if self.stderr_tty and not args.quiet and not silent:
             from rich.console import Console
             self.console = ui.console(stderr=True)
 
     # stderr events, for when there is no live display
     def _event(self, text, error=False):
-        if self.live:
+        if self.live or self.silent:
             return
         if self.args.quiet and not error:
             return
@@ -544,9 +554,12 @@ class Downloader:
         title = info.get("title") or "playlist"
         if self.args.playlist and self.args.limit:
             entries = entries[:self.args.limit]
-        if not self.args.playlist:
+        searching = is_search(item.url)
+        if not self.args.playlist and not searching:
             raise _Fail(f"This link is a playlist ({_videos(len(entries))}). Add --playlist to download all of them.")
-        if self.out_file:
+        if searching and not entries:
+            raise _Fail("Nothing found for that search.")
+        if self.out_file and not (searching and len(entries) == 1):
             raise _Fail(f"-o {self.out_file.name} names a single file, but this playlist has {_videos(len(entries))}. "
                         "Pass a folder instead.")
         if not entries:
@@ -567,7 +580,7 @@ class Downloader:
             item.title = title
         for c in children:
             self.q.put(c)
-        self._event(f"playlist: {title} ({_videos(len(children))})")
+        self._event(f"top result for “{title}”" if searching else f"playlist: {title} ({_videos(len(children))})")
 
     def _run(self, item):
         item.status = "running"
@@ -606,7 +619,7 @@ class Downloader:
             size = item.path.stat().st_size
             bits = ", ".join(b for b in (item.quality(), fmt_size(size)) if b)
             self._event(f"✓ {item.name} → {item.path} ({bits})")
-            if not self.stdout_tty and not self.args.json:
+            if not self.stdout_tty and not self.args.json and not self.silent:
                 print(item.path, flush=True)
         else:
             self._event(f"✗ {item.url}: {item.error}", error=True)
@@ -769,6 +782,24 @@ class Downloader:
                      Text.from_markup("  [muted]" + "  ·  ".join(foot) + "[/muted]"))
 
     # ── Run ──
+
+    def start(self):
+        """Start downloading in the background and return at once. For apps
+        that draw their own progress from self.items (the terminal app)."""
+        self.silent = True
+        for i in self.items:
+            self.q.put(i)
+        self._workers = [threading.Thread(target=self._worker, daemon=True) for _ in range(self.args.jobs)]
+        for w in self._workers:
+            w.start()
+
+    def add(self, urls):
+        """Queue more links on a downloader started with start()."""
+        for u in urls:
+            item = Item(u, thumbnail=bool(self.defaults["cover_art"]))
+            with self.lock:
+                self.items.append(item)
+            self.q.put(item)
 
     def run(self) -> int:
         if self.console:

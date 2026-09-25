@@ -51,7 +51,7 @@ Upgrades sdexe and its downloader engine in place. The Settings page has a butto
 sdexe
 ```
 
-Starts the web app at `http://localhost:5001`. All processing happens locally. The first run asks a few setup questions: whether `sdexe` should open the browser each time (also a toggle in Settings; `--browser` / `--no-browser` override it for one run), whether to fix zsh's handling of `?` in links, and whether to connect Claude Code. Run `sdexe setup` to change the answers.
+Opens a clickable app in your terminal (download, search, file tools and settings, all with buttons that work with the mouse) and starts the web app at `http://localhost:5001`. `sdexe --classic` skips the terminal app. All processing happens locally. The first run asks a few setup questions: whether `sdexe` should open the browser each time (also a toggle in Settings; `--browser` / `--no-browser` override it for one run), whether to fix zsh's handling of `?` in links, and whether to connect Claude Code. Run `sdexe setup` to change the answers.
 
 New to it? `sdexe tutorial` is a hands-on, 3-minute walkthrough that runs real commands.
 
@@ -83,6 +83,8 @@ Saves straight to the current folder, no browser or server needed. Built to be d
 | `sdexe download URL --json` | One JSON document with paths, sizes, resolution, errors |
 
 Formats: `mp4`, `webm`, `mkv` for video; `wav`, `mp3`, `flac`, `m4a`, `opus` for audio. Tags work as `-mp3`, `--mp3`, `mp3` or `-f mp3`. Run `sdexe download --help` for everything.
+
+`sdexe search "song name"` finds videos and songs by name (YouTube or SoundCloud, no account needed), and `sdexe download "ytsearch:song name" -mp3` grabs the top result in one step.
 
 `sdexe info URL` shows the title, length, every available quality with sizes, chapters and subtitles without downloading. It takes the same tags, so `sdexe info URL -720p` is a dry run of `sdexe download URL -720p`.
 

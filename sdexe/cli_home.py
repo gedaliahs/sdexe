@@ -463,8 +463,9 @@ def _tutorial_steps(folder: Path) -> list:
          "[brand]sdexe mcp[/brand] hands every tool to Claude, Cursor and other AI apps; [brand]sdexe settings[/brand]\n"
          "can connect Claude Code for you. Here is --json:",
          [["image", "info", "photo.jpg", "--json"]]),
-        ("The web app, and your settings",
-         "Run [brand]sdexe[/brand] on its own for the web app, with drag-and-drop for all of this.\n\n"
+        ("The app, and your settings",
+         "Run [brand]sdexe[/brand] on its own for a clickable app right here in the terminal (buttons for\n"
+         "download, search, files and settings) plus the web app in your browser, with drag-and-drop.\n\n"
          "  [brand]sdexe[/brand]                  starts it, and opens the browser if you chose that\n"
          "  [brand]sdexe[/brand] [brand2]--browser[/brand2]        opens the browser this time\n"
          "  [brand]sdexe[/brand] [brand2]--no-browser[/brand2]     doesn't, this time\n"

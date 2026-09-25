@@ -2629,6 +2629,30 @@ def transcribe_export():
     )
 
 
+def _run_with_terminal_app(tui, host, port, url, note, update):
+    """The web server on a thread, the clickable terminal app on the main one.
+    Server logs go to a file: anything printed would draw over the app."""
+    import logging
+    import signal
+    import sys
+    import threading
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(CONFIG_DIR / "server.log")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+    for name in ("werkzeug", "sdexe", app.logger.name):
+        log = logging.getLogger(name)
+        log.handlers = [handler]
+        log.propagate = False
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    threading.Thread(target=lambda: app.run(host=host, port=port, use_reloader=False), daemon=True).start()
+    try:
+        tui.run(url=url, note=note, update=update)
+    finally:
+        from sdexe import ui
+        ui.console().print("  [muted]sdexe stopped.[/muted]")
+    sys.exit(0)
+
+
 def _run_update():
     import sys
     from sdexe import ui
@@ -2789,7 +2813,7 @@ def _find_free_port(host, start_port, max_tries=20):
 
 
 _COMMANDS = ("download", "info", "pdf", "image", "audio", "video", "convert", "file", "mcp", "skill",
-             "setup", "settings", "tutorial", "update", "transcribe")
+             "setup", "settings", "tutorial", "search", "update", "transcribe")
 
 def _print_main_help():
     from rich.text import Text
@@ -2806,6 +2830,7 @@ def _print_main_help():
         ]),
         ("Media from links", [
             ('sdexe download "<link>" …', "video or audio · add -mp3, -a, -720p, --best"),
+            ('sdexe search "<words>"', "find a video or song by name · no link needed"),
             ('sdexe info "<link>"', "qualities, sizes, chapters · a dry run of download"),
         ]),
         ("Your files", [
@@ -2835,6 +2860,7 @@ def _print_main_help():
         ("--browser / --no-browser", "open it this time or not, whatever the setting"),
         ("-p, --port PORT", "default 5001, or the next free one"),
         ("--open PAGE", "media, pdf, images, convert, av, text"),
+        ("--classic", "no clickable app: print the address and wait"),
         ("--no-tray · --host · -q · -V", "no menu bar icon · bind address · no banner · version"),
     ], key_width=w))
     c.print()
@@ -2856,6 +2882,9 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "download":
         from sdexe.cli import download_main
         sys.exit(download_main(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "search":
+        from sdexe.cli_search import search_main
+        sys.exit(search_main(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] == "info":
         from sdexe.cli_info import info_main
         sys.exit(info_main(sys.argv[2:]))
@@ -2884,6 +2913,7 @@ def main():
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--browser", action="store_true")
+    parser.add_argument("--classic", action="store_true")
     parser.add_argument("--no-tray", action="store_true")
     parser.add_argument("-q", "--quiet", action="store_true")
     parser.add_argument("--open", metavar="PAGE")
@@ -2964,6 +2994,17 @@ def main():
     open_browser = args.browser or (not args.no_browser and cli_home.opens_browser())
     if open_browser:
         webbrowser.open(url)
+
+    use_app = interactive and not args.quiet and not args.classic and settings.get("terminal_app")
+    if use_app:
+        try:
+            from sdexe import tui
+        except ImportError:
+            use_app = False
+            console.print("  [warn]![/warn] [muted]The terminal app needs Textual:[/muted] [brand]sdexe update[/brand]")
+    if use_app:
+        _run_with_terminal_app(tui, host, port, url, port_note, update)
+        return
 
     if not args.quiet:
         if update_thread:

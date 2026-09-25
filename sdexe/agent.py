@@ -25,7 +25,7 @@ PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 INSTRUCTIONS = (
     "sdexe runs media, PDF, image, audio/video, data-conversion and file tools locally. "
     "Inputs are file paths on this machine; outputs are written to disk and their paths "
-    "are returned. Use media_info before download to see available qualities."
+    "are returned. Use search to find media by name, media_info to see qualities, then download."
 )
 
 _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean"}
@@ -87,6 +87,24 @@ def _info_tool():
     }
 
 
+def _search_tool():
+    return {
+        "name": "search",
+        "title": "Search for media",
+        "description": ("Find videos or songs by name on YouTube or SoundCloud. Returns titles, channels, "
+                        "durations and links to pass to `download`."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "what to look for"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10},
+                "source": {"type": "string", "enum": ["youtube", "soundcloud"], "default": "youtube"},
+            },
+            "required": ["query"],
+        },
+    }
+
+
 def _cmd_tool(cmd: Cmd) -> dict:
     props, required = {}, []
     if cmd.inputs == "none":
@@ -130,7 +148,7 @@ def _cmd_tool(cmd: Cmd) -> dict:
 
 
 def tool_definitions() -> list:
-    return [_download_tool(), _info_tool()] + [_cmd_tool(c) for c in COMMANDS]
+    return [_search_tool(), _download_tool(), _info_tool()] + [_cmd_tool(c) for c in COMMANDS]
 
 
 _CMD_BY_TOOL = {c.tool_name: c for c in COMMANDS}
@@ -144,6 +162,9 @@ def _abs(p: str, base: Path) -> str:
 
 
 def tool_argv(name: str, a: dict, base: Path) -> list:
+    if name == "search":
+        return ["search", str(a.get("query", "")), "-n", str(a.get("limit", 10)),
+                "-s", a.get("source", "youtube")]
     if name in ("download", "media_info"):
         argv = ["download" if name == "download" else "info", *a.get("urls", [])]
         if a.get("format"):
