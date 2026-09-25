@@ -21,6 +21,7 @@ from PIL import Image
 
 from sdexe import __version__
 from sdexe import tools
+from sdexe import media as media_opts  # "media" is taken by the /media page route
 
 
 def _ensure_ca_bundle():
@@ -145,11 +146,12 @@ def _clean_error(msg: str) -> str:
     return text.strip()
 
 
-def _friendly_download_error(raw: str, cancelled: bool = False) -> str:
+def _friendly_download_error(raw: str, cancelled: bool = False, cli: bool = False) -> str:
     """Map a download failure to a message safe and useful to show a user.
 
     The raw text is logged for the operator. It is never returned as-is: it
     carries ANSI escapes, internal URLs, and yt-dlp argument advice.
+    cli=True words the remedies for the terminal instead of the web UI.
     """
     err = _clean_error(raw)
     low = err.lower()
@@ -158,6 +160,10 @@ def _friendly_download_error(raw: str, cancelled: bool = False) -> str:
     if cancelled or "cancelled by user" in low:
         return "Download cancelled."
     if "sign in to confirm" in low or "not a bot" in low or "confirm you" in low:
+        if cli:
+            return ("YouTube is asking this machine to confirm it is not a bot. Sign in to "
+                    "YouTube in your browser, then retry with --cookies-from-browser chrome "
+                    "(or safari, firefox, brave, edge).")
         return ("YouTube is asking this machine to confirm it is not a bot. "
                 "Sign in to YouTube in your browser, then try again shortly.")
     if "drm" in low:
@@ -172,6 +178,8 @@ def _friendly_download_error(raw: str, cancelled: bool = False) -> str:
     if "members-only" in low or "members only" in low or "join this channel" in low:
         return "Members-only video. An eligible channel membership is required."
     if "age" in low and any(w in low for w in ("restrict", "confirm", "gate")):
+        if cli:
+            return "Age-restricted. Sign in to YouTube in your browser, then retry with --cookies-from-browser chrome."
         return "Age-restricted. Sign in to download."
     if "not available in your country" in low or "geo-restricted" in low:
         return "Not available in your country (geo-restricted)."
@@ -187,8 +195,9 @@ def _friendly_download_error(raw: str, cancelled: bool = False) -> str:
             or "requested format is not available" in low
             or "player response" in low or "nsig" in low):
         if _ytdlp_is_stale():
+            fix = "Run `sdexe update`" if cli else "Update it in Settings"
             return ("Could not read this video. The downloader engine is out of date, "
-                    "which is the usual cause. Update it in Settings, then try again.")
+                    f"which is the usual cause. {fix}, then try again.")
         return "Video unavailable or deleted."
     if any(w in low for w in ("timed out", "timeout", "connection", "network", "resolve")):
         return "Network problem while downloading. Check your connection and try again."
@@ -1014,71 +1023,20 @@ def download():
             ],
             **common_hooks,
         }
-    elif fmt == "mp4":
-        # Codec-agnostic: take the highest-bitrate stream at/under the chosen
-        # resolution (H.264 / VP9 / AV1), merged to mp4. The [ext=mp4] filter is
-        # intentionally dropped, it made yt-dlp fall back to a low-bitrate stream
-        # (or a 360p progressive file) when an mp4-codec 1080p wasn't offered.
-        if quality == "1080p":
-            format_str = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
-        elif quality == "720p":
-            format_str = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
-        elif quality == "480p":
-            format_str = "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
-        else:
-            format_str = "bestvideo+bestaudio/best"
-
-        mp4_postprocessors = [{"key": "EmbedThumbnail"}]
-        if subtitles:
-            mp4_postprocessors.append({"key": "FFmpegEmbedSubtitle", "already_have_subtitle": False})
+    else:
+        height = {"1080p": 1080, "720p": 720, "480p": 480}.get(quality) if fmt == "mp4" else None
         ydl_opts = {
-            "format": format_str,
-            # Prefer resolution, then raw bitrate, over yt-dlp's default codec-
-            # efficiency ranking, so we get the best-looking stream, not the
-            # smallest one.
-            "format_sort": ["res", "br"],
-            "merge_output_format": "mp4",
+            **media_opts.build_ydl_opts(
+                fmt if fmt in ("mp4", "flac", "wav") else "mp3",
+                height=height,
+                bitrate=quality,
+                subtitles=subtitles and fmt == "mp4",
+            ),
             "outtmpl": outtmpl,
-            "postprocessors": mp4_postprocessors,
-            **({"writesubtitles": True, "writeautomaticsub": True, "subtitleslangs": ["en"]} if subtitles else {}),
-            **common_hooks,
-        }
-    elif fmt == "flac":
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": outtmpl,
-            "postprocessors": [
-                {"key": "FFmpegExtractAudio", "preferredcodec": "flac"},
-                {"key": "EmbedThumbnail"},
-            ],
-            **common_hooks,
-        }
-    elif fmt == "wav":
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": outtmpl,
-            "postprocessors": [
-                {"key": "FFmpegExtractAudio", "preferredcodec": "wav"},
-            ],
-            **common_hooks,
-        }
-    else:  # mp3
-        bitrate = quality if quality in ("128", "192", "320") else "320"
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": outtmpl,
-            "postprocessors": [
-                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": bitrate},
-                {"key": "EmbedThumbnail"},
-            ],
             **common_hooks,
         }
 
-    # Apply clip range if specified
-    if clip_start is not None or clip_end is not None:
-        from yt_dlp.utils import download_range_func
-        ydl_opts["download_ranges"] = download_range_func(None, [(clip_start or 0, clip_end or float('inf'))])
-        ydl_opts["force_keyframes_at_cuts"] = True
+    media_opts.apply_clip(ydl_opts, clip_start, clip_end)
 
     def do_download():
         try:
@@ -2851,9 +2809,34 @@ def _print_startup_info(console, host, port):
     table.add_row("Tools", str(route_count))
     table.add_row("Config", str(CONFIG_DIR))
     table.add_row("Server", f"[cyan]http://{host}:{port}[/cyan]")
+    table.add_row("Terminal", "[dim]sdexe download <url>[/dim]")
 
     console.print(table)
     console.print()
+
+
+_COMMANDS = ("download", "update", "transcribe")
+
+_MAIN_HELP = """\
+[bold]sdexe[/bold] [dim]v{version} · local tools for media, PDF, images & files[/dim]
+
+[bold]Usage[/bold]
+  [cyan]sdexe[/cyan]                        start the web app at http://localhost:5001
+  [cyan]sdexe download[/cyan] <url> ...     save video or audio from a link (MP4 1080p60 by default)
+  [cyan]sdexe update[/cyan]                 update sdexe and its downloader engine
+  [cyan]sdexe transcribe[/cyan]             install the optional transcription engine
+
+[bold]Web app options[/bold]
+  -p, --port PORT      server port (default 5001; the next free one if taken)
+  --host HOST          bind address (default 127.0.0.1)
+  --open PAGE          open a specific page: media, pdf, images, convert, av, text
+  --no-browser         don't open the browser
+  --no-tray            no system tray icon; run the server in the foreground
+  -q, --quiet          no startup banner
+  -V, --version        print the version
+
+Run [cyan]sdexe download --help[/cyan] for formats, quality tags and examples.
+"""
 
 
 def main():
@@ -2866,21 +2849,41 @@ def main():
     from rich.console import Console
     from rich.panel import Panel
 
-    parser = argparse.ArgumentParser(
-        prog="sdexe",
-        description="Local tools for media, PDF, images & files",
-    )
-    parser.add_argument("-V", "--version", action="version", version=f"sdexe {__version__}")
-    parser.add_argument("-p", "--port", type=int, default=5001, help="server port (default: 5001)")
-    parser.add_argument("--host", default="127.0.0.1", help="bind address (default: 127.0.0.1)")
-    parser.add_argument("--no-browser", action="store_true", help="don't open browser on start")
-    parser.add_argument("--no-tray", action="store_true", help="skip system tray, run Flask on main thread")
-    parser.add_argument("-q", "--quiet", action="store_true", help="suppress startup banner")
-    parser.add_argument("--open", metavar="PAGE", help="open specific page (e.g. pdf, images, text)")
-    parser.add_argument("--update", action="store_true", help="same as 'sdexe update'")
-    parser.add_argument("command", nargs="?", help="'update' to upgrade sdexe, 'transcribe' to install transcription deps")
+    if len(sys.argv) > 1 and sys.argv[1] == "download":
+        from sdexe.cli import download_main
+        sys.exit(download_main(sys.argv[2:]))
 
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser(prog="sdexe", add_help=False)
+    parser.add_argument("-h", "--help", action="store_true")
+    parser.add_argument("-V", "--version", action="version", version=f"sdexe {__version__}")
+    parser.add_argument("-p", "--port", type=int, default=5001)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--no-tray", action="store_true")
+    parser.add_argument("-q", "--quiet", action="store_true")
+    parser.add_argument("--open", metavar="PAGE")
+    parser.add_argument("--update", action="store_true")
+    parser.add_argument("command", nargs="?")
+
+    args, extra = parser.parse_known_args()
+
+    if args.help:
+        Console(highlight=False).print(_MAIN_HELP.format(version=__version__), soft_wrap=True)
+        return
+    if args.command and args.command not in _COMMANDS:
+        import difflib
+        guess = difflib.get_close_matches(args.command, _COMMANDS, n=1)
+        hint = f" Did you mean [cyan]sdexe {guess[0]}[/cyan]?" if guess else " Run [cyan]sdexe --help[/cyan]."
+        Console(stderr=True, highlight=False).print(f"sdexe: unknown command '{args.command}'.{hint}")
+        sys.exit(2)
+    if extra:
+        Console(stderr=True, highlight=False).print(
+            f"sdexe: unknown option {extra[0]}. Run [cyan]sdexe --help[/cyan].")
+        sys.exit(2)
+    if args.command == "download":
+        # Reached only when options came before the command (sdexe -q download).
+        Console(stderr=True).print("sdexe: put [cyan]download[/cyan] first, e.g. sdexe download <url>")
+        sys.exit(2)
 
     if args.command == "transcribe":
         _install_transcribe_deps()

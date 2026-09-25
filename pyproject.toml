@@ -38,6 +38,8 @@ dependencies = [
     "qrcode",
     "imageio-ffmpeg",
     "certifi",
+    # Cover art for FLAC and Opus downloads (yt-dlp EmbedThumbnail).
+    "mutagen",
     "pypdfium2",
     "pillow-heif",
     "openpyxl",

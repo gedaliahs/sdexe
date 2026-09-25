@@ -53,6 +53,29 @@ sdexe
 
 Opens `http://localhost:5001` in your browser. All processing happens locally.
 
+### Download from the terminal
+
+```
+sdexe download <url> [url ...] [format] [quality] [options]
+```
+
+Saves straight to the current folder, no browser or server needed. Built to be driven by scripts and AI agents as well as by hand: saved paths go to stdout, progress and errors to stderr, and the exit code is 0 only when every link saved.
+
+| You type | You get |
+|---|---|
+| `sdexe download URL` | MP4, best stream up to 1080p60 |
+| `sdexe download URL -mp3` | MP3, 320 kbps |
+| `sdexe download URL -a` | WAV (lossless) |
+| `sdexe download URL --best` | Highest available video: 4K/8K, top fps and bitrate |
+| `sdexe download URL -720p` | Up to 720p (`-1080p30`, `-4k`, `-1440p` also work) |
+| `sdexe download URL1 URL2 URL3 -flac` | A batch, 3 at a time |
+| `sdexe download URL --playlist` | Every video in a playlist or channel (`--limit N` for the first N) |
+| `sdexe download URL --start 1:30 --end 2:00` | Only that section |
+| `sdexe download URL -o ~/Music/song.mp3` | A specific folder or file name |
+| `sdexe download URL --json` | One JSON document with paths, sizes, resolution, errors |
+
+Formats: `mp4`, `webm`, `mkv` for video; `wav`, `mp3`, `flac`, `m4a`, `opus` for audio. Tags work as `-mp3`, `--mp3`, `mp3` or `-f mp3`. Run `sdexe download --help` for everything.
+
 ## Features
 
 ### Media Downloader
