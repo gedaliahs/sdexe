@@ -222,7 +222,7 @@ def _parser():
     return p
 
 
-def parse_args(argv):
+def parse_args(argv, prog="download"):
     """Split tags out of argv, then parse the rest. Returns (args, tags)."""
     rest, tags = [], []
     i = 0
@@ -263,7 +263,7 @@ def parse_args(argv):
                 continue
             if not tag:
                 guess = difflib.get_close_matches(tok.lstrip("-").lower(), TAG_HINTS, n=1)
-                hint = f" Did you mean -{guess[0]}?" if guess else " Run `sdexe download --help` for options."
+                hint = f" Did you mean -{guess[0]}?" if guess else f" Run `sdexe {prog} --help` for options."
                 raise UsageError(f"Unknown option {tok}.{hint}")
             tags.append(tag)
         else:
@@ -342,9 +342,7 @@ PP_STAGES = {
     "MoveFiles": "finishing",
 }
 _THUMB_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
-ATTEMPTS = 3
-_RETRYABLE = re.compile(r"ffmpeg exited|http error 403|http error 5\d\d|timed out|timeout|"
-                        r"connection|incomplete|unable to download|fragment", re.I)
+ATTEMPTS = media.ATTEMPTS
 
 
 @dataclass(eq=False)
@@ -405,6 +403,28 @@ class _YtdlpLog:
     def error(self, msg):
         if self.emit:
             self.emit(msg)
+
+
+def ydl_base_opts(args, log=None) -> dict:
+    """yt-dlp options every command shares: quiet, JS runtime, cookies,
+    playlist handling. log receives yt-dlp's messages (for --verbose)."""
+    opts = {
+        "quiet": True,
+        "no_warnings": log is None,
+        "noprogress": True,
+        "logger": _YtdlpLog(log),
+        "noplaylist": not args.playlist,
+        "extract_flat": "in_playlist",
+        "js_runtimes": media.js_runtimes(),
+    }
+    if args.limit:
+        opts["playlistend"] = args.limit  # don't page through a whole channel
+    ffmpeg = tools.ffmpeg_path()
+    if ffmpeg:
+        opts["ffmpeg_location"] = ffmpeg
+    if args.cookies_from_browser:
+        opts["cookiesfrombrowser"] = (args.cookies_from_browser.lower(), None, None, None)
+    return opts
 
 
 class Downloader:
@@ -483,27 +503,15 @@ class Downloader:
             else:
                 item.stage = PP_STAGES.get(name, item.stage)
 
+        opts.update(ydl_base_opts(self.args, self._log if self.args.verbose else None))
         opts.update({
             "outtmpl": str(tmp / "%(id).60s.%(ext)s"),
             "progress_hooks": [progress_hook],
             "postprocessor_hooks": [pp_hook],
-            "quiet": True,
-            "no_warnings": not self.args.verbose,
-            "noprogress": True,
-            "logger": _YtdlpLog(self._log if self.args.verbose else None),
-            "noplaylist": not self.args.playlist,
-            "extract_flat": "in_playlist",
             "concurrent_fragment_downloads": 4,
             "retries": 5,
             "fragment_retries": 5,
         })
-        if self.args.limit:
-            opts["playlistend"] = self.args.limit  # don't page through a whole channel
-        ffmpeg = tools.ffmpeg_path()
-        if ffmpeg:
-            opts["ffmpeg_location"] = ffmpeg
-        if self.args.cookies_from_browser:
-            opts["cookiesfrombrowser"] = (self.args.cookies_from_browser.lower(), None, None, None)
         return opts
 
     def _expand(self, item, info):
@@ -521,7 +529,9 @@ class Downloader:
         children = []
         for e in entries:
             url = e.get("url") or e.get("webpage_url")
-            if not url:
+            # Flat extraction still lists members nobody can fetch.
+            if not url or (e.get("title") or "") in ("[Private video]", "[Deleted video]", "[Unavailable video]") \
+                    or e.get("availability") in ("private", "needs_auth", "subscriber_only", "premium_only"):
                 continue
             children.append(Item(url, entry=e, playlist=title, title=e.get("title") or ""))
         with self.lock:
@@ -551,15 +561,13 @@ class Downloader:
                 break
             except Exception as e:  # noqa: BLE001 - one bad link must not end the batch
                 raw = str(e)
-                if item.thumbnail and "unable to embed" in raw.lower() and attempt < ATTEMPTS:
+                if item.thumbnail and media.is_thumbnail_failure(raw) and attempt < ATTEMPTS:
                     # Cover art is a nicety; never lose the download over it.
                     item.thumbnail = False
                     item.stage = "retrying without cover art"
                     item.streams.clear()
                     continue
-                if attempt < ATTEMPTS and not self.cancel.is_set() and _RETRYABLE.search(raw):
-                    # A fresh extraction gets fresh stream URLs, which is what
-                    # clears YouTube's intermittent 403s and ffmpeg HLS drops.
+                if attempt < ATTEMPTS and not self.cancel.is_set() and media.is_retryable(raw):
                     item.stage = f"retrying ({attempt + 1}/{ATTEMPTS})"
                     item.streams.clear()
                     time.sleep(attempt)
@@ -879,6 +887,16 @@ def _escape(text):
     return escape(str(text))
 
 
+def youtube_warnings(urls):
+    if not any(re.search(r"(youtube\.com|youtu\.be)/", u) for u in urls):
+        return []
+    if not any(cfg.get("path") for cfg in media.js_runtimes().values()):
+        return [media.JS_RUNTIME_HINT]
+    if not media.ejs_installed():
+        return ["YouTube's challenge solver (yt-dlp-ejs) is missing. Run `sdexe update`."]
+    return []
+
+
 def _read_links(sources):
     links = []
     for src in sources:
@@ -893,11 +911,32 @@ def _read_links(sources):
     return links
 
 
-def download_main(argv) -> int:
+def collect_urls(args, prog):
+    urls = []
+    for tok in list(args.urls) + _read_links(args.input):
+        url = normalize_url(tok)
+        if not url:
+            raise UsageError(f"'{tok}' is not a link or a known tag. Run `sdexe {prog} --help`.")
+        urls.append(url)
+    urls = list(dict.fromkeys(urls))
+    if not urls:
+        raise UsageError(f"No links given. Example: sdexe {prog} https://youtu.be/dQw4w9WgXcQ")
+    if args.limit is not None:
+        if args.limit < 1:
+            raise UsageError("--limit must be 1 or more.")
+        args.playlist = True
+    return urls
+
+
+def quiet_sdexe_logger():
     # _friendly_download_error logs the raw error; without a handler Python
     # would print it to stderr on top of our own message.
     logging.getLogger("sdexe").addHandler(logging.NullHandler())
     logging.getLogger("sdexe").propagate = False
+
+
+def download_main(argv) -> int:
+    quiet_sdexe_logger()
 
     try:
         args, tags = parse_args(argv)
@@ -905,16 +944,7 @@ def download_main(argv) -> int:
             print_help()
             return 0
 
-        raw = list(args.urls) + _read_links(args.input)
-        urls = []
-        for tok in raw:
-            url = normalize_url(tok)
-            if not url:
-                raise UsageError(f"'{tok}' is not a link or a known tag. Run `sdexe download --help`.")
-            urls.append(url)
-        urls = list(dict.fromkeys(urls))
-        if not urls:
-            raise UsageError("No links given. Example: sdexe download https://youtu.be/dQw4w9WgXcQ")
+        urls = collect_urls(args, "download")
 
         out_dir, out_file = Path.cwd(), None
         if args.output:
@@ -931,10 +961,6 @@ def download_main(argv) -> int:
         end = parse_time(args.end) if args.end else None
         if start is not None and end is not None and end <= start:
             raise UsageError("--end must be after --start.")
-        if args.limit is not None:
-            if args.limit < 1:
-                raise UsageError("--limit must be 1 or more.")
-            args.playlist = True
         if not 1 <= args.jobs <= 8:
             raise UsageError("--jobs must be between 1 and 8.")
     except UsageError as e:
@@ -952,6 +978,7 @@ def download_main(argv) -> int:
         print(f"sdexe download: can't create {out_dir}: {e.strerror}", file=sys.stderr)
         return 1
 
+    spec.warnings += youtube_warnings(urls)
     dl = Downloader(urls, spec, args, out_dir, out_file, clip=(start, end))
     if not dl.console:
         for w in spec.warnings:

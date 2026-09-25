@@ -28,7 +28,9 @@ dependencies = [
     # Floor pin, not an exact pin. YouTube breaks older yt-dlp releases within
     # weeks, and the failure looks like a missing video, so an upgrade of sdexe
     # must also pull a current engine.
-    "yt-dlp>=2026.7.4",
+    # [default] brings yt-dlp-ejs, the YouTube JS challenge solver, pinned to
+    # match the engine.
+    "yt-dlp[default]>=2026.7.4",
     "pypdf",
     "Pillow",
     "markdown",

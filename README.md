@@ -76,6 +76,36 @@ Saves straight to the current folder, no browser or server needed. Built to be d
 
 Formats: `mp4`, `webm`, `mkv` for video; `wav`, `mp3`, `flac`, `m4a`, `opus` for audio. Tags work as `-mp3`, `--mp3`, `mp3` or `-f mp3`. Run `sdexe download --help` for everything.
 
+`sdexe info URL` shows the title, length, every available quality with sizes, chapters and subtitles without downloading. It takes the same tags, so `sdexe info URL -720p` is a dry run of `sdexe download URL -720p`.
+
+### Every tool from the terminal
+
+The PDF, image, audio, video and conversion tools work from the command line too, with the same conventions: outputs land in the current folder as `<name>-<action>.<ext>`, nothing is overwritten, `--json` gives one result document, and several files can be passed at once.
+
+```
+sdexe pdf merge a.pdf b.pdf -o book.pdf
+sdexe pdf text report.pdf > report.txt
+sdexe image resize *.jpg --width 1200
+sdexe image convert IMG_0001.heic -f jpg
+sdexe audio trim podcast.mp3 --start 1:00 --end 2:30
+sdexe video gif clip.mp4 --width 480
+sdexe convert data.csv -f json
+sdexe file hash installer.dmg
+```
+
+Run `sdexe pdf`, `sdexe image`, `sdexe audio`, `sdexe video`, `sdexe convert --help` or `sdexe file` to list the commands in each group.
+
+### Use it from AI agents
+
+Agents can call the CLI directly. Two ways to make it discoverable:
+
+```
+claude mcp add sdexe -- sdexe mcp      # MCP server: every command becomes a tool (Claude Code, Desktop, Cursor)
+sdexe skill --install                  # or a Claude Code skill describing every command
+```
+
+`sdexe mcp --help` shows the Claude Desktop config. MCP outputs go to the client's working folder (or `~/Downloads`); set `SDEXE_OUTPUT_DIR` to change it.
+
 ## Features
 
 ### Media Downloader

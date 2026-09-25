@@ -3,6 +3,13 @@
 No Flask imports. Callers add their own hooks, output template, and logging.
 """
 
+import functools
+import glob
+import os
+import re
+import shutil
+import subprocess
+
 VIDEO_FORMATS = ("mp4", "webm", "mkv")
 AUDIO_FORMATS = ("wav", "mp3", "flac", "m4a", "opus")
 MP3_BITRATES = ("128", "192", "256", "320")
@@ -123,3 +130,93 @@ def apply_clip(opts: dict, start: float | None, end: float | None) -> None:
     from yt_dlp.utils import download_range_func
     opts["download_ranges"] = download_range_func(None, [(start or 0, end or float("inf"))])
     opts["force_keyframes_at_cuts"] = True
+
+
+# ── Retries ──
+# YouTube intermittently refuses a stream URL (403) or drops an HLS fragment,
+# which surfaces as "ffmpeg exited with code 8" on clips. A fresh extraction
+# gets fresh URLs and almost always succeeds.
+ATTEMPTS = 3
+_RETRYABLE = re.compile(r"ffmpeg exited|http error 403|http error 5\d\d|timed out|timeout|"
+                        r"connection|incomplete|unable to download|fragment", re.I)
+
+
+def is_retryable(message: str) -> bool:
+    return bool(_RETRYABLE.search(message or ""))
+
+
+def is_thumbnail_failure(message: str) -> bool:
+    """Cover-art embedding failed. Worth retrying without it: the art is a
+    nicety, the download is not."""
+    return "unable to embed" in (message or "").lower()
+
+
+def without_thumbnail(opts: dict) -> dict:
+    opts["postprocessors"] = [pp for pp in opts.get("postprocessors", []) if pp["key"] != "EmbedThumbnail"]
+    return opts
+
+
+# ── JavaScript runtime ──
+# YouTube hides formats (and is moving to refuse downloads) unless yt-dlp can
+# solve its JS challenges, which needs the yt-dlp-ejs scripts plus a runtime.
+# yt-dlp only tries deno, and only on PATH, which a tray or Finder launch
+# barely has. Offer every supported runtime at its resolved path instead.
+_JS_RUNTIMES = (("deno", "deno"), ("node", "node"), ("bun", "bun"), ("quickjs", "qjs"))
+_JS_DIRS = ("~/.deno/bin", "~/.bun/bin", "~/.volta/bin", "~/.local/node/bin", "~/.local/bin",
+            "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin")
+
+
+def _find_exe(exe: str) -> str | None:
+    found = shutil.which(exe)
+    if found:
+        return found
+    dirs = [os.path.expanduser(d) for d in _JS_DIRS]
+    # nvm keeps each Node version in its own folder; newest last.
+    if exe == "node":
+        dirs += sorted(glob.glob(os.path.expanduser("~/.nvm/versions/node/*/bin")),
+                       key=lambda d: [int(x) for x in re.findall(r"\d+", d)])[::-1]
+    for d in dirs:
+        path = os.path.join(d, exe)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
+
+
+@functools.lru_cache(maxsize=1)
+def js_runtimes() -> dict:
+    """yt-dlp's js_runtimes option: every installed runtime, with its path.
+    yt-dlp skips any that are too old."""
+    found = {}
+    for name, exe in _JS_RUNTIMES:
+        path = _find_exe(exe)
+        if path:
+            found[name] = {"path": path}
+    return found or {"deno": {}}
+
+
+def ejs_installed() -> bool:
+    try:
+        import yt_dlp_ejs  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@functools.lru_cache(maxsize=1)
+def js_runtime_label() -> str | None:
+    """"node 24.2.0" for the first runtime found, or None."""
+    for name, cfg in js_runtimes().items():
+        path = cfg.get("path")
+        if not path:
+            continue
+        try:
+            out = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=5).stdout
+        except Exception:
+            continue
+        m = re.search(r"\d+(\.\d+)+", out)
+        return f"{name} {m.group(0)}" if m else name
+    return None
+
+
+JS_RUNTIME_HINT = ("No JavaScript runtime found, so YouTube may hide some formats. "
+                   "Install one (macOS: brew install deno) and sdexe will use it.")

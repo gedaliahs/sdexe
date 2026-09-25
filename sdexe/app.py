@@ -597,11 +597,11 @@ def self_update(engine_only=False):
     Returns (ok, message). Used by `sdexe update` and the Settings page.
     """
     if engine_only:
-        ok, out = _pip_install("yt-dlp")
+        ok, out = _pip_install("yt-dlp[default]")
         return ok, ("Downloader engine updated. Restart sdexe to use it." if ok else out)
 
     latest = _latest_pypi_version()
-    ok, out = _pip_install("sdexe", "yt-dlp")
+    ok, out = _pip_install("sdexe", "yt-dlp[default]")
     if not ok:
         return False, out or "Update failed"
     new_ver = _installed_version()
@@ -669,6 +669,8 @@ def deps():
         "ffprobe": tools.ffprobe_available(),
         "ytdlp_version": ytdlp_ver,
         "ytdlp_stale": _ytdlp_is_stale(),
+        "js_runtime": media_opts.js_runtime_label(),
+        "ejs": media_opts.ejs_installed(),
         "whisper": whisper_ok,
         "diarize": diarize_ok,
     })
@@ -813,6 +815,7 @@ def info():
         "no_warnings": True,
         "extract_flat": True,
         "socket_timeout": 12,
+        "js_runtimes": media_opts.js_runtimes(),
     }
 
     try:
@@ -985,8 +988,13 @@ def download():
         "postprocessor_hooks": [postprocessor_hook],
         "quiet": True,
         "no_warnings": True,
+        "noprogress": True,  # the hooks above still fire; this only stops terminal spam
         "noplaylist": True,
         "writethumbnail": True,
+        "js_runtimes": media_opts.js_runtimes(),
+        "concurrent_fragment_downloads": 4,
+        "retries": 5,
+        "fragment_retries": 5,
     }
     # Use the resolved ffmpeg (system, or the bundled fallback) for post-processing,
     # so audio/video downloads work even without a working system ffmpeg.
@@ -1031,6 +1039,7 @@ def download():
                 height=height,
                 bitrate=quality,
                 subtitles=subtitles and fmt == "mp4",
+                prefer_fps=True,
             ),
             "outtmpl": outtmpl,
             **common_hooks,
@@ -1040,8 +1049,26 @@ def download():
 
     def do_download():
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                vid_info = ydl.extract_info(url, download=True)
+            for attempt in range(1, media_opts.ATTEMPTS + 1):
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        vid_info = ydl.extract_info(url, download=True)
+                    break
+                except Exception as e:
+                    msg = str(e)
+                    if downloads[dl_id].get("cancelled") or attempt == media_opts.ATTEMPTS:
+                        raise
+                    if media_opts.is_thumbnail_failure(msg):
+                        # Cover art is a nicety; retry without it.
+                        media_opts.without_thumbnail(ydl_opts)
+                    elif media_opts.is_retryable(msg):
+                        for f in DOWNLOAD_DIR.glob(f"{dl_id}.*"):
+                            f.unlink(missing_ok=True)
+                        time.sleep(attempt)
+                    else:
+                        raise
+                    downloads[dl_id].update(status="downloading", progress=0, pp_step=0,
+                                            detail=f"Retrying ({attempt + 1}/{media_opts.ATTEMPTS})")
 
             # Find the output file (skip leftover thumbnail images)
             thumb_exts = {".jpg", ".jpeg", ".png", ".webp"}
@@ -2806,6 +2833,13 @@ def _print_startup_info(console, host, port):
     table.add_row("Python", f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
     table.add_row("ffmpeg", ffmpeg_ver)
     table.add_row("yt-dlp", ytdlp_ver)
+    js = media_opts.js_runtime_label()
+    if js and media_opts.ejs_installed():
+        table.add_row("JS", js)
+    elif js:
+        table.add_row("JS", f"{js} [yellow](solver missing, run sdexe update)[/yellow]")
+    else:
+        table.add_row("JS", "[yellow]none, YouTube may hide formats (brew install deno)[/yellow]")
     table.add_row("Tools", str(route_count))
     table.add_row("Config", str(CONFIG_DIR))
     table.add_row("Server", f"[cyan]http://{host}:{port}[/cyan]")
@@ -2815,7 +2849,8 @@ def _print_startup_info(console, host, port):
     console.print()
 
 
-_COMMANDS = ("download", "update", "transcribe")
+_COMMANDS = ("download", "info", "pdf", "image", "audio", "video", "convert", "file", "mcp", "skill",
+             "update", "transcribe")
 
 _MAIN_HELP = """\
 [bold]sdexe[/bold] [dim]v{version} · local tools for media, PDF, images & files[/dim]
@@ -2823,6 +2858,18 @@ _MAIN_HELP = """\
 [bold]Usage[/bold]
   [cyan]sdexe[/cyan]                        start the web app at http://localhost:5001
   [cyan]sdexe download[/cyan] <url> ...     save video or audio from a link (MP4 1080p60 by default)
+  [cyan]sdexe info[/cyan] <url> ...         title, length, available qualities; what download would fetch
+
+  [cyan]sdexe pdf[/cyan] <command> ...      merge, split, compress, text, OCR, rotate, watermark, encrypt
+  [cyan]sdexe image[/cyan] <command> ...    resize, compress, convert (incl. HEIC), crop, watermark, QR
+  [cyan]sdexe audio[/cyan] <command> ...    convert, trim, speed, normalize, fade, merge, split
+  [cyan]sdexe video[/cyan] <command> ...    convert, trim, compress, extract audio, GIF, merge, frames
+  [cyan]sdexe convert[/cyan] <file> -f FMT  csv, json, yaml, xml, toml, md, html, xlsx; office → pdf
+  [cyan]sdexe file[/cyan] <command> ...     hash, zip, unzip, split
+
+  [cyan]sdexe mcp[/cyan]                    run as an MCP server for Claude, Cursor and other AI apps
+  [cyan]sdexe skill[/cyan] [--install]      a Claude Code skill describing every command
+
   [cyan]sdexe update[/cyan]                 update sdexe and its downloader engine
   [cyan]sdexe transcribe[/cyan]             install the optional transcription engine
 
@@ -2835,7 +2882,7 @@ _MAIN_HELP = """\
   -q, --quiet          no startup banner
   -V, --version        print the version
 
-Run [cyan]sdexe download --help[/cyan] for formats, quality tags and examples.
+Every command takes [cyan]--help[/cyan], [cyan]--json[/cyan] and [cyan]-o[/cyan]. Outputs land in the current folder.
 """
 
 
@@ -2852,6 +2899,15 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "download":
         from sdexe.cli import download_main
         sys.exit(download_main(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "info":
+        from sdexe.cli_info import info_main
+        sys.exit(info_main(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] in ("mcp", "skill"):
+        from sdexe import agent
+        sys.exit((agent.mcp_main if sys.argv[1] == "mcp" else agent.skill_main)(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] in ("pdf", "image", "audio", "video", "convert", "file"):
+        from sdexe.cli_tools import tools_main
+        sys.exit(tools_main(sys.argv[1:]))
 
     parser = argparse.ArgumentParser(prog="sdexe", add_help=False)
     parser.add_argument("-h", "--help", action="store_true")
@@ -2880,9 +2936,9 @@ def main():
         Console(stderr=True, highlight=False).print(
             f"sdexe: unknown option {extra[0]}. Run [cyan]sdexe --help[/cyan].")
         sys.exit(2)
-    if args.command == "download":
+    if args.command in ("download", "info"):
         # Reached only when options came before the command (sdexe -q download).
-        Console(stderr=True).print("sdexe: put [cyan]download[/cyan] first, e.g. sdexe download <url>")
+        Console(stderr=True).print(f"sdexe: put [cyan]{args.command}[/cyan] first, e.g. sdexe {args.command} <url>")
         sys.exit(2)
 
     if args.command == "transcribe":

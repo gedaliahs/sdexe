@@ -558,7 +558,7 @@ def extract_frames(data: bytes, ext: str, mode: str, base: str, time: float = 0,
             if duration and duration / interval > 1000:
                 raise ValueError("That would produce more than 1000 frames; use a longer interval.")
             pattern = wd / f"f_%04d.{fmt}"
-            _run([exe, "-y", "-i", str(src), "-vf", f"fps=1/{interval}", "-vsync", "vfr"] + enc + [str(pattern)],
+            _run([exe, "-y", "-i", str(src), "-vf", f"fps=1/{interval}", "-fps_mode", "vfr"] + enc + [str(pattern)],
                  timeout=900)
             frames = sorted(wd.glob(f"f_*.{fmt}"))
             names = [f"{base}_{i * interval:g}s.{fmt}" for i in range(len(frames))]
