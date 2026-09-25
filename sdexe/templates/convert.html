@@ -3,6 +3,31 @@
 {% block title %}File Converter{% endblock %}
 {% block nav_convert %}active{% endblock %}
 
+{% block head %}
+<style>
+    .c2-result { margin-top: 16px; }
+    .c2-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .c2-table-wrap { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: auto; max-height: 360px; }
+    .c2-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .c2-table th, .c2-table td { padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; word-break: break-all; }
+    .c2-table th { background: var(--surface-2); font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 500; position: sticky; top: 0; }
+    .c2-table tr:last-child td { border-bottom: none; }
+    .c2-table td.c2-right, .c2-table th.c2-right { text-align: right; white-space: nowrap; }
+    .c2-table td.c2-hash { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .76rem; }
+    .c2-table td.c2-algo { white-space: nowrap; color: var(--text-secondary); width: 1%; }
+    .c2-table tr.c2-match td { background: var(--green-bg); }
+    .c2-table tr.c2-match td.c2-hash { color: var(--green); }
+    .c2-table tr.c2-mismatch td.c2-hash { color: var(--text-muted); }
+    .c2-file-heading { margin-top: 14px; font-size: .82rem; font-weight: 600; display: flex; justify-content: space-between; gap: 12px; }
+    .c2-file-heading .file-size { font-weight: 400; }
+    .c2-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 600; letter-spacing: .04em; }
+    .c2-badge.match { background: var(--green-bg); color: var(--green); }
+    .c2-badge.mismatch { background: var(--danger-bg); color: var(--danger); }
+    .c2-changed { color: var(--accent); }
+    .c2-table td.c2-unchanged { color: var(--text-muted); }
+</style>
+{% endblock %}
+
 {% block content %}
     <main>
 
@@ -321,6 +346,547 @@
                 </div>
 
                 <div id="extractzip-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- ═══════════ Data tools (batch 2) ═══════════ -->
+
+        <!-- JSON to XML -->
+        <div id="tab-json2xml" class="pdf-section card">
+            <div class="card-body">
+                <h2>JSON to XML</h2>
+                <p class="meta">Upload a .json file or paste JSON to convert it to pretty-printed XML. Arrays become repeated elements.</p>
+
+                <div class="drop-zone" id="json2xml-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <label class="drop-browse">Select .json file<input type="file" id="json2xml-input" accept=".json" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; or paste JSON below &middot; outputs .xml</p>
+                </div>
+
+                <div id="json2xml-file-info" class="split-info" hidden>
+                    <span id="json2xml-file-name" class="split-name"></span>
+                    <span id="json2xml-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearJson2XmlFile()">&times;</button>
+                </div>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Or paste JSON here</label>
+                    <textarea id="json2xml-text" class="convert-textarea" rows="6" placeholder='{"name": "ann", "tags": ["a", "b"]}'></textarea>
+                </div>
+
+                <div class="field-row" style="margin-top: 12px;">
+                    <div class="field" style="max-width: 240px;">
+                        <label>Root element name</label>
+                        <input type="text" id="json2xml-root" value="root" placeholder="root">
+                    </div>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 16px;">
+                    <button id="json2xml-btn" class="btn-download" onclick="doJsonToXml()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to XML
+                    </button>
+                </div>
+
+                <div id="json2xml-result-wrap" class="c2-result" hidden>
+                    <div class="md-preview-header">
+                        <span class="md-preview-label">Result</span>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-copy" onclick="copyText('json2xml-result', this)">Copy</button>
+                            <button class="btn-copy" onclick="downloadText('json2xml-result', json2xmlOutName)">Download .xml</button>
+                        </div>
+                    </div>
+                    <textarea id="json2xml-result" class="convert-textarea c2-mono" rows="12" readonly></textarea>
+                </div>
+
+                <div id="json2xml-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Excel to CSV -->
+        <div id="tab-xlsx2csv" class="pdf-section card">
+            <div class="card-body">
+                <h2>Excel to CSV</h2>
+                <p class="meta">Convert an Excel workbook to CSV. One sheet downloads as .csv; several sheets download as a ZIP of CSVs named after each sheet.</p>
+
+                <div class="drop-zone" id="xlsx2csv-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
+                    </svg>
+                    <label class="drop-browse">Select .xlsx file<input type="file" id="xlsx2csv-input" accept=".xlsx,.xlsm" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; .xlsx or .xlsm &middot; outputs .csv or .zip</p>
+                </div>
+
+                <div id="xlsx2csv-file-info" class="split-info" hidden>
+                    <span id="xlsx2csv-file-name" class="split-name"></span>
+                    <span id="xlsx2csv-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearXlsx2CsvFile()">&times;</button>
+                </div>
+
+                <div class="field-row" style="margin-top: 12px;">
+                    <div class="field" style="max-width: 280px;">
+                        <label>Sheet (optional)</label>
+                        <input type="text" id="xlsx2csv-sheet" placeholder="all sheets">
+                    </div>
+                </div>
+
+                <div id="xlsx2csv-actions" class="pdf-actions" hidden>
+                    <button id="xlsx2csv-btn" class="btn-download" onclick="doXlsxToCsv()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to CSV
+                    </button>
+                </div>
+
+                <div id="xlsx2csv-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- CSV to Excel -->
+        <div id="tab-csv2xlsx" class="pdf-section card">
+            <div class="card-body">
+                <h2>CSV to Excel</h2>
+                <p class="meta">Bundle one or more CSV files into an .xlsx workbook, one sheet per file. Numeric cells are written as numbers.</p>
+
+                <div class="drop-zone" id="csv2xlsx-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
+                    </svg>
+                    <label class="drop-browse">Select .csv files<input type="file" id="csv2xlsx-input" accept=".csv,.tsv,.txt" multiple hidden></label>
+                    <p class="drop-hint">or drop files here &middot; each file becomes a sheet &middot; outputs .xlsx</p>
+                </div>
+
+                <div id="csv2xlsx-list" class="file-list"></div>
+
+                <div style="margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;">
+                    <label class="check-label"><input type="checkbox" id="csv2xlsx-header" checked> First row is a header (bold, frozen, auto column width)</label>
+                </div>
+
+                <div id="csv2xlsx-actions" class="pdf-actions" hidden>
+                    <button id="csv2xlsx-btn" class="btn-download" onclick="doCsvToXlsx()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to Excel
+                    </button>
+                </div>
+
+                <div id="csv2xlsx-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- HTML to Markdown -->
+        <div id="tab-html2md" class="pdf-section card">
+            <div class="card-body">
+                <h2>HTML to Markdown</h2>
+                <p class="meta">Upload an .html file or paste HTML to convert it to Markdown. Links, emphasis, lists, code and tables are preserved.</p>
+
+                <div class="drop-zone" id="html2md-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <polyline points="10 13 8 15 10 17"/><polyline points="14 13 16 15 14 17"/>
+                    </svg>
+                    <label class="drop-browse">Select .html file<input type="file" id="html2md-input" accept=".html,.htm" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; or paste HTML below &middot; outputs .md</p>
+                </div>
+
+                <div id="html2md-file-info" class="split-info" hidden>
+                    <span id="html2md-file-name" class="split-name"></span>
+                    <span id="html2md-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearHtml2MdFile()">&times;</button>
+                </div>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Or paste HTML here</label>
+                    <textarea id="html2md-text" class="convert-textarea" rows="6" placeholder="&lt;h1&gt;Hello&lt;/h1&gt;&lt;p&gt;Some &lt;b&gt;bold&lt;/b&gt; text&lt;/p&gt;"></textarea>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 16px;">
+                    <button id="html2md-btn" class="btn-download" onclick="doHtmlToMd()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to Markdown
+                    </button>
+                </div>
+
+                <div id="html2md-result-wrap" class="c2-result" hidden>
+                    <div class="md-preview-header">
+                        <span class="md-preview-label">Result</span>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-copy" onclick="copyText('html2md-result', this)">Copy</button>
+                            <button class="btn-copy" onclick="downloadText('html2md-result', html2mdOutName)">Download .md</button>
+                        </div>
+                    </div>
+                    <textarea id="html2md-result" class="convert-textarea c2-mono" rows="12" readonly></textarea>
+                </div>
+
+                <div id="html2md-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- TOML ↔ JSON -->
+        <div id="tab-toml" class="pdf-section card">
+            <div class="card-body">
+                <h2>TOML ↔ JSON</h2>
+                <p class="meta">Convert between TOML and JSON. Upload a file or paste text; the result is shown below and can be copied or downloaded.</p>
+                <div class="pdf-tabs" style="margin-top:0; margin-bottom:16px;">
+                    <button class="pdf-tab active" data-subtab="tomltojson">TOML → JSON</button>
+                    <button class="pdf-tab" data-subtab="jsontotoml">JSON → TOML</button>
+                </div>
+                <!-- TOML → JSON -->
+                <div id="subtab-tomltojson" class="pdf-subsection active">
+                    <div class="drop-zone" id="toml2json-drop">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <label class="drop-browse">Select .toml file<input type="file" id="toml2json-input" accept=".toml" hidden></label>
+                        <p class="drop-hint">or drop a file here &middot; or paste TOML below &middot; outputs .json</p>
+                    </div>
+                    <div id="toml2json-file-info" class="split-info" hidden>
+                        <span id="toml2json-file-name" class="split-name"></span>
+                        <span id="toml2json-file-size" class="file-size"></span>
+                        <button class="split-remove" onclick="clearTextTool('toml2json')">&times;</button>
+                    </div>
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Or paste TOML here</label>
+                        <textarea id="toml2json-text" class="convert-textarea" rows="6" placeholder='title = "Example"&#10;&#10;[owner]&#10;name = "Tom"'></textarea>
+                    </div>
+                    <div class="pdf-actions" style="margin-top: 16px;">
+                        <button id="toml2json-btn" class="btn-download" onclick="doTomlToJson()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Convert to JSON
+                        </button>
+                    </div>
+                    <div id="toml2json-result-wrap" class="c2-result" hidden>
+                        <div class="md-preview-header">
+                            <span class="md-preview-label">Result</span>
+                            <div style="display:flex; gap:6px;">
+                                <button class="btn-copy" onclick="copyText('toml2json-result', this)">Copy</button>
+                                <button class="btn-copy" onclick="downloadText('toml2json-result', textToolOutName.toml2json)">Download .json</button>
+                            </div>
+                        </div>
+                        <textarea id="toml2json-result" class="convert-textarea c2-mono" rows="12" readonly></textarea>
+                    </div>
+                    <div id="toml2json-error" class="error" hidden></div>
+                </div>
+                <!-- JSON → TOML -->
+                <div id="subtab-jsontotoml" class="pdf-subsection" hidden>
+                    <div class="drop-zone" id="json2toml-drop">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <label class="drop-browse">Select .json file<input type="file" id="json2toml-input" accept=".json" hidden></label>
+                        <p class="drop-hint">or drop a file here &middot; or paste JSON below &middot; top-level must be an object &middot; outputs .toml</p>
+                    </div>
+                    <div id="json2toml-file-info" class="split-info" hidden>
+                        <span id="json2toml-file-name" class="split-name"></span>
+                        <span id="json2toml-file-size" class="file-size"></span>
+                        <button class="split-remove" onclick="clearTextTool('json2toml')">&times;</button>
+                    </div>
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Or paste JSON here</label>
+                        <textarea id="json2toml-text" class="convert-textarea" rows="6" placeholder='{"title": "Example", "owner": {"name": "Tom"}}'></textarea>
+                    </div>
+                    <div class="pdf-actions" style="margin-top: 16px;">
+                        <button id="json2toml-btn" class="btn-download" onclick="doJsonToToml()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Convert to TOML
+                        </button>
+                    </div>
+                    <div id="json2toml-result-wrap" class="c2-result" hidden>
+                        <div class="md-preview-header">
+                            <span class="md-preview-label">Result</span>
+                            <div style="display:flex; gap:6px;">
+                                <button class="btn-copy" onclick="copyText('json2toml-result', this)">Copy</button>
+                                <button class="btn-copy" onclick="downloadText('json2toml-result', textToolOutName.json2toml)">Download .toml</button>
+                            </div>
+                        </div>
+                        <textarea id="json2toml-result" class="convert-textarea c2-mono" rows="12" readonly></textarea>
+                    </div>
+                    <div id="json2toml-error" class="error" hidden></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SQL Formatter -->
+        <div id="tab-sqlformat" class="pdf-section card">
+            <div class="card-body">
+                <h2>SQL Formatter</h2>
+                <p class="meta">Paste SQL to reindent it with consistent keyword casing, or minify it onto a single line.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>SQL</label>
+                    <textarea id="sql-text" class="convert-textarea c2-mono" rows="8" placeholder="select a.id, b.name from users a join orders b on a.id=b.user_id where a.active=1"></textarea>
+                </div>
+
+                <div class="field-row" style="margin-top: 12px; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+                    <div class="field" style="flex: 1; min-width: 140px;">
+                        <label>Keyword case</label>
+                        <select id="sql-case">
+                            <option value="upper" selected>UPPER</option>
+                            <option value="lower">lower</option>
+                            <option value="keep">Keep as-is</option>
+                        </select>
+                    </div>
+                    <div class="field" style="flex: 1; min-width: 120px;">
+                        <label>Indent width</label>
+                        <input type="number" id="sql-indent" value="2" min="1" max="8">
+                    </div>
+                </div>
+                <div style="margin-top: 10px; display: flex; gap: 16px; flex-wrap: wrap;">
+                    <label class="check-label"><input type="checkbox" id="sql-reindent" checked> Reindent</label>
+                    <label class="check-label"><input type="checkbox" id="sql-strip"> Strip comments</label>
+                </div>
+
+                <div class="pdf-actions" style="margin-top: 16px; display:flex; gap:8px;">
+                    <button id="sql-btn" class="btn-download" onclick="doSqlFormat(false)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M4 6h16M4 12h10M4 18h13"/></svg>
+                        Format SQL
+                    </button>
+                    <button id="sql-minify-btn" class="btn-download" style="background: var(--surface-2); color: var(--text-secondary); box-shadow:none;" onclick="doSqlFormat(true)">
+                        Minify
+                    </button>
+                </div>
+
+                <div id="sql-result-wrap" class="c2-result" hidden>
+                    <div class="md-preview-header">
+                        <span class="md-preview-label">Result</span>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-copy" onclick="copyText('sql-result', this)">Copy</button>
+                            <button class="btn-copy" onclick="downloadText('sql-result', 'formatted.sql')">Download .sql</button>
+                        </div>
+                    </div>
+                    <textarea id="sql-result" class="convert-textarea c2-mono" rows="12" readonly></textarea>
+                </div>
+
+                <div id="sql-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- ═══════════ File tools (batch 2) ═══════════ -->
+
+        <!-- Extract Archive -->
+        <div id="tab-extract-archive" class="pdf-section card">
+            <div class="card-body">
+                <h2>Extract Archive</h2>
+                <p class="meta">Open a .tar, .tar.gz, .tar.bz2, .tar.xz, .7z, .rar or .zip archive, preview its contents, and download everything as a single ZIP.</p>
+
+                <div class="drop-zone" id="extarc-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <label class="drop-browse">Select archive<input type="file" id="extarc-input" accept=".tar,.gz,.tgz,.bz2,.tbz2,.xz,.txz,.7z,.rar,.zip" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; tar, tar.gz, tar.bz2, tar.xz, 7z, rar, zip &middot; outputs .zip</p>
+                </div>
+
+                <div id="extarc-file-info" class="split-info" hidden>
+                    <span id="extarc-file-name" class="split-name"></span>
+                    <span id="extarc-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearExtArcFile()">&times;</button>
+                </div>
+
+                <div id="extarc-listing" class="c2-result" hidden>
+                    <div class="md-preview-header">
+                        <span class="md-preview-label">Contents</span>
+                        <span id="extarc-summary" class="file-size"></span>
+                    </div>
+                    <div class="c2-table-wrap">
+                        <table class="c2-table">
+                            <thead><tr><th>File</th><th class="c2-right">Size</th></tr></thead>
+                            <tbody id="extarc-rows"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="extarc-actions" class="pdf-actions" hidden>
+                    <button id="extarc-btn" class="btn-download" onclick="doExtractArchive()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Extract to ZIP
+                    </button>
+                </div>
+
+                <div id="extarc-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Checksum -->
+        <div id="tab-checksum" class="pdf-section card">
+            <div class="card-body">
+                <h2>File Checksum</h2>
+                <p class="meta">Compute MD5, SHA-1, SHA-256 and SHA-512 hashes for one or more files, and optionally verify against an expected hash.</p>
+
+                <div class="drop-zone" id="checksum-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <polyline points="9 15 11 17 15 13"/>
+                    </svg>
+                    <label class="drop-browse">Select files<input type="file" id="checksum-input" multiple hidden></label>
+                    <p class="drop-hint">or drop files here &middot; any file type &middot; batch supported</p>
+                </div>
+
+                <div id="checksum-list" class="file-list"></div>
+
+                <div class="field-row" style="margin-top: 12px;">
+                    <div class="field">
+                        <label>Expected hash (optional)</label>
+                        <input type="text" id="checksum-expected" class="c2-mono" placeholder="Paste a hash to verify against" oninput="renderChecksumResults()">
+                    </div>
+                </div>
+
+                <div id="checksum-actions" class="pdf-actions" hidden>
+                    <button id="checksum-btn" class="btn-download" onclick="doChecksum()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><polyline points="20 6 9 17 4 12"/></svg>
+                        Compute Hashes
+                    </button>
+                </div>
+
+                <div id="checksum-results" class="c2-result" hidden></div>
+
+                <div id="checksum-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Batch Rename -->
+        <div id="tab-rename" class="pdf-section card">
+            <div class="card-body">
+                <h2>Batch Rename</h2>
+                <p class="meta">Rename many files at once with a pattern, find and replace, and case rules. Preview updates live; the result downloads as a ZIP.</p>
+
+                <div class="drop-zone" id="rename-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <label class="drop-browse">Select files<input type="file" id="rename-input" multiple hidden></label>
+                    <p class="drop-hint">or drop files here &middot; any file type &middot; outputs renamed.zip</p>
+                </div>
+
+                <div id="rename-list" class="file-list" hidden></div>
+
+                <div class="field-row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
+                    <div class="field" style="flex: 2; min-width: 200px;">
+                        <label>Pattern</label>
+                        <input type="text" id="rename-pattern" class="c2-mono" value="{name}.{ext}" placeholder="{name}.{ext}" oninput="renderRenamePreview()">
+                    </div>
+                    <div class="field" style="flex: 1; min-width: 120px;">
+                        <label>Case</label>
+                        <select id="rename-case" onchange="renderRenamePreview()">
+                            <option value="keep" selected>Keep</option>
+                            <option value="lower">lowercase</option>
+                            <option value="upper">UPPERCASE</option>
+                            <option value="title">Title Case</option>
+                        </select>
+                    </div>
+                    <div class="field" style="flex: 0 0 110px; min-width: 100px;">
+                        <label>Start #</label>
+                        <input type="number" id="rename-start" value="1" min="0" oninput="renderRenamePreview()">
+                    </div>
+                </div>
+                <div class="field-row" style="margin-top: 12px; gap: 8px; flex-wrap: wrap;">
+                    <div class="field" style="flex: 1; min-width: 160px;">
+                        <label>Find</label>
+                        <input type="text" id="rename-find" placeholder="text in name" oninput="renderRenamePreview()">
+                    </div>
+                    <div class="field" style="flex: 1; min-width: 160px;">
+                        <label>Replace with</label>
+                        <input type="text" id="rename-replace" placeholder="replacement" oninput="renderRenamePreview()">
+                    </div>
+                </div>
+                <p class="drop-hint" style="margin-top: 8px;">Tokens: <code>{name}</code> <code>{ext}</code> <code>{n}</code> <code>{n:03}</code> <code>{date}</code> &middot; find/replace and case apply to the name before the pattern</p>
+
+                <div id="rename-preview-wrap" class="c2-result" hidden>
+                    <div class="md-preview-header">
+                        <span class="md-preview-label">Preview</span>
+                    </div>
+                    <div class="c2-table-wrap">
+                        <table class="c2-table">
+                            <thead><tr><th>Original</th><th>New name</th></tr></thead>
+                            <tbody id="rename-rows"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="rename-actions" class="pdf-actions" hidden>
+                    <button id="rename-btn" class="btn-download" onclick="doBatchRename()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Rename &amp; Download ZIP
+                    </button>
+                </div>
+
+                <div id="rename-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- File Splitter -->
+        <div id="tab-split-file" class="pdf-section card">
+            <div class="card-body">
+                <h2>File Splitter</h2>
+                <p class="meta">Split a large file into numbered parts (with a JOIN.txt of reassembly commands), or join parts back into the original file.</p>
+                <div class="pdf-tabs" style="margin-top:0; margin-bottom:16px;">
+                    <button class="pdf-tab active" data-subtab="splitfile">Split</button>
+                    <button class="pdf-tab" data-subtab="joinfiles">Join</button>
+                </div>
+                <!-- Split -->
+                <div id="subtab-splitfile" class="pdf-subsection active">
+                    <div class="drop-zone" id="splitfile-drop">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="4" y1="14" x2="20" y2="14" stroke-dasharray="2 2"/>
+                        </svg>
+                        <label class="drop-browse">Select file<input type="file" id="splitfile-input" hidden></label>
+                        <p class="drop-hint">or drop a file here &middot; any file type &middot; outputs a ZIP of .001, .002… parts</p>
+                    </div>
+                    <div id="splitfile-file-info" class="split-info" hidden>
+                        <span id="splitfile-file-name" class="split-name"></span>
+                        <span id="splitfile-file-size" class="file-size"></span>
+                        <button class="split-remove" onclick="clearSplitFile()">&times;</button>
+                    </div>
+                    <div class="field-row" style="margin-top: 12px; align-items: flex-end; gap: 12px;">
+                        <div class="field" style="max-width: 180px;">
+                            <label>Chunk size (MB)</label>
+                            <input type="number" id="splitfile-chunk" value="100" min="0.1" step="any" oninput="updateSplitEstimate()">
+                        </div>
+                        <span id="splitfile-estimate" class="file-size" style="padding-bottom: 12px;"></span>
+                    </div>
+                    <div id="splitfile-actions" class="pdf-actions" hidden>
+                        <button id="splitfile-btn" class="btn-download" onclick="doSplitFile()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Split File
+                        </button>
+                    </div>
+                    <div id="splitfile-error" class="error" hidden></div>
+                </div>
+                <!-- Join -->
+                <div id="subtab-joinfiles" class="pdf-subsection" hidden>
+                    <div class="drop-zone" id="joinfiles-drop">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <label class="drop-browse">Select part files<input type="file" id="joinfiles-input" multiple hidden></label>
+                        <p class="drop-hint">or drop parts here &middot; name.001, name.002… &middot; sorted by name and joined</p>
+                    </div>
+                    <div id="joinfiles-list" class="file-list"></div>
+                    <div id="joinfiles-actions" class="pdf-actions" hidden>
+                        <button id="joinfiles-btn" class="btn-download" onclick="doJoinFiles()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Join Files
+                        </button>
+                    </div>
+                    <div id="joinfiles-error" class="error" hidden></div>
+                </div>
             </div>
         </div>
     </main>

@@ -3,6 +3,39 @@
 {% block title %}Text Tools{% endblock %}
 {% block nav_text %}active{% endblock %}
 
+{% block head %}
+<style>
+    /* Styles for the Line Tools, Cron, Entities, Escape, Base, Units, Slug, Markdown Table and TTS sections. */
+    .tt-table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-top: 12px; }
+    .tt-table th, .tt-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .tt-table th { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); font-weight: 500; }
+    .tt-table td.mono, .tt-mono { font-family: ui-monospace, monospace; }
+    .tt-table tr:last-child td { border-bottom: none; }
+    .tt-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .tt-row .tt-key { width: 92px; flex-shrink: 0; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); font-weight: 500; }
+    .tt-row input[readonly] { flex: 1; min-width: 0; padding: 9px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-family: ui-monospace, monospace; font-size: .85rem; outline: none; }
+    .tt-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    .tt-chips .pill { padding: 5px 12px; font-family: ui-monospace, monospace; }
+    .tt-opts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: flex-end; }
+    .tt-opts .field { flex: 0 1 auto; }
+    .tt-opts .field input, .tt-opts .field select { width: auto; min-width: 90px; }
+    .tt-note { font-size: .82rem; color: var(--text-secondary); margin-top: 8px; }
+    .text-page input[type="range"] { width: 100%; padding: 0; border: none; background: transparent; box-shadow: none; accent-color: var(--accent); height: 28px; }
+    .tt-grid-wrap { overflow-x: auto; margin-top: 12px; }
+    .tt-grid { border-collapse: separate; border-spacing: 4px; }
+    .tt-grid input[type="text"] { width: 130px; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: .82rem; font-family: inherit; outline: none; }
+    .tt-grid input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+    .tt-grid thead input[type="text"] { font-weight: 600; }
+    .tt-grid select { width: 130px; padding: 5px 28px 5px 9px; font-size: .74rem; }
+    .tt-grid .tt-rm { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; padding: 0 4px; line-height: 1; }
+    .tt-grid .tt-rm:hover { color: var(--danger); }
+    .tt-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .tt-btns .btn-download { width: auto; margin-top: 0; padding: 10px 18px; font-size: .82rem; }
+    .tt-btn-group { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+    .tt-btn-group .pill-label { margin-right: 4px; }
+</style>
+{% endblock %}
+
 {% block content %}
     <main class="text-page">
 
@@ -478,6 +511,372 @@
 
                 <div id="pw-strength" style="margin-top: 8px; font-size: .82rem; color: var(--text-secondary);"></div>
                 <div class="pw-strength-bar"><div class="pw-strength-fill" id="pw-strength-fill"></div></div>
+            </div>
+        </div>
+
+        <!-- Line Tools -->
+        <div id="tab-lines" class="pdf-section card">
+            <div class="card-body">
+                <h2>Line Tools</h2>
+                <p class="meta">Sort, dedupe, number, join and split lines of text.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Input</label>
+                    <textarea id="lt-input" class="convert-textarea" rows="6" placeholder="One item per line..."></textarea>
+                </div>
+
+                <div class="tt-btn-group">
+                    <span class="pill-label">Sort</span>
+                    <button class="pill" onclick="doLines('sortaz')">A &rarr; Z</button>
+                    <button class="pill" onclick="doLines('sortza')">Z &rarr; A</button>
+                    <button class="pill" onclick="doLines('sortnum')">Numeric</button>
+                    <button class="pill" onclick="doLines('natural')">Natural</button>
+                    <button class="pill" onclick="doLines('reverse')">Reverse</button>
+                    <button class="pill" onclick="doLines('shuffle')">Shuffle</button>
+                </div>
+                <div class="tt-btn-group">
+                    <span class="pill-label">Clean</span>
+                    <button class="pill" onclick="doLines('dedupe')">Remove duplicates</button>
+                    <button class="pill" onclick="doLines('noblank')">Remove blank lines</button>
+                    <button class="pill" onclick="doLines('trim')">Trim whitespace</button>
+                    <button class="pill" onclick="doLines('number')">Add line numbers</button>
+                    <label class="check-label" style="margin-left: 6px;"><input type="checkbox" id="lt-case"> Case sensitive</label>
+                </div>
+
+                <div class="tt-opts">
+                    <div class="field"><label>Prefix</label><input type="text" id="lt-prefix" placeholder="- " style="width: 110px;"></div>
+                    <div class="field"><label>Suffix</label><input type="text" id="lt-suffix" placeholder=";" style="width: 110px;"></div>
+                    <button class="pill" onclick="doLines('affix')" style="height: 40px;">Add prefix / suffix</button>
+                </div>
+                <div class="tt-opts">
+                    <div class="field"><label>Separator</label><input type="text" id="lt-sep" value=", " placeholder=", or \t" style="width: 110px;"></div>
+                    <button class="pill" onclick="doLines('join')" style="height: 40px;">Join lines</button>
+                    <button class="pill" onclick="doLines('split')" style="height: 40px;">Split by separator</button>
+                </div>
+
+                <div class="field" style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Output</label>
+                        <button class="btn-copy" onclick="copyText('lt-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+                    </div>
+                    <textarea id="lt-output" class="convert-textarea" rows="6" readonly placeholder="Result will appear here..."></textarea>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; gap: 12px; flex-wrap: wrap;">
+                    <div id="lt-count" class="tt-note" style="margin-top: 0;">0 lines</div>
+                    <button class="btn-copy" onclick="linesUseOutput()" title="Move output into the input box for chaining">&uarr; Use as input</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cron Explainer -->
+        <div id="tab-cron" class="pdf-section card">
+            <div class="card-body">
+                <h2>Cron Explainer</h2>
+                <p class="meta">Translate a cron expression into plain English and preview its next run times.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Cron expression</label>
+                    <input type="text" id="cron-input" value="30 9 * * 1-5" placeholder="min hour day month weekday  (or sec min hour day month weekday)" style="font-family: ui-monospace, monospace;" spellcheck="false">
+                </div>
+                <div class="tt-chips" id="cron-examples">
+                    <button class="pill" data-cron="*/5 * * * *">*/5 * * * *</button>
+                    <button class="pill" data-cron="0 9 * * 1-5">0 9 * * 1-5</button>
+                    <button class="pill" data-cron="0 0 1 * *">0 0 1 * *</button>
+                    <button class="pill" data-cron="0 */6 * * *">0 */6 * * *</button>
+                    <button class="pill" data-cron="15 10 * * MON,WED,FRI">15 10 * * MON,WED,FRI</button>
+                    <button class="pill" data-cron="*/30 * * * * *">*/30 * * * * *</button>
+                    <button class="pill" data-cron="@daily">@daily</button>
+                    <button class="pill" data-cron="0 0 29 2 *">0 0 29 2 *</button>
+                </div>
+
+                <div id="cron-sentence" style="margin-top: 16px; font-size: 1.05rem; font-weight: 600; letter-spacing: -.01em;"></div>
+                <div id="cron-error" class="error" hidden></div>
+                <div id="cron-breakdown"></div>
+                <div id="cron-next"></div>
+            </div>
+        </div>
+
+        <!-- HTML Entities -->
+        <div id="tab-entities" class="pdf-section card">
+            <div class="card-body">
+                <h2>HTML Entities</h2>
+                <p class="meta">Encode text as HTML entities or decode named, decimal and hex entities back to text.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Input</label>
+                    <textarea id="ent-input" class="convert-textarea" rows="5" placeholder="Paste text or HTML with entities..."></textarea>
+                </div>
+
+                <div class="tt-btn-group">
+                    <button class="pill active" id="ent-mode-encode" onclick="entSetDirection('encode')">Encode</button>
+                    <button class="pill" id="ent-mode-decode" onclick="entSetDirection('decode')">Decode</button>
+                </div>
+                <div id="ent-encode-opts" style="margin-top: 12px; display: flex; gap: 16px 24px; flex-wrap: wrap;">
+                    <div class="tt-btn-group" style="margin-top: 0;">
+                        <span class="pill-label">Format</span>
+                        <button class="pill active" data-ent-mode="named">Named (&amp;copy;)</button>
+                        <button class="pill" data-ent-mode="dec">Decimal (&amp;#169;)</button>
+                        <button class="pill" data-ent-mode="hex">Hex (&amp;#xA9;)</button>
+                    </div>
+                    <div class="tt-btn-group" style="margin-top: 0;">
+                        <span class="pill-label">Scope</span>
+                        <button class="pill active" data-ent-scope="unsafe">Only unsafe (&amp; &lt; &gt; " ')</button>
+                        <button class="pill" data-ent-scope="nonascii">All non-ASCII</button>
+                    </div>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Output</label>
+                        <button class="btn-copy" onclick="copyText('ent-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+                    </div>
+                    <textarea id="ent-output" class="convert-textarea" rows="5" readonly placeholder="Result will appear here..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- String Escape -->
+        <div id="tab-escape" class="pdf-section card">
+            <div class="card-body">
+                <h2>String Escape</h2>
+                <p class="meta">Escape or unescape a string for JSON, JavaScript, Python, HTML attributes, CSV, shell, URLs or regular expressions.</p>
+
+                <div class="tt-opts" style="margin-top: 16px;">
+                    <div class="field" style="min-width: 200px;">
+                        <label>Language</label>
+                        <select id="esc-lang">
+                            <option value="json">JSON string</option>
+                            <option value="js">JavaScript string</option>
+                            <option value="python">Python string</option>
+                            <option value="htmlattr">HTML attribute</option>
+                            <option value="csv">CSV field</option>
+                            <option value="shell">Shell (single-quoted)</option>
+                            <option value="url">URL component</option>
+                            <option value="regex">Regex (escape special chars)</option>
+                        </select>
+                    </div>
+                    <div class="tt-btn-group" style="margin-top: 0; padding-bottom: 2px;">
+                        <button class="pill active" id="esc-dir-escape" onclick="escSetDirection('escape')">Escape</button>
+                        <button class="pill" id="esc-dir-unescape" onclick="escSetDirection('unescape')">Unescape</button>
+                    </div>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <label>Input</label>
+                    <textarea id="esc-input" class="convert-textarea" rows="5" placeholder="Paste the raw or escaped string..."></textarea>
+                </div>
+
+                <div class="field" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Output</label>
+                        <button class="btn-copy" onclick="copyText('esc-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+                    </div>
+                    <textarea id="esc-output" class="convert-textarea" rows="5" readonly placeholder="Result will appear here..."></textarea>
+                </div>
+                <div id="esc-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Number Base -->
+        <div id="tab-base" class="pdf-section card">
+            <div class="card-body">
+                <h2>Number Base Converter</h2>
+                <p class="meta">Convert integers of any size between binary, octal, decimal, hex and custom bases.</p>
+
+                <div class="tt-opts" style="margin-top: 16px; align-items: flex-end;">
+                    <div class="field" style="flex: 1 1 240px;">
+                        <label>Number</label>
+                        <input type="text" id="nb-input" value="255" placeholder="e.g. 255, 0xFF, -42, 1010" style="font-family: ui-monospace, monospace; width: 100%;" spellcheck="false">
+                    </div>
+                    <div class="field">
+                        <label>Input base</label>
+                        <select id="nb-base">
+                            <option value="2">Binary (2)</option>
+                            <option value="8">Octal (8)</option>
+                            <option value="10" selected>Decimal (10)</option>
+                            <option value="16">Hex (16)</option>
+                            <option value="custom">Custom...</option>
+                        </select>
+                    </div>
+                    <div class="field" id="nb-custom-wrap" hidden>
+                        <label>Base (2-36)</label>
+                        <input type="number" id="nb-custom" min="2" max="36" value="36" style="width: 90px;">
+                    </div>
+                    <label class="check-label" style="padding-bottom: 12px;"><input type="checkbox" id="nb-upper" checked> Uppercase hex</label>
+                </div>
+                <div id="nb-error" class="error" hidden></div>
+
+                <div id="nb-outputs" style="margin-top: 8px;">
+                    <div class="tt-row"><span class="tt-key">Binary</span><input type="text" id="nb-bin" readonly><button class="btn-copy" onclick="copyText('nb-bin', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
+                    <div class="tt-row"><span class="tt-key">Octal</span><input type="text" id="nb-oct" readonly><button class="btn-copy" onclick="copyText('nb-oct', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
+                    <div class="tt-row"><span class="tt-key">Decimal</span><input type="text" id="nb-dec" readonly><button class="btn-copy" onclick="copyText('nb-dec', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
+                    <div class="tt-row"><span class="tt-key">Hex</span><input type="text" id="nb-hex" readonly><button class="btn-copy" onclick="copyText('nb-hex', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
+                    <div class="tt-row"><span class="tt-key">Base 36</span><input type="text" id="nb-b36" readonly><button class="btn-copy" onclick="copyText('nb-b36', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
+                    <div class="tt-row"><span class="tt-key">Character</span><input type="text" id="nb-char" readonly><button class="btn-copy" onclick="copyText('nb-char', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
+                </div>
+
+                <div id="nb-bits" style="margin-top: 16px;"></div>
+            </div>
+        </div>
+
+        <!-- Unit Converter -->
+        <div id="tab-units" class="pdf-section card">
+            <div class="card-body">
+                <h2>Unit Converter</h2>
+                <p class="meta">Convert length, mass, temperature, area, volume, speed, time, data size, energy and pressure.</p>
+
+                <div class="tt-opts" style="margin-top: 16px;">
+                    <div class="field"><label>Category</label><select id="un-cat"></select></div>
+                </div>
+                <div class="tt-opts" style="align-items: flex-end;">
+                    <div class="field" style="flex: 1 1 140px;"><label>Value</label><input type="number" id="un-value" value="1" step="any" style="width: 100%;"></div>
+                    <div class="field" style="flex: 1 1 160px;"><label>From</label><select id="un-from" style="width: 100%;"></select></div>
+                    <button class="pill" id="un-swap" title="Swap units" style="height: 40px;">&#8644; Swap</button>
+                    <div class="field" style="flex: 1 1 160px;"><label>To</label><select id="un-to" style="width: 100%;"></select></div>
+                </div>
+
+                <div class="field" style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Result</label>
+                        <button class="btn-copy" onclick="copyText('un-result', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+                    </div>
+                    <input type="text" id="un-result" readonly style="font-family: ui-monospace, monospace; font-size: 1.05rem; padding: 14px;">
+                </div>
+                <div id="un-summary" class="tt-note"></div>
+                <div id="un-table"></div>
+            </div>
+        </div>
+
+        <!-- Slug Generator -->
+        <div id="tab-slug" class="pdf-section card">
+            <div class="card-body">
+                <h2>Slug Generator</h2>
+                <p class="meta">Turn a title into a clean URL slug.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Text</label>
+                    <textarea id="slug-input" class="convert-textarea" rows="3" placeholder="e.g. Crème Brûlée &amp; the Art of Dessert" style="min-height: 80px;"></textarea>
+                </div>
+
+                <div class="tt-opts">
+                    <div class="field"><label>Separator</label>
+                        <select id="slug-sep"><option value="-">Hyphen (-)</option><option value="_">Underscore (_)</option></select>
+                    </div>
+                    <div class="field"><label>Max length</label><input type="number" id="slug-max" min="0" placeholder="none" style="width: 100px;"></div>
+                </div>
+                <div style="margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;">
+                    <label class="check-label"><input type="checkbox" id="slug-lower" checked> Lowercase</label>
+                    <label class="check-label"><input type="checkbox" id="slug-translit" checked> Transliterate accents</label>
+                    <label class="check-label"><input type="checkbox" id="slug-stop"> Remove stop words</label>
+                </div>
+
+                <div class="field" style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Slug</label>
+                        <button class="btn-copy" onclick="copyText('slug-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+                    </div>
+                    <input type="text" id="slug-output" readonly style="font-family: ui-monospace, monospace; font-size: 1.05rem; padding: 14px;">
+                </div>
+                <div id="slug-count" class="tt-note"></div>
+            </div>
+        </div>
+
+        <!-- Markdown Table -->
+        <div id="tab-mdtable" class="pdf-section card">
+            <div class="card-body">
+                <h2>Markdown Table</h2>
+                <p class="meta">Build a Markdown table from CSV/TSV or edit cells in a grid; or convert a Markdown table back to CSV.</p>
+
+                <div class="tt-btn-group" style="margin-top: 16px;">
+                    <button class="pill active" id="mt-mode-build" onclick="mtSetMode('build')">CSV / Grid &rarr; Markdown</button>
+                    <button class="pill" id="mt-mode-reverse" onclick="mtSetMode('reverse')">Markdown &rarr; CSV</button>
+                </div>
+
+                <div id="mt-build">
+                    <div class="field" style="margin-top: 12px;">
+                        <label>Paste CSV / TSV (delimiter auto-detected, quoted fields supported)</label>
+                        <textarea id="mt-input" class="convert-textarea" rows="5" placeholder="Name, Role, Start&#10;&quot;Smith, John&quot;, Engineer, 2021&#10;Ada, Lead, 2019" style="min-height: 100px;"></textarea>
+                    </div>
+
+                    <div class="tt-btns">
+                        <button class="btn-download btn-secondary" onclick="mtAddRow()">+ Row</button>
+                        <button class="btn-download btn-secondary" onclick="mtAddCol()">+ Column</button>
+                        <button class="btn-download btn-secondary" onclick="mtClear()">Clear</button>
+                    </div>
+                    <div class="tt-grid-wrap"><table class="tt-grid" id="mt-grid"></table></div>
+
+                    <div style="margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;">
+                        <label class="check-label"><input type="checkbox" id="mt-header" checked> First row is header</label>
+                        <label class="check-label"><input type="checkbox" id="mt-compact"> Compact</label>
+                    </div>
+
+                    <div class="field" style="margin-top: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>Markdown</label>
+                        <button class="btn-copy" onclick="copyText('mt-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+                    </div>
+                        <textarea id="mt-output" class="convert-textarea" rows="7" readonly style="font-family: ui-monospace, monospace; white-space: pre; overflow-x: auto;"></textarea>
+                    </div>
+                </div>
+
+                <div id="mt-reverse" hidden>
+                    <div class="field" style="margin-top: 12px;">
+                        <label>Markdown table</label>
+                        <textarea id="mt-md-input" class="convert-textarea" rows="6" placeholder="| Name | Role |&#10;|------|------|&#10;| Ada  | Lead |" style="font-family: ui-monospace, monospace;"></textarea>
+                    </div>
+                    <div class="tt-opts">
+                        <div class="field"><label>Delimiter</label>
+                            <select id="mt-csv-delim"><option value=",">Comma (CSV)</option><option value="&#9;">Tab (TSV)</option><option value=";">Semicolon</option></select>
+                        </div>
+                    </div>
+                    <div class="field" style="margin-top: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label>CSV</label>
+                        <button class="btn-copy" onclick="copyText('mt-csv-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+                    </div>
+                        <textarea id="mt-csv-output" class="convert-textarea" rows="6" readonly style="font-family: ui-monospace, monospace;"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Text to Speech -->
+        <div id="tab-tts" class="pdf-section card">
+            <div class="card-body">
+                <h2>Text to Speech</h2>
+                <p class="meta">Read text aloud with your browser's built-in voices.</p>
+
+                <div class="field" style="margin-top: 16px;">
+                    <label>Text</label>
+                    <textarea id="tts-input" class="convert-textarea" rows="6" placeholder="Type or paste something to read aloud..."></textarea>
+                </div>
+
+                <div class="tt-opts">
+                    <div class="field" style="flex: 1 1 260px;"><label>Voice</label><select id="tts-voice" style="width: 100%;"><option>Loading voices...</option></select></div>
+                </div>
+                <div class="field-row" style="gap: 24px; flex-wrap: wrap;">
+                    <div class="field" style="min-width: 200px;">
+                        <label>Rate: <span id="tts-rate-val">1.0</span>x</label>
+                        <input type="range" id="tts-rate" min="0.5" max="2" step="0.1" value="1">
+                    </div>
+                    <div class="field" style="min-width: 200px;">
+                        <label>Pitch: <span id="tts-pitch-val">1.0</span></label>
+                        <input type="range" id="tts-pitch" min="0" max="2" step="0.1" value="1">
+                    </div>
+                </div>
+
+                <div class="tt-btns">
+                    <button class="btn-download" id="tts-speak" onclick="ttsSpeak()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/></svg>
+                        Speak
+                    </button>
+                    <button class="btn-download btn-secondary" id="tts-pause" onclick="ttsPause()">Pause</button>
+                    <button class="btn-download btn-secondary" id="tts-resume" onclick="ttsResume()">Resume</button>
+                    <button class="btn-download btn-secondary" id="tts-stop" onclick="ttsStop()">Stop</button>
+                </div>
+                <div id="tts-status" class="tt-note"></div>
+                <div id="tts-error" class="error" hidden></div>
+                <p class="tt-note" style="margin-top: 14px;">Audio plays through your speakers only. The Web Speech API does not expose the audio stream, so it cannot be saved as a file.</p>
             </div>
         </div>
 

@@ -875,6 +875,406 @@ async function doSaveMetadata() {
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Save Metadata`;
 }
 
+/* ── PDF → Images ── */
+let pdf2ImagesFile = null;
+
+setupDropZone("pdf2images-drop", "pdf2images-input", async files => {
+    const f = files[0];
+    if (!f || (!f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf"))) return;
+    pdf2ImagesFile = f;
+    document.getElementById("pdf2images-file-name").textContent = f.name;
+    document.getElementById("pdf2images-file-size").textContent = formatSize(f.size);
+    document.getElementById("pdf2images-file-info").hidden = false;
+    document.getElementById("pdf2images-options").hidden = false;
+    document.getElementById("pdf2images-actions").hidden = false;
+    fetchPageCount(f, "pdf2images-page-count");
+});
+
+function clearPdf2ImagesFile() {
+    pdf2ImagesFile = null;
+    document.getElementById("pdf2images-file-info").hidden = true;
+    document.getElementById("pdf2images-options").hidden = true;
+    document.getElementById("pdf2images-actions").hidden = true;
+    document.getElementById("pdf2images-page-count").textContent = "";
+    document.getElementById("pdf2images-pages").value = "";
+}
+
+async function doPdf2Images() {
+    if (!pdf2ImagesFile) return;
+    const btn = document.getElementById("pdf2images-btn");
+    const err = document.getElementById("pdf2images-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Rendering...";
+
+    const fmt = document.getElementById("pdf2images-format").value;
+    const form = new FormData();
+    form.append("file", pdf2ImagesFile);
+    form.append("format", fmt);
+    form.append("dpi", document.getElementById("pdf2images-dpi").value);
+    const pagesVal = document.getElementById("pdf2images-pages").value.trim();
+    form.append("pages", pagesVal || "all");
+
+    try {
+        const res = await fetch("/api/pdf/to-images", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Conversion failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = pdf2ImagesFile.name.replace(/\.pdf$/i, "");
+            const name = blob.type === "application/zip" ? base + "_pages.zip" : filenameFromResponse(res, base + "." + fmt);
+            downloadBlob(blob, name);
+            showToast("Saved: " + name);
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Convert to Images`;
+}
+
+/* ── OCR ── */
+let ocrFile = null;
+
+setupDropZone("ocr-drop", "ocr-input", files => {
+    const f = files[0];
+    if (!f) return;
+    ocrFile = f;
+    document.getElementById("ocr-file-name").textContent = f.name;
+    document.getElementById("ocr-file-size").textContent = formatSize(f.size);
+    document.getElementById("ocr-file-info").hidden = false;
+    document.getElementById("ocr-options").hidden = false;
+    document.getElementById("ocr-actions").hidden = false;
+    document.getElementById("ocr-result").hidden = true;
+    document.getElementById("ocr-output").value = "";
+});
+
+function clearOcrFile() {
+    ocrFile = null;
+    document.getElementById("ocr-file-info").hidden = true;
+    document.getElementById("ocr-options").hidden = true;
+    document.getElementById("ocr-actions").hidden = true;
+    document.getElementById("ocr-result").hidden = true;
+    document.getElementById("ocr-output").value = "";
+}
+
+async function doOcr() {
+    if (!ocrFile) return;
+    const btn = document.getElementById("ocr-btn");
+    const err = document.getElementById("ocr-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Recognising...";
+
+    const form = new FormData();
+    form.append("file", ocrFile);
+    form.append("language", document.getElementById("ocr-language").value);
+
+    try {
+        const res = await fetch("/api/pdf/ocr", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) {
+            err.textContent = data.error || "OCR failed";
+            err.hidden = false;
+        } else {
+            document.getElementById("ocr-output").value = data.text || "";
+            document.getElementById("ocr-result-meta").textContent =
+                data.pages + (data.pages === 1 ? " page" : " pages") + " · " + (data.text || "").length + " chars";
+            document.getElementById("ocr-result").hidden = false;
+            showToast("OCR complete: " + data.pages + (data.pages === 1 ? " page" : " pages"));
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Run OCR`;
+}
+
+function copyOcrText(btn) {
+    const el = document.getElementById("ocr-output");
+    navigator.clipboard.writeText(el.value).then(() => {
+        btn.classList.add("copied");
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+        setTimeout(() => { btn.classList.remove("copied"); btn.innerHTML = orig; }, 1500);
+    }).catch(() => {
+        el.select();
+        document.execCommand("copy");
+    });
+}
+
+function downloadOcrText() {
+    const text = document.getElementById("ocr-output").value;
+    const base = ocrFile ? ocrFile.name.replace(/\.[^.]+$/, "") : "ocr";
+    downloadBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), base + "_ocr.txt");
+    showToast("Saved: " + base + "_ocr.txt");
+}
+
+/* ── Office → PDF ── */
+let office2PdfFile = null;
+
+setupDropZone("office2pdf-drop", "office2pdf-input", files => {
+    const f = files[0];
+    if (!f) return;
+    office2PdfFile = f;
+    document.getElementById("office2pdf-file-name").textContent = f.name;
+    document.getElementById("office2pdf-file-size").textContent = formatSize(f.size);
+    document.getElementById("office2pdf-file-info").hidden = false;
+    document.getElementById("office2pdf-actions").hidden = false;
+});
+
+function clearOffice2PdfFile() {
+    office2PdfFile = null;
+    document.getElementById("office2pdf-file-info").hidden = true;
+    document.getElementById("office2pdf-actions").hidden = true;
+}
+
+async function doOffice2Pdf() {
+    if (!office2PdfFile) return;
+    const btn = document.getElementById("office2pdf-btn");
+    const err = document.getElementById("office2pdf-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Converting...";
+
+    const form = new FormData();
+    form.append("file", office2PdfFile);
+
+    try {
+        const res = await fetch("/api/pdf/from-office", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Conversion failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = office2PdfFile.name.replace(/\.[^.]+$/, "");
+            downloadBlob(blob, base + ".pdf");
+            showToast("Saved: " + base + ".pdf");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Convert to PDF`;
+}
+
+/* ── Stamp Image ── */
+let stampFile = null;
+let stampImage = null;
+
+setupDropZone("stamp-drop", "stamp-input", files => {
+    const f = files[0];
+    if (!f || (!f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf"))) return;
+    stampFile = f;
+    document.getElementById("stamp-file-name").textContent = f.name;
+    document.getElementById("stamp-file-size").textContent = formatSize(f.size);
+    document.getElementById("stamp-file-info").hidden = false;
+    document.getElementById("stamp-options").hidden = false;
+    document.getElementById("stamp-actions").hidden = false;
+    fetchPageCount(f, "stamp-page-count");
+});
+
+setupDropZone("stamp-image-drop", "stamp-image-input", files => {
+    const f = files[0];
+    if (!f || !f.type.startsWith("image/")) return;
+    stampImage = f;
+    document.getElementById("stamp-image-name").textContent = f.name;
+    document.getElementById("stamp-image-size").textContent = formatSize(f.size);
+    document.getElementById("stamp-image-info").hidden = false;
+    document.getElementById("stamp-image-drop").hidden = true;
+});
+
+document.getElementById("stamp-opacity").addEventListener("input", function() {
+    document.getElementById("stamp-opacity-val").textContent = this.value;
+});
+
+function clearStampImage() {
+    stampImage = null;
+    document.getElementById("stamp-image-info").hidden = true;
+    document.getElementById("stamp-image-drop").hidden = false;
+}
+
+function clearStampFile() {
+    stampFile = null;
+    clearStampImage();
+    document.getElementById("stamp-file-info").hidden = true;
+    document.getElementById("stamp-options").hidden = true;
+    document.getElementById("stamp-actions").hidden = true;
+    document.getElementById("stamp-page-count").textContent = "";
+    document.getElementById("stamp-pages").value = "";
+}
+
+async function doStamp() {
+    if (!stampFile) return;
+    const err = document.getElementById("stamp-error");
+    if (!stampImage) { err.textContent = "Choose an image to stamp"; err.hidden = false; return; }
+    const btn = document.getElementById("stamp-btn");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Stamping...";
+
+    const form = new FormData();
+    form.append("file", stampFile);
+    form.append("image", stampImage);
+    form.append("position", document.getElementById("stamp-position").value);
+    form.append("scale", document.getElementById("stamp-scale").value || "25");
+    form.append("opacity", document.getElementById("stamp-opacity").value);
+    const pagesVal = document.getElementById("stamp-pages").value.trim();
+    form.append("pages", pagesVal || "all");
+
+    try {
+        const res = await fetch("/api/pdf/stamp", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Stamping failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = stampFile.name.replace(/\.pdf$/i, "");
+            downloadBlob(blob, base + "_stamped.pdf");
+            showToast("Saved: " + base + "_stamped.pdf");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Stamp PDF`;
+}
+
+/* ── Resize Pages ── */
+let pageSizeFile = null;
+
+setupDropZone("pagesize-drop", "pagesize-input", files => {
+    const f = files[0];
+    if (!f || (!f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf"))) return;
+    pageSizeFile = f;
+    document.getElementById("pagesize-file-name").textContent = f.name;
+    document.getElementById("pagesize-file-size").textContent = formatSize(f.size);
+    document.getElementById("pagesize-file-info").hidden = false;
+    document.getElementById("pagesize-options").hidden = false;
+    document.getElementById("pagesize-actions").hidden = false;
+    fetchPageCount(f, "pagesize-page-count");
+});
+
+function clearPageSizeFile() {
+    pageSizeFile = null;
+    document.getElementById("pagesize-file-info").hidden = true;
+    document.getElementById("pagesize-options").hidden = true;
+    document.getElementById("pagesize-actions").hidden = true;
+    document.getElementById("pagesize-page-count").textContent = "";
+}
+
+async function doPageSize() {
+    if (!pageSizeFile) return;
+    const btn = document.getElementById("pagesize-btn");
+    const err = document.getElementById("pagesize-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Resizing...";
+
+    const size = document.getElementById("pagesize-size").value;
+    const form = new FormData();
+    form.append("file", pageSizeFile);
+    form.append("size", size);
+    form.append("fit", document.getElementById("pagesize-fit").value);
+
+    try {
+        const res = await fetch("/api/pdf/page-size", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Resize failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = pageSizeFile.name.replace(/\.pdf$/i, "");
+            downloadBlob(blob, base + "_" + size + ".pdf");
+            showToast("Saved: " + base + "_" + size + ".pdf");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Resize Pages`;
+}
+
+/* ── Flatten ── */
+let flattenFile = null;
+
+setupDropZone("flatten-drop", "flatten-input", files => {
+    const f = files[0];
+    if (!f || (!f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf"))) return;
+    flattenFile = f;
+    document.getElementById("flatten-file-name").textContent = f.name;
+    document.getElementById("flatten-file-size").textContent = formatSize(f.size);
+    document.getElementById("flatten-file-info").hidden = false;
+    document.getElementById("flatten-actions").hidden = false;
+    fetchPageCount(f, "flatten-page-count");
+});
+
+function clearFlattenFile() {
+    flattenFile = null;
+    document.getElementById("flatten-file-info").hidden = true;
+    document.getElementById("flatten-actions").hidden = true;
+    document.getElementById("flatten-page-count").textContent = "";
+}
+
+async function doFlatten() {
+    if (!flattenFile) return;
+    const btn = document.getElementById("flatten-btn");
+    const err = document.getElementById("flatten-error");
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Flattening...";
+
+    const form = new FormData();
+    form.append("file", flattenFile);
+
+    try {
+        const res = await fetch("/api/pdf/flatten", { method: "POST", body: form });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Flatten failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const base = flattenFile.name.replace(/\.pdf$/i, "");
+            downloadBlob(blob, base + "_flattened.pdf");
+            showToast("Saved: " + base + "_flattened.pdf");
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Flatten PDF`;
+}
+
+/* Fills a .count-badge with the page count of a PDF (best effort). */
+async function fetchPageCount(file, badgeId) {
+    const form = new FormData();
+    form.append("file", file);
+    try {
+        const res = await fetch("/api/pdf/page-count", { method: "POST", body: form });
+        const data = await res.json();
+        if (data.pages) document.getElementById(badgeId).textContent = data.pages + (data.pages === 1 ? " page" : " pages");
+    } catch {}
+}
+
+/* Reads the filename from a Content-Disposition header, or returns fallback. */
+function filenameFromResponse(res, fallback) {
+    const cd = res.headers.get("Content-Disposition") || "";
+    const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
+    return m ? decodeURIComponent(m[1]) : fallback;
+}
+
 /* ── Helpers ── */
 function esc(s) {
     const d = document.createElement("div");

@@ -564,6 +564,324 @@
                 <div id="metadata-error" class="error" hidden></div>
             </div>
         </div>
+
+        <!-- PDF to Images -->
+        <div id="tab-pdf2images" class="pdf-section card">
+            <div class="card-body">
+                <h2>PDF to Images</h2>
+                <p class="meta">Render each page of a PDF as a PNG or JPG image.</p>
+
+                <div class="drop-zone" id="pdf2images-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <circle cx="10" cy="13" r="2"/>
+                        <path d="M20 20l-4.5-4.5L8 22"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="pdf2images-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; single page downloads as an image &middot; multiple pages as a ZIP</p>
+                </div>
+
+                <div id="pdf2images-file-info" class="split-info" hidden>
+                    <span id="pdf2images-file-name" class="split-name"></span>
+                    <span id="pdf2images-file-size" class="file-size"></span>
+                    <span id="pdf2images-page-count" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearPdf2ImagesFile()">&times;</button>
+                </div>
+
+                <div id="pdf2images-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Format</label>
+                            <select id="pdf2images-format">
+                                <option value="png">PNG</option>
+                                <option value="jpg">JPG</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <label>Resolution</label>
+                            <select id="pdf2images-dpi">
+                                <option value="72">72 dpi (screen)</option>
+                                <option value="150" selected>150 dpi (standard)</option>
+                                <option value="300">300 dpi (print)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field" style="margin-top: 12px;">
+                        <label>Pages (leave empty for all)</label>
+                        <input type="text" id="pdf2images-pages" placeholder="e.g. 1, 3, 5-7">
+                    </div>
+                </div>
+
+                <div id="pdf2images-actions" class="pdf-actions" hidden>
+                    <button id="pdf2images-btn" class="btn-download" onclick="doPdf2Images()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to Images
+                    </button>
+                </div>
+                <div id="pdf2images-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- OCR -->
+        <div id="tab-ocr" class="pdf-section card">
+            <div class="card-body">
+                <h2>OCR</h2>
+                <p class="meta">Recognise text in a scanned PDF or image using Tesseract.</p>
+
+                <div class="drop-zone" id="ocr-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="8" y1="13" x2="16" y2="13"/>
+                        <line x1="8" y1="17" x2="16" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF or image<input type="file" id="ocr-input" accept=".pdf,image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PDF, PNG, JPG, TIFF &middot; requires Tesseract to be installed</p>
+                </div>
+
+                <div id="ocr-file-info" class="split-info" hidden>
+                    <span id="ocr-file-name" class="split-name"></span>
+                    <span id="ocr-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearOcrFile()">&times;</button>
+                </div>
+
+                <div id="ocr-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Language</label>
+                            <select id="ocr-language">
+                                <option value="eng" selected>English</option>
+                                <option value="fra">French</option>
+                                <option value="deu">German</option>
+                                <option value="spa">Spanish</option>
+                                <option value="ita">Italian</option>
+                                <option value="por">Portuguese</option>
+                                <option value="nld">Dutch</option>
+                                <option value="rus">Russian</option>
+                                <option value="heb">Hebrew</option>
+                                <option value="ara">Arabic</option>
+                                <option value="chi_sim">Chinese (Simplified)</option>
+                                <option value="chi_tra">Chinese (Traditional)</option>
+                                <option value="jpn">Japanese</option>
+                                <option value="kor">Korean</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="ocr-actions" class="pdf-actions" hidden>
+                    <button id="ocr-btn" class="btn-download" onclick="doOcr()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Run OCR
+                    </button>
+                </div>
+                <div id="ocr-result" hidden>
+                    <div class="field" style="margin-top: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label>Recognised Text <span id="ocr-result-meta" class="file-size"></span></label>
+                            <div style="display: flex; gap: 6px;">
+                                <button class="btn-copy" onclick="copyOcrText(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+                                <button class="btn-copy" onclick="downloadOcrText()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Download .txt</button>
+                            </div>
+                        </div>
+                        <textarea id="ocr-output" class="convert-textarea" rows="12" readonly placeholder="Recognised text will appear here..."></textarea>
+                    </div>
+                </div>
+                <div id="ocr-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Office to PDF -->
+        <div id="tab-office2pdf" class="pdf-section card">
+            <div class="card-body">
+                <h2>Office to PDF</h2>
+                <p class="meta">Convert Word, Excel, PowerPoint and OpenDocument files to PDF using LibreOffice.</p>
+
+                <div class="drop-zone" id="office2pdf-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <label class="drop-browse">Select document<input type="file" id="office2pdf-input" accept=".doc,.docx,.odt,.rtf,.txt,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp,.html,.epub" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; .docx .xlsx .pptx .odt .rtf and more &middot; requires LibreOffice to be installed</p>
+                </div>
+
+                <div id="office2pdf-file-info" class="split-info" hidden>
+                    <span id="office2pdf-file-name" class="split-name"></span>
+                    <span id="office2pdf-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearOffice2PdfFile()">&times;</button>
+                </div>
+
+                <div id="office2pdf-actions" class="pdf-actions" hidden>
+                    <button id="office2pdf-btn" class="btn-download" onclick="doOffice2Pdf()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert to PDF
+                    </button>
+                </div>
+                <div id="office2pdf-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Stamp Image -->
+        <div id="tab-stamp" class="pdf-section card">
+            <div class="card-body">
+                <h2>Stamp Image</h2>
+                <p class="meta">Place a logo, signature or image onto pages of a PDF.</p>
+
+                <div class="drop-zone" id="stamp-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <circle cx="10" cy="13" r="2"/>
+                        <path d="M20 20l-4.5-4.5L8 22"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="stamp-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; then choose the image to stamp</p>
+                </div>
+
+                <div id="stamp-file-info" class="split-info" hidden>
+                    <span id="stamp-file-name" class="split-name"></span>
+                    <span id="stamp-file-size" class="file-size"></span>
+                    <span id="stamp-page-count" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearStampFile()">&times;</button>
+                </div>
+
+                <div id="stamp-options" hidden>
+                    <div class="field" style="margin-top: 16px;">
+                        <label>Stamp image</label>
+                        <div class="drop-zone" id="stamp-image-drop" style="padding: 20px;">
+                            <label class="drop-browse">Select image<input type="file" id="stamp-image-input" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" hidden></label>
+                            <p class="drop-hint">or drop a PNG / JPG here &middot; transparent PNGs work best for signatures</p>
+                        </div>
+                        <div id="stamp-image-info" class="split-info" hidden>
+                            <span id="stamp-image-name" class="split-name"></span>
+                            <span id="stamp-image-size" class="file-size"></span>
+                            <button class="split-remove" onclick="clearStampImage()">&times;</button>
+                        </div>
+                    </div>
+                    <div class="field-row" style="margin-top: 12px;">
+                        <div class="select-wrap">
+                            <label>Position</label>
+                            <select id="stamp-position">
+                                <option value="bottom-right" selected>Bottom Right</option>
+                                <option value="bottom-left">Bottom Left</option>
+                                <option value="top-right">Top Right</option>
+                                <option value="top-left">Top Left</option>
+                                <option value="center">Center</option>
+                            </select>
+                        </div>
+                        <div class="field" style="max-width: 140px;">
+                            <label>Size (% of page width)</label>
+                            <input type="number" id="stamp-scale" value="25" min="1" max="100">
+                        </div>
+                        <div class="field" style="flex: 1;">
+                            <label>Opacity: <span id="stamp-opacity-val">100</span>%</label>
+                            <input type="range" id="stamp-opacity" min="5" max="100" step="5" value="100">
+                        </div>
+                    </div>
+                    <div class="field" style="margin-top: 12px;">
+                        <label>Pages (leave empty for all)</label>
+                        <input type="text" id="stamp-pages" placeholder="e.g. 1, 3, 5-7">
+                    </div>
+                </div>
+
+                <div id="stamp-actions" class="pdf-actions" hidden>
+                    <button id="stamp-btn" class="btn-download" onclick="doStamp()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Stamp PDF
+                    </button>
+                </div>
+                <div id="stamp-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Resize Pages -->
+        <div id="tab-pagesize" class="pdf-section card">
+            <div class="card-body">
+                <h2>Resize Pages</h2>
+                <p class="meta">Scale every page to a standard paper size with the content centred.</p>
+
+                <div class="drop-zone" id="pagesize-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="pagesize-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; A4, Letter, Legal, A3, A5 &middot; landscape pages stay landscape</p>
+                </div>
+
+                <div id="pagesize-file-info" class="split-info" hidden>
+                    <span id="pagesize-file-name" class="split-name"></span>
+                    <span id="pagesize-file-size" class="file-size"></span>
+                    <span id="pagesize-page-count" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearPageSizeFile()">&times;</button>
+                </div>
+
+                <div id="pagesize-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Paper size</label>
+                            <select id="pagesize-size">
+                                <option value="a4" selected>A4 (210 &times; 297 mm)</option>
+                                <option value="letter">Letter (8.5 &times; 11 in)</option>
+                                <option value="legal">Legal (8.5 &times; 14 in)</option>
+                                <option value="a3">A3 (297 &times; 420 mm)</option>
+                                <option value="a5">A5 (148 &times; 210 mm)</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <label>Scaling</label>
+                            <select id="pagesize-fit">
+                                <option value="fit" selected>Fit (keep everything visible)</option>
+                                <option value="fill">Fill (cover page, may crop edges)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pagesize-actions" class="pdf-actions" hidden>
+                    <button id="pagesize-btn" class="btn-download" onclick="doPageSize()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Resize Pages
+                    </button>
+                </div>
+                <div id="pagesize-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Flatten PDF -->
+        <div id="tab-flatten" class="pdf-section card">
+            <div class="card-body">
+                <h2>Flatten PDF</h2>
+                <p class="meta">Rasterise every page to an image so forms, annotations and layers become permanent, uneditable content.</p>
+
+                <div class="drop-zone" id="flatten-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <label class="drop-browse">Select PDF file<input type="file" id="flatten-input" accept=".pdf" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; renders pages at 150 dpi &middot; text will no longer be selectable</p>
+                </div>
+
+                <div id="flatten-file-info" class="split-info" hidden>
+                    <span id="flatten-file-name" class="split-name"></span>
+                    <span id="flatten-file-size" class="file-size"></span>
+                    <span id="flatten-page-count" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearFlattenFile()">&times;</button>
+                </div>
+
+                <div id="flatten-actions" class="pdf-actions" hidden>
+                    <button id="flatten-btn" class="btn-download" onclick="doFlatten()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Flatten PDF
+                    </button>
+                </div>
+                <div id="flatten-error" class="error" hidden></div>
+            </div>
+        </div>
     </main>
 {% endblock %}
 

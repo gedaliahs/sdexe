@@ -38,6 +38,15 @@ dependencies = [
     "qrcode",
     "imageio-ffmpeg",
     "certifi",
+    "pypdfium2",
+    "pillow-heif",
+    "openpyxl",
+    "html2text",
+    "sqlparse",
+    "py7zr",
+    "tomli-w",
+    "tomli; python_version < '3.11'",
+    "pytesseract",
 ]
 
 [project.optional-dependencies]

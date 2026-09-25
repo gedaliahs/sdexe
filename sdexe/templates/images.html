@@ -3,6 +3,34 @@
 {% block title %}Image Tools{% endblock %}
 {% block nav_images %}active{% endblock %}
 
+{% block head %}
+<style>
+    /* images2: range sliders, before/after compare, key/value tables, ASCII output, color picker */
+    .field input[type="range"] { padding: 0; height: 28px; border: none; background: transparent; box-shadow: none; accent-color: var(--accent); cursor: pointer; }
+    .field input[type="range"]:focus { box-shadow: none; }
+    .range-value { float: right; font-variant-numeric: tabular-nums; color: var(--text-muted); text-transform: none; letter-spacing: normal; }
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .compare-pane { position: relative; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; min-height: 80px; }
+    .compare-pane img { display: block; width: 100%; max-height: 360px; object-fit: contain; }
+    .compare-label { position: absolute; top: 8px; left: 8px; font-size: .7rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 3px 8px; border-radius: var(--radius-pill); background: rgba(0,0,0,.55); color: #fff; }
+    .kv-wrap { max-height: 480px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
+    .kv-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .kv-table th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); position: sticky; top: 0; }
+    .kv-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); vertical-align: top; word-break: break-word; }
+    .kv-table tr:last-child td { border-bottom: none; }
+    .kv-table td.kv-key { width: 34%; color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
+    .kv-table td.kv-section { background: var(--surface-3); color: var(--text); font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+    .kv-table td.kv-val { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: .78rem; }
+    .ascii-output { background: #111; color: #e6e6e6; padding: 14px; border-radius: var(--radius-md); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9px; line-height: 1.05; overflow: auto; max-height: 520px; white-space: pre; margin: 0; }
+    .cp-canvas-wrap { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface-2); line-height: 0; }
+    #colorpicker-canvas { max-width: 100%; height: auto; display: block; cursor: crosshair; image-rendering: auto; }
+    .cp-hover { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: .82rem; color: var(--text-secondary); font-family: "SF Mono", Menlo, Consolas, monospace; }
+    .cp-swatch { display: inline-block; width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--border); background: transparent; flex-shrink: 0; }
+    .cp-swatch.lg { width: 28px; height: 28px; }
+    @media (max-width: 640px) { .compare-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
 {% block content %}
     <main>
 
@@ -132,8 +160,8 @@
                         <circle cx="8.5" cy="8.5" r="1.5"/>
                         <polyline points="21 15 16 10 5 21"/>
                     </svg>
-                    <label class="drop-browse">Select images<input type="file" id="iconvert-input" accept="image/*" multiple hidden></label>
-                    <p class="drop-hint">or drop files here &middot; converts PNG ↔ JPG ↔ WebP &middot; batch supported</p>
+                    <label class="drop-browse">Select images<input type="file" id="iconvert-input" accept="image/*,.heic,.heif" multiple hidden></label>
+                    <p class="drop-hint">or drop files here &middot; converts PNG ↔ JPG ↔ WebP &middot; HEIC input supported &middot; batch supported</p>
                 </div>
 
                 <div id="iconvert-list" class="file-list"></div>
@@ -606,6 +634,488 @@
                 </div>
 
                 <div id="ph-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- HEIC to JPG -->
+        <div id="tab-heic" class="pdf-section card">
+            <div class="card-body">
+                <h2>HEIC to JPG</h2>
+                <p class="meta">Convert iPhone HEIC / HEIF photos to JPG or PNG.</p>
+
+                <div class="drop-zone" id="heic-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <label class="drop-browse">Select HEIC files<input type="file" id="heic-input" accept=".heic,.heif,image/heic,image/heif" multiple hidden></label>
+                    <p class="drop-hint">or drop files here &middot; HEIC, HEIF &middot; batch supported &middot; output JPG or PNG</p>
+                </div>
+
+                <div id="heic-file-list" class="file-list"></div>
+
+                <div id="heic-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Output Format</label>
+                            <select id="heic-format" onchange="toggleHeicQuality()">
+                                <option value="jpg" selected>JPG</option>
+                                <option value="png">PNG</option>
+                            </select>
+                        </div>
+                        <div class="field" id="heic-quality-field" style="max-width: 140px;">
+                            <label>JPG Quality</label>
+                            <input type="number" id="heic-quality" value="90" min="1" max="100">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="heic-actions" class="pdf-actions" hidden>
+                    <button id="heic-btn" class="btn-download" onclick="doHeic()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert HEIC
+                    </button>
+                </div>
+
+                <div id="heic-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Adjust -->
+        <div id="tab-adjust" class="pdf-section card">
+            <div class="card-body">
+                <h2>Adjust Image</h2>
+                <p class="meta">Tune brightness, contrast, saturation and sharpness with a live preview.</p>
+
+                <div class="drop-zone" id="adjust-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="var(--surface)"/>
+                        <line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="var(--surface)"/>
+                        <line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2" fill="var(--surface)"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="adjust-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP &middot; 100% = unchanged</p>
+                </div>
+
+                <div id="adjust-file-info" class="split-info" hidden>
+                    <img id="adjust-thumb" class="img-thumb" src="" alt="">
+                    <span id="adjust-file-name" class="split-name"></span>
+                    <span id="adjust-dimensions" class="count-badge"></span>
+                    <span id="adjust-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAdjustFile()">&times;</button>
+                </div>
+
+                <div id="adjust-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Brightness <span class="range-value" id="adjust-brightness-val">100%</span></label>
+                            <input type="range" id="adjust-brightness" min="0" max="200" value="100" oninput="updateAdjustPreview()">
+                        </div>
+                        <div class="field">
+                            <label>Contrast <span class="range-value" id="adjust-contrast-val">100%</span></label>
+                            <input type="range" id="adjust-contrast" min="0" max="200" value="100" oninput="updateAdjustPreview()">
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label>Saturation <span class="range-value" id="adjust-saturation-val">100%</span></label>
+                            <input type="range" id="adjust-saturation" min="0" max="200" value="100" oninput="updateAdjustPreview()">
+                        </div>
+                        <div class="field">
+                            <label>Sharpness <span class="range-value" id="adjust-sharpness-val">100%</span></label>
+                            <input type="range" id="adjust-sharpness" min="0" max="200" value="100" oninput="updateAdjustPreview()">
+                        </div>
+                    </div>
+                    <div style="margin-top: 8px;">
+                        <button type="button" class="btn-copy" onclick="resetAdjust()">Reset</button>
+                    </div>
+
+                    <div class="compare-grid" style="margin-top: 16px;">
+                        <div class="compare-pane">
+                            <span class="compare-label">Before</span>
+                            <img id="adjust-before" src="" alt="Original">
+                        </div>
+                        <div class="compare-pane">
+                            <span class="compare-label">After (preview)</span>
+                            <img id="adjust-after" src="" alt="Preview">
+                        </div>
+                    </div>
+                    <p class="drop-hint" style="margin-top: 8px;">Preview is approximate; sharpness is applied on download.</p>
+                </div>
+
+                <div id="adjust-actions" class="pdf-actions" hidden>
+                    <button id="adjust-btn" class="btn-download" onclick="doAdjust()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Apply &amp; Download
+                    </button>
+                </div>
+
+                <div id="adjust-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- EXIF Viewer -->
+        <div id="tab-exif" class="pdf-section card">
+            <div class="card-body">
+                <h2>EXIF Viewer</h2>
+                <p class="meta">Read camera, lens, date and GPS metadata embedded in a photo.</p>
+
+                <div class="drop-zone" id="exif-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="exif-input" accept="image/*,.heic,.heif" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; JPG, PNG, WebP, HEIC, TIFF &middot; read only, nothing is modified</p>
+                </div>
+
+                <div id="exif-file-info" class="split-info" hidden>
+                    <img id="exif-thumb" class="img-thumb" src="" alt="">
+                    <span id="exif-file-name" class="split-name"></span>
+                    <span id="exif-file-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearExifFile()">&times;</button>
+                </div>
+
+                <div id="exif-result" hidden style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span id="exif-count" class="drop-hint"></span>
+                        <button class="btn-copy" id="exif-copy-btn" onclick="copyExifJson(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy JSON</button>
+                    </div>
+                    <div class="kv-wrap"><table class="kv-table" id="exif-table"></table></div>
+                </div>
+
+                <div id="exif-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Border / Padding -->
+        <div id="tab-border" class="pdf-section card">
+            <div class="card-body">
+                <h2>Border / Padding</h2>
+                <p class="meta">Add a solid frame or padding around an image, with optional rounded corners.</p>
+
+                <div class="drop-zone" id="border-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="2" y="2" width="20" height="20" rx="1"/>
+                        <rect x="7" y="7" width="10" height="10" rx="1" stroke-dasharray="2 2"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="border-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP &middot; padding is transparent for PNG</p>
+                </div>
+
+                <div id="border-file-info" class="split-info" hidden>
+                    <img id="border-thumb" class="img-thumb" src="" alt="">
+                    <span id="border-file-name" class="split-name"></span>
+                    <span id="border-dimensions" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearBorderFile()">&times;</button>
+                </div>
+
+                <div id="border-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Mode</label>
+                            <select id="border-mode" onchange="toggleBorderMode()">
+                                <option value="border" selected>Border (solid frame)</option>
+                                <option value="padding">Padding (transparent if PNG)</option>
+                            </select>
+                        </div>
+                        <div class="field" style="max-width: 120px;">
+                            <label>Size (px)</label>
+                            <input type="number" id="border-size" value="20" min="0" max="2000">
+                        </div>
+                        <div class="field" style="max-width: 120px;">
+                            <label>Radius (px)</label>
+                            <input type="number" id="border-radius" value="0" min="0" max="2000">
+                        </div>
+                        <div class="field" style="max-width: 90px;" id="border-color-field">
+                            <label>Color</label>
+                            <input type="color" id="border-color" value="#ffffff" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
+                        </div>
+                    </div>
+                    <p class="drop-hint" id="border-mode-hint" style="margin-top: 8px;">Border: a solid colored frame around the image.</p>
+                </div>
+
+                <div id="border-actions" class="pdf-actions" hidden>
+                    <button id="border-btn" class="btn-download" onclick="doBorder()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Add Border
+                    </button>
+                </div>
+
+                <div id="border-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Favicon Set -->
+        <div id="tab-favicon" class="pdf-section card">
+            <div class="card-body">
+                <h2>Favicon Set</h2>
+                <p class="meta">Generate a complete favicon package (ICO, PNG sizes, Apple touch icon, manifest) from one image.</p>
+
+                <div class="drop-zone" id="favicon-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="4"/>
+                        <path d="M12 7l1.5 3.2 3.5.4-2.6 2.4.7 3.5L12 14.8 8.9 16.5l.7-3.5L7 10.6l3.5-.4z"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="favicon-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; square images work best (512&times;512 or larger) &middot; center-cropped to square</p>
+                </div>
+
+                <div id="favicon-file-info" class="split-info" hidden>
+                    <img id="favicon-thumb" class="img-thumb" src="" alt="">
+                    <span id="favicon-file-name" class="split-name"></span>
+                    <span id="favicon-dimensions" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearFaviconFile()">&times;</button>
+                </div>
+
+                <div id="favicon-options" hidden>
+                    <p class="drop-hint" style="margin-top: 12px;">ZIP includes: favicon.ico (16/32/48), favicon-16x16.png, favicon-32x32.png, apple-touch-icon.png (180), android-chrome-192x192.png, android-chrome-512x512.png, site.webmanifest, snippet.html</p>
+                </div>
+
+                <div id="favicon-actions" class="pdf-actions" hidden>
+                    <button id="favicon-btn" class="btn-download" onclick="doFaviconSet()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Generate Favicon Set
+                    </button>
+                </div>
+
+                <div id="favicon-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Upscale -->
+        <div id="tab-upscale" class="pdf-section card">
+            <div class="card-body">
+                <h2>Upscale Image</h2>
+                <p class="meta">Enlarge an image 2&times;, 3&times; or 4&times; using Lanczos resampling with light sharpening (not AI).</p>
+
+                <div class="drop-zone" id="upscale-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="upscale-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP &middot; resampling upscale, output capped at 80 MP</p>
+                </div>
+
+                <div id="upscale-file-info" class="split-info" hidden>
+                    <img id="upscale-thumb" class="img-thumb" src="" alt="">
+                    <span id="upscale-file-name" class="split-name"></span>
+                    <span id="upscale-dimensions" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearUpscaleFile()">&times;</button>
+                </div>
+
+                <div id="upscale-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Scale Factor</label>
+                            <select id="upscale-factor" onchange="updateUpscaleHint()">
+                                <option value="2" selected>2&times;</option>
+                                <option value="3">3&times;</option>
+                                <option value="4">4&times;</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="drop-hint" id="upscale-hint" style="margin-top: 8px;"></p>
+                </div>
+
+                <div id="upscale-actions" class="pdf-actions" hidden>
+                    <button id="upscale-btn" class="btn-download" onclick="doUpscale()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Upscale Image
+                    </button>
+                </div>
+
+                <div id="upscale-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Collage / Sprite Sheet -->
+        <div id="tab-collage" class="pdf-section card">
+            <div class="card-body">
+                <h2>Collage / Sprite Sheet</h2>
+                <p class="meta">Arrange multiple images into a grid, optionally with CSS sprite positions. Drag to reorder.</p>
+
+                <div class="drop-zone" id="collage-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                    <label class="drop-browse">Select images<input type="file" id="collage-input" accept="image/*" multiple hidden></label>
+                    <p class="drop-hint">or drop files here &middot; PNG, JPG, WebP &middot; grid order follows the list</p>
+                </div>
+
+                <div id="collage-list" class="file-list"></div>
+
+                <div id="collage-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Columns</label>
+                            <input type="number" id="collage-columns" placeholder="auto" min="1" max="100">
+                        </div>
+                        <div class="field">
+                            <label>Cell Size (px)</label>
+                            <input type="number" id="collage-cell" value="256" min="8" max="2048">
+                        </div>
+                        <div class="field">
+                            <label>Gap (px)</label>
+                            <input type="number" id="collage-gap" value="0" min="0" max="512">
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="select-wrap">
+                            <label>Fit</label>
+                            <select id="collage-fit">
+                                <option value="contain" selected>Contain (whole image)</option>
+                                <option value="cover">Cover (fill &amp; crop)</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <label>Output</label>
+                            <select id="collage-output">
+                                <option value="image" selected>PNG image</option>
+                                <option value="zip">ZIP (sprite.png + sprite.css)</option>
+                            </select>
+                        </div>
+                        <div class="field" style="max-width: 90px;">
+                            <label>Background</label>
+                            <input type="color" id="collage-bg" value="#ffffff" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px;">
+                        <label class="check-label">
+                            <input type="checkbox" id="collage-transparent">
+                            Transparent background
+                        </label>
+                    </div>
+                    <p class="drop-hint" id="collage-hint" style="margin-top: 8px;"></p>
+                </div>
+
+                <div id="collage-actions" class="pdf-actions" hidden>
+                    <button id="collage-btn" class="btn-download" onclick="doCollage()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Build Collage
+                    </button>
+                </div>
+
+                <div id="collage-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Image to ASCII -->
+        <div id="tab-ascii" class="pdf-section card">
+            <div class="card-body">
+                <h2>Image to ASCII</h2>
+                <p class="meta">Turn an image into ASCII art you can paste into a terminal, README, or comment.</p>
+
+                <div class="drop-zone" id="ascii-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <text x="12" y="16" text-anchor="middle" font-size="10" font-family="monospace" fill="currentColor" stroke="none">@#:</text>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="ascii-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP &middot; choose width in characters</p>
+                </div>
+
+                <div id="ascii-file-info" class="split-info" hidden>
+                    <img id="ascii-thumb" class="img-thumb" src="" alt="">
+                    <span id="ascii-file-name" class="split-name"></span>
+                    <span id="ascii-dimensions" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearAsciiFile()">&times;</button>
+                </div>
+
+                <div id="ascii-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field" style="max-width: 140px;">
+                            <label>Width (chars)</label>
+                            <input type="number" id="ascii-width" value="100" min="10" max="400">
+                        </div>
+                        <div class="select-wrap">
+                            <label>Character Set</label>
+                            <select id="ascii-charset">
+                                <option value="standard" selected>Standard (70 levels)</option>
+                                <option value="simple">Simple (@%#*+=-:. )</option>
+                                <option value="blocks">Blocks (&#9608;&#9619;&#9618;&#9617;)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px;">
+                        <label class="check-label">
+                            <input type="checkbox" id="ascii-invert">
+                            Invert (for dark terminals / light-on-dark)
+                        </label>
+                    </div>
+                </div>
+
+                <div id="ascii-actions" class="pdf-actions" hidden>
+                    <button id="ascii-btn" class="btn-download" onclick="doAscii()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+                        Convert to ASCII
+                    </button>
+                </div>
+
+                <div id="ascii-result" hidden style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
+                        <span id="ascii-meta" class="drop-hint"></span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-copy" onclick="copyAscii(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+                            <button class="btn-copy" onclick="downloadAscii()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Download .txt</button>
+                        </div>
+                    </div>
+                    <pre id="ascii-output" class="ascii-output"></pre>
+                </div>
+
+                <div id="ascii-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Color Picker -->
+        <div id="tab-colorpicker" class="pdf-section card">
+            <div class="card-body">
+                <h2>Color Picker</h2>
+                <p class="meta">Hover to sample colors from an image, click to save them, or extract the dominant palette. Runs entirely in your browser.</p>
+
+                <div class="drop-zone" id="colorpicker-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M3 21l3-1 11-11-2-2L4 18z"/><path d="M14 4l2-2 4 4-2 2"/><path d="M13 7l4 4"/>
+                    </svg>
+                    <label class="drop-browse">Select image<input type="file" id="colorpicker-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; PNG, JPG, WebP, GIF &middot; nothing is uploaded</p>
+                </div>
+
+                <div id="colorpicker-file-info" class="split-info" hidden>
+                    <img id="colorpicker-thumb" class="img-thumb" src="" alt="">
+                    <span id="colorpicker-file-name" class="split-name"></span>
+                    <span id="colorpicker-dimensions" class="count-badge"></span>
+                    <button class="split-remove" onclick="clearColorPickerFile()">&times;</button>
+                </div>
+
+                <div id="colorpicker-work" hidden style="margin-top: 16px;">
+                    <div class="cp-canvas-wrap">
+                        <canvas id="colorpicker-canvas"></canvas>
+                    </div>
+                    <div class="cp-hover" id="colorpicker-hover">
+                        <span class="cp-swatch" id="colorpicker-hover-swatch"></span>
+                        <span id="colorpicker-hover-text">Hover over the image to sample a color; click to add it to the palette.</span>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+                        <button class="btn-copy" onclick="extractPalette()">Extract palette (8 colors)</button>
+                        <button class="btn-copy" onclick="clearPalette()">Clear</button>
+                        <button class="btn-copy" onclick="copyPaletteAll(this)">Copy all HEX</button>
+                    </div>
+
+                    <div class="kv-wrap" style="margin-top: 12px;">
+                        <table class="kv-table" id="colorpicker-table">
+                            <thead><tr><th></th><th>HEX</th><th>RGB</th><th>HSL</th><th></th></tr></thead>
+                            <tbody id="colorpicker-palette"></tbody>
+                        </table>
+                    </div>
+                    <p class="drop-hint" id="colorpicker-empty" style="margin-top: 8px;">No colors saved yet.</p>
+                </div>
+
+                <div id="colorpicker-error" class="error" hidden></div>
             </div>
         </div>
 

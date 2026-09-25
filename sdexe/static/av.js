@@ -863,6 +863,696 @@ function downloadScreenRecording() {
     showToast("Saved: screen-recording.webm");
 }
 
+/* ── Two-file helper (video + companion file sections) ── */
+function avPairLoad(prefix, slot, files, acceptType, update) {
+    const f = files[0];
+    if (!f) return;
+    if (acceptType && !f.type.startsWith(acceptType) && !(acceptType === "image/" && /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name))) return;
+    avFiles[`${prefix}-${slot}`] = f;
+    document.getElementById(`${prefix}-${slot}-name`).textContent = f.name;
+    document.getElementById(`${prefix}-${slot}-size`).textContent = formatSize(f.size);
+    document.getElementById(`${prefix}-${slot}-info`).hidden = false;
+    update();
+}
+
+function avPairClear(prefix, slot, update) {
+    avFiles[`${prefix}-${slot}`] = null;
+    document.getElementById(`${prefix}-${slot}-info`).hidden = true;
+    update();
+}
+
+function avPairUpdate(prefix, slots) {
+    const ready = slots.every(s => avFiles[`${prefix}-${s}`]);
+    const opts = document.getElementById(`${prefix}-options`);
+    if (opts) opts.hidden = !ready;
+    document.getElementById(`${prefix}-actions`).hidden = !ready;
+}
+
+/* Like avFetch but the FormData is built by the caller (multi-file sections). */
+async function avFetchForm(prefix, endpoint, fd, fallbackName, loadingText) {
+    const btn = document.getElementById(`${prefix}-btn`);
+    const err = document.getElementById(`${prefix}-error`);
+    err.hidden = true;
+    btn.disabled = true;
+    btn.textContent = loadingText || "Processing...";
+    try {
+        const res = await fetch(endpoint, { method: "POST", body: fd });
+        if (!res.ok) {
+            const data = await res.json();
+            err.textContent = data.error || "Processing failed";
+            err.hidden = false;
+        } else {
+            const blob = await res.blob();
+            const cd = res.headers.get("content-disposition") || "";
+            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const name = match ? match[1] : fallbackName;
+            downloadBlob(blob, name);
+            showToast("Saved: " + name);
+        }
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> ${btn.dataset.label || "Download"}`;
+}
+
+function avShowError(prefix, msg) {
+    const err = document.getElementById(`${prefix}-error`);
+    err.textContent = msg;
+    err.hidden = false;
+}
+
+/* ── Remove Silence ── */
+setupDropZone("silence-drop", "silence-input", files => loadAvFile("silence", files, "audio/"));
+
+document.getElementById("silence-btn").dataset.label = "Remove Silence";
+
+async function doRemoveSilence() {
+    const threshold = document.getElementById("silence-threshold").value;
+    const minSilence = document.getElementById("silence-min").value;
+    await avFetch("silence", "/api/av/remove-silence",
+        file => { const fd = new FormData(); fd.append("file", file); fd.append("threshold_db", threshold); fd.append("min_silence", minSilence); return fd; },
+        file => file.name.replace(/\.[^.]+$/, "") + "_nosilence." + file.name.split(".").pop(),
+        "Removing silence..."
+    );
+}
+
+/* ── Split Audio ── */
+setupDropZone("split-audio-drop", "split-audio-input", files => loadAvFile("split-audio", files, "audio/"));
+
+document.getElementById("split-audio-btn").dataset.label = "Split Audio";
+
+function updateSplitAudioMode() {
+    const mode = document.getElementById("split-audio-mode").value;
+    const label = document.getElementById("split-audio-value-label");
+    const input = document.getElementById("split-audio-value");
+    if (mode === "count") { label.textContent = "Number of parts"; input.value = "2"; input.min = "2"; }
+    else { label.textContent = "Seconds per part"; input.value = "60"; input.min = "1"; }
+}
+
+async function doSplitAudio() {
+    const mode = document.getElementById("split-audio-mode").value;
+    const value = parseFloat(document.getElementById("split-audio-value").value);
+    if (!(value > 0) || (mode === "count" && value < 2)) {
+        avShowError("split-audio", mode === "count" ? "Enter at least 2 parts" : "Enter a part length greater than 0");
+        return;
+    }
+    await avFetch("split-audio", "/api/av/split-audio",
+        file => { const fd = new FormData(); fd.append("file", file); fd.append("mode", mode); fd.append("value", value); return fd; },
+        file => file.name.replace(/\.[^.]+$/, "") + "_parts.zip",
+        "Splitting..."
+    );
+}
+
+/* ── Channels ── */
+setupDropZone("channels-drop", "channels-input", files => loadAvFile("channels", files, "audio/"));
+
+document.getElementById("channels-btn").dataset.label = "Convert Channels";
+
+async function doChannels() {
+    const mode = document.getElementById("channels-mode").value;
+    await avFetch("channels", "/api/av/channels",
+        file => { const fd = new FormData(); fd.append("file", file); fd.append("mode", mode); return fd; },
+        file => file.name.replace(/\.[^.]+$/, "") + "_" + mode + "." + file.name.split(".").pop(),
+        "Converting..."
+    );
+}
+
+/* ── Bitrate ── */
+setupDropZone("bitrate-drop", "bitrate-input", files => loadAvFile("bitrate", files, "audio/"));
+
+document.getElementById("bitrate-btn").dataset.label = "Change Bitrate";
+
+async function doBitrate() {
+    const bitrate = document.getElementById("bitrate-value").value;
+    const fmt = document.getElementById("bitrate-format").value;
+    await avFetch("bitrate", "/api/av/bitrate",
+        file => { const fd = new FormData(); fd.append("file", file); fd.append("bitrate", bitrate); fd.append("format", fmt); return fd; },
+        file => file.name.replace(/\.[^.]+$/, "") + "_" + bitrate + "k." + (fmt === "keep" ? file.name.split(".").pop() : fmt),
+        "Encoding..."
+    );
+}
+
+/* ── Tag Editor ── */
+const TAG_FIELDS = ["title", "artist", "album", "year", "genre", "track", "comment"];
+let tagsCoverFile = null;
+
+setupDropZone("tags-drop", "tags-input", files => {
+    loadAvFile("tags", files, "audio/");
+    if (avFiles["tags"]) readTags();
+});
+
+setupDropZone("tags-cover-drop", "tags-cover-input", files => {
+    const f = files[0];
+    if (!f || !f.type.startsWith("image/")) return;
+    tagsCoverFile = f;
+    document.getElementById("tags-cover-name").textContent = f.name;
+    document.getElementById("tags-cover-size").textContent = formatSize(f.size);
+    document.getElementById("tags-cover-info").hidden = false;
+});
+
+document.getElementById("tags-btn").dataset.label = "Save Tags";
+
+function clearTagsFile() {
+    clearAvFile("tags");
+    clearTagsCover();
+    TAG_FIELDS.forEach(k => document.getElementById("tags-" + k).value = "");
+}
+
+function clearTagsCover() {
+    tagsCoverFile = null;
+    document.getElementById("tags-cover-info").hidden = true;
+}
+
+async function readTags() {
+    const f = avFiles["tags"];
+    if (!f) return;
+    const err = document.getElementById("tags-error");
+    err.hidden = true;
+    TAG_FIELDS.forEach(k => document.getElementById("tags-" + k).value = "");
+    const fd = new FormData();
+    fd.append("file", f);
+    try {
+        const res = await fetch("/api/av/tags/read", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) {
+            err.textContent = data.error || "Could not read tags";
+            err.hidden = false;
+            return;
+        }
+        TAG_FIELDS.forEach(k => document.getElementById("tags-" + k).value = data[k] || "");
+        const hint = document.getElementById("tags-cover-hint");
+        document.getElementById("tags-cover-wrap").hidden = !data.can_cover;
+        hint.textContent = data.has_cover
+            ? "this file already has cover art · drop a new image to replace it"
+            : "optional · drop a JPG or PNG here to set the cover art";
+    } catch {
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+}
+
+async function doWriteTags() {
+    const f = avFiles["tags"];
+    if (!f) return;
+    const fd = new FormData();
+    fd.append("file", f);
+    TAG_FIELDS.forEach(k => fd.append(k, document.getElementById("tags-" + k).value.trim()));
+    if (tagsCoverFile) fd.append("cover", tagsCoverFile);
+    await avFetchForm("tags", "/api/av/tags/write", fd,
+        f.name.replace(/\.[^.]+$/, "") + "_tagged." + f.name.split(".").pop(), "Saving...");
+}
+
+/* ── Audio to Video ── */
+let audio2videoImageFile = null;
+
+setupDropZone("audio2video-drop", "audio2video-input", files => loadAvFile("audio2video", files, "audio/"));
+
+setupDropZone("audio2video-image-drop", "audio2video-image-input", files => {
+    const f = files[0];
+    if (!f || !f.type.startsWith("image/")) return;
+    audio2videoImageFile = f;
+    document.getElementById("audio2video-image-name").textContent = f.name;
+    document.getElementById("audio2video-image-size").textContent = formatSize(f.size);
+    document.getElementById("audio2video-image-info").hidden = false;
+});
+
+document.getElementById("audio2video-btn").dataset.label = "Create Video";
+
+function clearAudio2VideoImage() {
+    audio2videoImageFile = null;
+    document.getElementById("audio2video-image-info").hidden = true;
+}
+
+function updateAudio2VideoStyle() {
+    const style = document.getElementById("audio2video-style").value;
+    document.getElementById("audio2video-image-wrap").hidden = style !== "image";
+    document.getElementById("audio2video-color-field").hidden = style === "image";
+}
+
+async function doAudio2Video() {
+    const style = document.getElementById("audio2video-style").value;
+    if (style === "image" && !audio2videoImageFile) {
+        avShowError("audio2video", "Select an image for the still image style");
+        return;
+    }
+    const color = document.getElementById("audio2video-color").value;
+    const background = document.getElementById("audio2video-background").value;
+    const resolution = document.getElementById("audio2video-resolution").value;
+    await avFetch("audio2video", "/api/av/audio-to-video",
+        file => {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("style", style);
+            fd.append("color", color);
+            fd.append("background", background);
+            fd.append("resolution", resolution);
+            if (style === "image") fd.append("image", audio2videoImageFile);
+            return fd;
+        },
+        file => file.name.replace(/\.[^.]+$/, "") + "_video.mp4",
+        "Rendering video..."
+    );
+}
+
+/* ── Merge Clips ── */
+let mergeVideoFiles = [];
+
+setupDropZone("merge-video-drop", "merge-video-input", files => {
+    for (const f of files) {
+        if (f.type.startsWith("video/") || /\.(mp4|mov|webm|mkv|avi|m4v)$/i.test(f.name)) {
+            mergeVideoFiles.push(f);
+        }
+    }
+    renderMergeVideoList();
+});
+
+function renderMergeVideoList() {
+    const list = document.getElementById("merge-video-list");
+    list.innerHTML = "";
+    mergeVideoFiles.forEach((f, i) => {
+        const item = document.createElement("div");
+        item.className = "file-item";
+        item.innerHTML = `<span class="file-name">${esc(f.name)}</span><span class="file-size">${formatSize(f.size)}</span><button class="file-remove" onclick="removeMergeVideo(${i})">&times;</button>`;
+        list.appendChild(item);
+    });
+    const show = mergeVideoFiles.length >= 2;
+    document.getElementById("merge-video-options").hidden = !show;
+    document.getElementById("merge-video-actions").hidden = !show;
+}
+
+function removeMergeVideo(i) {
+    mergeVideoFiles.splice(i, 1);
+    renderMergeVideoList();
+}
+
+document.getElementById("merge-video-btn").dataset.label = "Merge Clips";
+
+async function doMergeVideo() {
+    if (mergeVideoFiles.length < 2) return;
+    const fd = new FormData();
+    mergeVideoFiles.forEach(f => fd.append("files", f));
+    fd.append("resolution", document.getElementById("merge-video-resolution").value);
+    await avFetchForm("merge-video", "/api/av/merge-video", fd, "merged.mp4", "Merging clips...");
+}
+
+/* ── Watermark / Logo ── */
+const updateVideoWatermark = () => avPairUpdate("video-watermark", ["video", "image"]);
+setupDropZone("video-watermark-video-drop", "video-watermark-video-input", files => avPairLoad("video-watermark", "video", files, "video/", updateVideoWatermark));
+setupDropZone("video-watermark-image-drop", "video-watermark-image-input", files => avPairLoad("video-watermark", "image", files, "image/", updateVideoWatermark));
+function clearVideoWatermarkVideo() { avPairClear("video-watermark", "video", updateVideoWatermark); }
+function clearVideoWatermarkImage() { avPairClear("video-watermark", "image", updateVideoWatermark); }
+
+document.getElementById("video-watermark-btn").dataset.label = "Add Watermark";
+
+async function doVideoWatermark() {
+    const video = avFiles["video-watermark-video"], image = avFiles["video-watermark-image"];
+    if (!video || !image) return;
+    const fd = new FormData();
+    fd.append("video", video);
+    fd.append("image", image);
+    fd.append("position", document.getElementById("video-watermark-position").value);
+    fd.append("scale", document.getElementById("video-watermark-scale").value);
+    fd.append("opacity", document.getElementById("video-watermark-opacity").value);
+    fd.append("margin", document.getElementById("video-watermark-margin").value);
+    await avFetchForm("video-watermark", "/api/av/video-watermark", fd,
+        video.name.replace(/\.[^.]+$/, "") + "_watermarked." + video.name.split(".").pop(), "Adding watermark...");
+}
+
+/* ── Extract Frames ── */
+setupDropZone("frames-drop", "frames-input", files => loadAvFile("frames", files, "video/"));
+
+document.getElementById("frames-btn").dataset.label = "Extract Frames";
+
+function updateFramesMode() {
+    const mode = document.getElementById("frames-mode").value;
+    document.getElementById("frames-time-field").hidden = mode !== "single";
+    document.getElementById("frames-interval-field").hidden = mode !== "interval";
+    document.getElementById("frames-count-field").hidden = mode !== "count";
+}
+
+async function doFrames() {
+    const mode = document.getElementById("frames-mode").value;
+    const fmt = document.getElementById("frames-format").value;
+    const time = document.getElementById("frames-time").value;
+    const interval = document.getElementById("frames-interval").value;
+    const count = document.getElementById("frames-count").value;
+    if (mode === "interval" && !(parseFloat(interval) > 0)) { avShowError("frames", "Interval must be greater than 0"); return; }
+    if (mode === "count" && !(parseInt(count) >= 1)) { avShowError("frames", "Enter how many frames to extract"); return; }
+    await avFetch("frames", "/api/av/frames",
+        file => {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("mode", mode);
+            fd.append("format", fmt);
+            fd.append("time", time || "0");
+            fd.append("interval", interval || "1");
+            fd.append("count", count || "10");
+            return fd;
+        },
+        file => { const base = file.name.replace(/\.[^.]+$/, ""); return mode === "single" ? `${base}_frame.${fmt}` : `${base}_frames.zip`; },
+        "Extracting..."
+    );
+}
+
+/* ── Change Video Speed ── */
+setupDropZone("video-speed-drop", "video-speed-input", files => loadAvFile("video-speed", files, "video/"));
+
+document.getElementById("video-speed-btn").dataset.label = "Change Speed";
+
+async function doVideoSpeed() {
+    const speed = parseFloat(document.getElementById("video-speed-value").value);
+    if (!(speed >= 0.25 && speed <= 4)) { avShowError("video-speed", "Speed must be between 0.25 and 4"); return; }
+    const keepPitch = document.getElementById("video-speed-pitch").checked;
+    await avFetch("video-speed", "/api/av/video-speed",
+        file => { const fd = new FormData(); fd.append("file", file); fd.append("speed", speed); fd.append("keep_pitch", keepPitch); return fd; },
+        file => file.name.replace(/\.[^.]+$/, "") + "_" + speed + "x." + file.name.split(".").pop(),
+        "Changing speed..."
+    );
+}
+
+/* ── Stabilize ── */
+setupDropZone("stabilize-drop", "stabilize-input", files => loadAvFile("stabilize", files, "video/"));
+
+document.getElementById("stabilize-btn").dataset.label = "Stabilize Video";
+
+async function doStabilize() {
+    const strength = document.getElementById("stabilize-strength").value;
+    await avFetch("stabilize", "/api/av/stabilize",
+        file => { const fd = new FormData(); fd.append("file", file); fd.append("strength", strength); return fd; },
+        file => file.name.replace(/\.[^.]+$/, "") + "_stabilized." + file.name.split(".").pop(),
+        "Stabilizing..."
+    );
+}
+
+/* ── GIF to Video ── */
+setupDropZone("gif2video-drop", "gif2video-input", files => {
+    const f = files[0];
+    if (!f) return;
+    if (f.type !== "image/gif" && !/\.gif$/i.test(f.name)) return;
+    loadAvFile("gif2video", files);
+});
+
+document.getElementById("gif2video-btn").dataset.label = "Convert GIF";
+
+async function doGif2Video() {
+    const fmt = document.getElementById("gif2video-format").value;
+    const loop = document.getElementById("gif2video-loop").value;
+    await avFetch("gif2video", "/api/av/gif-to-video",
+        file => { const fd = new FormData(); fd.append("file", file); fd.append("format", fmt); fd.append("loop_count", loop || "1"); return fd; },
+        file => file.name.replace(/\.[^.]+$/, "") + "." + fmt,
+        "Converting..."
+    );
+}
+
+/* ── Video Info ── */
+let videoInfoData = null;
+
+setupDropZone("video-info-drop", "video-info-input", files => {
+    const f = files[0];
+    if (!f) return;
+    if (!f.type.startsWith("video/") && !f.type.startsWith("audio/") && !/\.(mp4|mov|webm|mkv|avi|m4v|mp3|wav|ogg|flac|aac|m4a|opus|wma|ts|mts|3gp)$/i.test(f.name)) return;
+    loadAvFile("video-info", files);
+    fetchVideoInfo();
+});
+
+function clearVideoInfo() {
+    clearAvFile("video-info");
+    videoInfoData = null;
+    document.getElementById("video-info-result").hidden = true;
+}
+
+function fmtDuration(s) {
+    if (!s && s !== 0) return "unknown";
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = (s % 60).toFixed(2);
+    return (h ? h + ":" : "") + String(m).padStart(h ? 2 : 1, "0") + ":" + String(sec).padStart(5, "0") + ` (${s.toFixed(2)} s)`;
+}
+
+function fmtBitrate(b) { return b ? (b >= 1000000 ? (b / 1000000).toFixed(2) + " Mb/s" : Math.round(b / 1000) + " kb/s") : "unknown"; }
+
+function infoRows(table, rows) {
+    table.innerHTML = "";
+    rows.forEach(([k, v, head]) => {
+        const tr = document.createElement("tr");
+        if (head) tr.className = "info-stream-head";
+        const td1 = document.createElement("td"), td2 = document.createElement("td");
+        td1.textContent = k;
+        td2.textContent = v == null || v === "" ? "—" : v;
+        tr.appendChild(td1); tr.appendChild(td2);
+        table.appendChild(tr);
+    });
+}
+
+async function fetchVideoInfo() {
+    const f = avFiles["video-info"];
+    if (!f) return;
+    const err = document.getElementById("video-info-error");
+    const status = document.getElementById("video-info-status");
+    err.hidden = true;
+    status.hidden = false;
+    document.getElementById("video-info-result").hidden = true;
+    document.getElementById("video-info-actions").hidden = true;
+    const fd = new FormData();
+    fd.append("file", f);
+    try {
+        const res = await fetch("/api/av/info", { method: "POST", body: fd });
+        const data = await res.json();
+        status.hidden = true;
+        if (!res.ok) {
+            err.textContent = data.error || "Could not read file";
+            err.hidden = false;
+            return;
+        }
+        videoInfoData = data;
+        const v = data.video, a = data.audio;
+        const rows = [
+            ["File", data.filename],
+            ["Container", data.container],
+            ["Duration", fmtDuration(data.duration)],
+            ["Size", formatSize(data.size)],
+            ["Bitrate", fmtBitrate(data.bitrate)],
+        ];
+        if (v) {
+            rows.push(["Video codec", v.codec_long || v.codec]);
+            rows.push(["Resolution", v.width && v.height ? `${v.width} x ${v.height}` : null]);
+            rows.push(["Frame rate", v.fps ? `${v.fps} fps` : null]);
+            rows.push(["Pixel format", v.pix_fmt]);
+        }
+        if (a) {
+            rows.push(["Audio codec", a.codec_long || a.codec]);
+            rows.push(["Sample rate", a.sample_rate ? `${a.sample_rate} Hz` : null]);
+            rows.push(["Channels", a.channels ? `${a.channels} (${a.channel_layout || ""})` : a.channel_layout]);
+            rows.push(["Audio bitrate", a.bitrate ? fmtBitrate(a.bitrate) : null]);
+        }
+        const tags = Object.entries(data.tags || {}).filter(([k]) => !/^(major_brand|minor_version|compatible_brands|encoder|handler_name|vendor_id)$/.test(k));
+        tags.slice(0, 12).forEach(([k, val]) => rows.push([k, val]));
+        infoRows(document.getElementById("video-info-table"), rows);
+
+        const srows = [];
+        (data.streams || []).forEach(s => {
+            srows.push([`#${s.index} ${s.type}`, s.codec_long || s.codec, true]);
+            if (s.type === "video") {
+                srows.push(["Resolution", s.width && s.height ? `${s.width} x ${s.height}` : null]);
+                srows.push(["Frame rate", s.fps ? `${s.fps} fps` : null]);
+                if (s.attached_pic) srows.push(["Role", "cover art"]);
+            } else if (s.type === "audio") {
+                srows.push(["Sample rate", s.sample_rate ? `${s.sample_rate} Hz` : null]);
+                srows.push(["Channels", s.channel_layout || s.channels]);
+            }
+            if (s.bitrate) srows.push(["Bitrate", fmtBitrate(s.bitrate)]);
+        });
+        infoRows(document.getElementById("video-info-streams"), srows);
+        document.getElementById("video-info-result").hidden = false;
+        document.getElementById("video-info-actions").hidden = false;
+    } catch {
+        status.hidden = true;
+        err.textContent = "Network error";
+        err.hidden = false;
+    }
+}
+
+async function copyVideoInfoJson() {
+    if (!videoInfoData) return;
+    try {
+        await navigator.clipboard.writeText(JSON.stringify(videoInfoData, null, 2));
+        showToast("Copied JSON to clipboard");
+    } catch {
+        avShowError("video-info", "Could not access the clipboard");
+    }
+}
+
+/* ── Picture-in-Picture ── */
+const updatePip = () => avPairUpdate("pip", ["main", "overlay"]);
+setupDropZone("pip-main-drop", "pip-main-input", files => avPairLoad("pip", "main", files, "video/", updatePip));
+setupDropZone("pip-overlay-drop", "pip-overlay-input", files => avPairLoad("pip", "overlay", files, "video/", updatePip));
+function clearPipMain() { avPairClear("pip", "main", updatePip); }
+function clearPipOverlay() { avPairClear("pip", "overlay", updatePip); }
+
+document.getElementById("pip-btn").dataset.label = "Create PiP Video";
+
+async function doPip() {
+    const main = avFiles["pip-main"], overlay = avFiles["pip-overlay"];
+    if (!main || !overlay) return;
+    const fd = new FormData();
+    fd.append("main", main);
+    fd.append("overlay", overlay);
+    fd.append("position", document.getElementById("pip-position").value);
+    fd.append("scale", document.getElementById("pip-scale").value);
+    fd.append("margin", document.getElementById("pip-margin").value);
+    await avFetchForm("pip", "/api/av/pip", fd, main.name.replace(/\.[^.]+$/, "") + "_pip.mp4", "Compositing...");
+}
+
+/* ── Webcam ── */
+let webcamStream = null;
+let webcamRecorder = null;
+let webcamChunks = [];
+let webcamBlob = null;
+let webcamTimerInterval = null;
+let webcamRecordStart = 0;
+
+function webcamErrorMessage(e) {
+    if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")) {
+        return "Camera access was denied. Allow camera (and microphone) access for this site in your browser settings, then try again.";
+    }
+    if (e && (e.name === "NotFoundError" || e.name === "OverconstrainedError")) {
+        return "No camera was found on this device.";
+    }
+    if (e && e.name === "NotReadableError") {
+        return "The camera is in use by another application.";
+    }
+    return "Could not start the camera: " + ((e && e.message) || "not supported in this browser");
+}
+
+async function startWebcam() {
+    const err = document.getElementById("webcam-error");
+    err.hidden = true;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        err.textContent = "Camera capture is not supported in this browser.";
+        err.hidden = false;
+        return;
+    }
+    const wantAudio = document.getElementById("webcam-audio").checked;
+    try {
+        try {
+            webcamStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: wantAudio });
+        } catch (e) {
+            // A missing or blocked microphone should not stop the camera.
+            if (!wantAudio || e.name === "NotAllowedError") throw e;
+            webcamStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+            showToast("Microphone unavailable; recording without audio");
+        }
+        const preview = document.getElementById("webcam-preview");
+        preview.srcObject = webcamStream;
+        preview.hidden = false;
+        document.getElementById("webcam-start").hidden = true;
+        document.getElementById("webcam-photo").hidden = false;
+        document.getElementById("webcam-record").hidden = false;
+        document.getElementById("webcam-off").hidden = false;
+        webcamStream.getVideoTracks()[0].onended = () => stopWebcam();
+    } catch (e) {
+        err.textContent = webcamErrorMessage(e);
+        err.hidden = false;
+    }
+}
+
+function stopWebcam() {
+    if (webcamRecorder && webcamRecorder.state !== "inactive") stopWebcamRecording();
+    if (webcamStream) {
+        webcamStream.getTracks().forEach(t => t.stop());
+        webcamStream = null;
+    }
+    const preview = document.getElementById("webcam-preview");
+    preview.srcObject = null;
+    preview.hidden = true;
+    document.getElementById("webcam-start").hidden = false;
+    document.getElementById("webcam-photo").hidden = true;
+    document.getElementById("webcam-record").hidden = true;
+    document.getElementById("webcam-stop").hidden = true;
+    document.getElementById("webcam-off").hidden = true;
+}
+
+function takeWebcamPhoto() {
+    const preview = document.getElementById("webcam-preview");
+    if (!webcamStream || !preview.videoWidth) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = preview.videoWidth;
+    canvas.height = preview.videoHeight;
+    canvas.getContext("2d").drawImage(preview, 0, 0);
+    canvas.toBlob(blob => {
+        if (!blob) return;
+        const name = "webcam-photo-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".png";
+        downloadBlob(blob, name);
+        showToast("Saved: " + name);
+    }, "image/png");
+}
+
+function startWebcamRecording() {
+    if (!webcamStream) return;
+    const err = document.getElementById("webcam-error");
+    err.hidden = true;
+    if (typeof MediaRecorder === "undefined") {
+        err.textContent = "Video recording is not supported in this browser.";
+        err.hidden = false;
+        return;
+    }
+    webcamChunks = [];
+    document.getElementById("webcam-result").hidden = true;
+    try {
+        const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find(m => MediaRecorder.isTypeSupported(m));
+        webcamRecorder = mime ? new MediaRecorder(webcamStream, { mimeType: mime }) : new MediaRecorder(webcamStream);
+    } catch (e) {
+        err.textContent = "Could not start recording: " + e.message;
+        err.hidden = false;
+        return;
+    }
+    webcamRecorder.ondataavailable = e => { if (e.data.size > 0) webcamChunks.push(e.data); };
+    webcamRecorder.onstop = () => {
+        webcamBlob = new Blob(webcamChunks, { type: "video/webm" });
+        document.getElementById("webcam-player").src = URL.createObjectURL(webcamBlob);
+        document.getElementById("webcam-result").hidden = false;
+    };
+    webcamRecorder.start();
+    document.getElementById("webcam-record").hidden = true;
+    document.getElementById("webcam-photo").hidden = true;
+    document.getElementById("webcam-off").hidden = true;
+    document.getElementById("webcam-stop").hidden = false;
+    webcamRecordStart = Date.now();
+    document.getElementById("webcam-timer").textContent = "00:00";
+    webcamTimerInterval = setInterval(updateWebcamTimer, 200);
+}
+
+function stopWebcamRecording() {
+    if (webcamRecorder && webcamRecorder.state !== "inactive") webcamRecorder.stop();
+    clearInterval(webcamTimerInterval);
+    document.getElementById("webcam-stop").hidden = true;
+    if (webcamStream) {
+        document.getElementById("webcam-record").hidden = false;
+        document.getElementById("webcam-photo").hidden = false;
+        document.getElementById("webcam-off").hidden = false;
+    }
+}
+
+function updateWebcamTimer() {
+    const elapsed = Math.floor((Date.now() - webcamRecordStart) / 1000);
+    const min = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    const sec = String(elapsed % 60).padStart(2, "0");
+    document.getElementById("webcam-timer").textContent = min + ":" + sec;
+}
+
+function resetWebcamRecording() {
+    document.getElementById("webcam-result").hidden = true;
+    document.getElementById("webcam-timer").textContent = "00:00";
+    webcamBlob = null;
+}
+
+function downloadWebcamRecording() {
+    if (!webcamBlob) return;
+    const name = "webcam-recording-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".webm";
+    downloadBlob(webcamBlob, name);
+    showToast("Saved: " + name);
+}
+
 /* ── Helpers ── */
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + " B";

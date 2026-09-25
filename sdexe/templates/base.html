@@ -42,21 +42,36 @@ function showToast(msg, type, actions) {
                     <a href="/pdf" class="nav-group-trigger">PDF
                         <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
-                    <div class="nav-group-menu">
-                        <a href="/pdf#merge" class="nav-group-item">Merge PDF</a>
-                        <a href="/pdf#split" class="nav-group-item">Split PDF</a>
-                        <a href="/pdf#compress" class="nav-group-item">Compress PDF</a>
-                        <a href="/pdf#img2pdf" class="nav-group-item">Images → PDF</a>
-                        <a href="/pdf#totext" class="nav-group-item">Extract Text</a>
-                        <a href="/pdf#extractimages" class="nav-group-item">Extract Images</a>
-                        <a href="/pdf#numberpages" class="nav-group-item">Number Pages</a>
-                        <a href="/pdf#password" class="nav-group-item">Password Protect</a>
-                        <a href="/pdf#unlock" class="nav-group-item">Unlock PDF</a>
-                        <a href="/pdf#rotatepages" class="nav-group-item">Rotate Pages</a>
-                        <a href="/pdf#watermark" class="nav-group-item">Watermark</a>
-                        <a href="/pdf#reorder" class="nav-group-item">Reorder Pages</a>
-                        <a href="/pdf#deletepages" class="nav-group-item">Delete Pages</a>
-                        <a href="/pdf#metadata" class="nav-group-item">Edit Metadata</a>
+                    <div class="nav-group-menu nav-group-cols">
+                        <div class="nav-group-col">
+                            <div class="nav-group-col-head">Organize</div>
+                            <a href="/pdf#merge" class="nav-group-item">Merge PDF</a>
+                            <a href="/pdf#split" class="nav-group-item">Split PDF</a>
+                            <a href="/pdf#reorder" class="nav-group-item">Reorder Pages</a>
+                            <a href="/pdf#deletepages" class="nav-group-item">Delete Pages</a>
+                            <a href="/pdf#rotatepages" class="nav-group-item">Rotate Pages</a>
+                            <a href="/pdf#pagesize" class="nav-group-item">Resize Pages</a>
+                            <a href="/pdf#compress" class="nav-group-item">Compress PDF</a>
+                            <a href="/pdf#flatten" class="nav-group-item">Flatten</a>
+                        </div>
+                        <div class="nav-group-col">
+                            <div class="nav-group-col-head">Convert</div>
+                            <a href="/pdf#img2pdf" class="nav-group-item">Images → PDF</a>
+                            <a href="/pdf#pdf2images" class="nav-group-item">PDF → Images</a>
+                            <a href="/pdf#office2pdf" class="nav-group-item">Office → PDF</a>
+                            <a href="/pdf#totext" class="nav-group-item">Extract Text</a>
+                            <a href="/pdf#ocr" class="nav-group-item">OCR (Scanned)</a>
+                            <a href="/pdf#extractimages" class="nav-group-item">Extract Images</a>
+                        </div>
+                        <div class="nav-group-col">
+                            <div class="nav-group-col-head">Edit</div>
+                            <a href="/pdf#watermark" class="nav-group-item">Watermark</a>
+                            <a href="/pdf#stamp" class="nav-group-item">Stamp Image</a>
+                            <a href="/pdf#numberpages" class="nav-group-item">Number Pages</a>
+                            <a href="/pdf#password" class="nav-group-item">Password Protect</a>
+                            <a href="/pdf#unlock" class="nav-group-item">Unlock PDF</a>
+                            <a href="/pdf#metadata" class="nav-group-item">Edit Metadata</a>
+                        </div>
                     </div>
                 </div>
 
@@ -64,20 +79,38 @@ function showToast(msg, type, actions) {
                     <a href="/images" class="nav-group-trigger">Images
                         <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
-                    <div class="nav-group-menu">
-                        <a href="/images#resize" class="nav-group-item">Resize</a>
-                        <a href="/images#compress" class="nav-group-item">Compress</a>
-                        <a href="/images#imgconvert" class="nav-group-item">Convert Format</a>
-                        <a href="/images#crop" class="nav-group-item">Crop</a>
-                        <a href="/images#rotate" class="nav-group-item">Rotate</a>
-                        <a href="/images#stripexif" class="nav-group-item">Strip EXIF</a>
-                        <a href="/images#toico" class="nav-group-item">To ICO</a>
-                        <a href="/images#flip" class="nav-group-item">Flip</a>
-                        <a href="/images#grayscale" class="nav-group-item">Grayscale</a>
-                        <a href="/images#blur" class="nav-group-item">Blur</a>
-                        <a href="/images#qrcode" class="nav-group-item">QR Code</a>
-                        <a href="/images#watermark" class="nav-group-item">Watermark</a>
-                        <a href="/images#placeholder" class="nav-group-item">Placeholder</a>
+                    <div class="nav-group-menu nav-group-cols">
+                        <div class="nav-group-col">
+                            <div class="nav-group-col-head">Transform</div>
+                            <a href="/images#resize" class="nav-group-item">Resize</a>
+                            <a href="/images#upscale" class="nav-group-item">Upscale</a>
+                            <a href="/images#crop" class="nav-group-item">Crop</a>
+                            <a href="/images#rotate" class="nav-group-item">Rotate</a>
+                            <a href="/images#flip" class="nav-group-item">Flip</a>
+                            <a href="/images#border" class="nav-group-item">Border / Padding</a>
+                            <a href="/images#collage" class="nav-group-item">Collage / Sprite</a>
+                        </div>
+                        <div class="nav-group-col">
+                            <div class="nav-group-col-head">Adjust</div>
+                            <a href="/images#compress" class="nav-group-item">Compress</a>
+                            <a href="/images#imgconvert" class="nav-group-item">Convert Format</a>
+                            <a href="/images#heic" class="nav-group-item">HEIC → JPG</a>
+                            <a href="/images#adjust" class="nav-group-item">Adjust Colors</a>
+                            <a href="/images#grayscale" class="nav-group-item">Grayscale</a>
+                            <a href="/images#blur" class="nav-group-item">Blur</a>
+                            <a href="/images#watermark" class="nav-group-item">Watermark</a>
+                            <a href="/images#stripexif" class="nav-group-item">Strip EXIF</a>
+                        </div>
+                        <div class="nav-group-col">
+                            <div class="nav-group-col-head">Create & Inspect</div>
+                            <a href="/images#qrcode" class="nav-group-item">QR Code</a>
+                            <a href="/images#placeholder" class="nav-group-item">Placeholder</a>
+                            <a href="/images#favicon" class="nav-group-item">Favicon Set</a>
+                            <a href="/images#toico" class="nav-group-item">To ICO</a>
+                            <a href="/images#ascii" class="nav-group-item">Image → ASCII</a>
+                            <a href="/images#colorpicker" class="nav-group-item">Color Picker</a>
+                            <a href="/images#exif" class="nav-group-item">EXIF Viewer</a>
+                        </div>
                     </div>
                 </div>
 
@@ -95,11 +128,21 @@ function showToast(msg, type, actions) {
                             <a href="/convert#json2yaml" class="nav-group-item">JSON → YAML</a>
                             <a href="/convert#csv2tsv" class="nav-group-item">CSV ↔ TSV</a>
                             <a href="/convert#xml2json" class="nav-group-item">XML → JSON</a>
+                            <a href="/convert#json2xml" class="nav-group-item">JSON → XML</a>
+                            <a href="/convert#xlsx2csv" class="nav-group-item">Excel → CSV</a>
+                            <a href="/convert#csv2xlsx" class="nav-group-item">CSV → Excel</a>
+                            <a href="/convert#html2md" class="nav-group-item">HTML → Markdown</a>
+                            <a href="/convert#toml" class="nav-group-item">TOML ↔ JSON</a>
+                            <a href="/convert#sqlformat" class="nav-group-item">SQL Formatter</a>
                         </div>
                         <div class="nav-group-col">
                             <div class="nav-group-col-head">Files</div>
                             <a href="/convert#createzip" class="nav-group-item">Create ZIP</a>
                             <a href="/convert#extractzip" class="nav-group-item">Extract ZIP</a>
+                            <a href="/convert#extract-archive" class="nav-group-item">Extract Archive</a>
+                            <a href="/convert#checksum" class="nav-group-item">Checksum</a>
+                            <a href="/convert#rename" class="nav-group-item">Batch Rename</a>
+                            <a href="/convert#split-file" class="nav-group-item">Split / Join File</a>
                         </div>
                     </div>
                 </div>
@@ -121,6 +164,12 @@ function showToast(msg, type, actions) {
                             <a href="/av#pitch" class="nav-group-item">Change Pitch</a>
                             <a href="/av#equalizer" class="nav-group-item">Audio Equalizer</a>
                             <a href="/av#fade" class="nav-group-item">Audio Fade</a>
+                            <a href="/av#silence" class="nav-group-item">Remove Silence</a>
+                            <a href="/av#split-audio" class="nav-group-item">Split Audio</a>
+                            <a href="/av#channels" class="nav-group-item">Channels</a>
+                            <a href="/av#bitrate" class="nav-group-item">Bitrate</a>
+                            <a href="/av#tags" class="nav-group-item">Tag Editor</a>
+                            <a href="/av#audio2video" class="nav-group-item">Audio → Video</a>
                         </div>
                         <div class="nav-group-col">
                             <div class="nav-group-col-head">Video</div>
@@ -136,11 +185,20 @@ function showToast(msg, type, actions) {
                             <a href="/av#mute-video" class="nav-group-item">Mute Video</a>
                             <a href="/av#add-audio" class="nav-group-item">Add Audio to Video</a>
                             <a href="/av#burn-subs" class="nav-group-item">Burn Subtitles</a>
+                            <a href="/av#merge-video" class="nav-group-item">Merge Clips</a>
+                            <a href="/av#video-watermark" class="nav-group-item">Watermark / Logo</a>
+                            <a href="/av#frames" class="nav-group-item">Extract Frames</a>
+                            <a href="/av#video-speed" class="nav-group-item">Change Speed</a>
+                            <a href="/av#stabilize" class="nav-group-item">Stabilize</a>
+                            <a href="/av#gif2video" class="nav-group-item">GIF → Video</a>
+                            <a href="/av#pip" class="nav-group-item">Picture in Picture</a>
+                            <a href="/av#video-info" class="nav-group-item">Video Info</a>
                         </div>
                         <div class="nav-group-col">
                             <div class="nav-group-col-head">Record</div>
                             <a href="/av#av-record-audio" class="nav-group-item">Voice Recorder</a>
                             <a href="/av#av-record-screen" class="nav-group-item">Screen Recorder</a>
+                            <a href="/av#av-record-webcam" class="nav-group-item">Webcam</a>
                         </div>
                     </div>
                 </div>
@@ -159,6 +217,8 @@ function showToast(msg, type, actions) {
                             <a href="/text#regex" class="nav-group-item">Regex Tester</a>
                             <a href="/text#diff" class="nav-group-item">Text Diff</a>
                             <a href="/text#case" class="nav-group-item">Case Converter</a>
+                            <a href="/text#lines" class="nav-group-item">Line Tools</a>
+                            <a href="/text#cron" class="nav-group-item">Cron Explainer</a>
                         </div>
                         <div class="nav-group-col">
                             <div class="nav-group-col-head">Encode</div>
@@ -167,6 +227,9 @@ function showToast(msg, type, actions) {
                             <a href="/text#urlencode" class="nav-group-item">URL Encode</a>
                             <a href="/text#json" class="nav-group-item">JSON Format</a>
                             <a href="/text#jwt" class="nav-group-item">JWT Decoder</a>
+                            <a href="/text#entities" class="nav-group-item">HTML Entities</a>
+                            <a href="/text#escape" class="nav-group-item">String Escape</a>
+                            <a href="/text#base" class="nav-group-item">Number Base</a>
                         </div>
                         <div class="nav-group-col">
                             <div class="nav-group-col-head">Generate</div>
@@ -175,6 +238,10 @@ function showToast(msg, type, actions) {
                             <a href="/text#lorem" class="nav-group-item">Lorem Ipsum</a>
                             <a href="/text#color" class="nav-group-item">Color Converter</a>
                             <a href="/text#password" class="nav-group-item">Password Generator</a>
+                            <a href="/text#units" class="nav-group-item">Unit Converter</a>
+                            <a href="/text#slug" class="nav-group-item">Slug Generator</a>
+                            <a href="/text#mdtable" class="nav-group-item">Markdown Table</a>
+                            <a href="/text#tts" class="nav-group-item">Text to Speech</a>
                         </div>
                     </div>
                 </div>

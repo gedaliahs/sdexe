@@ -2,6 +2,18 @@
 
 {% block title %}AV Tools{% endblock %}
 {% block nav_av %}active{% endblock %}
+{% block head %}
+<style>
+.info-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .9rem; }
+.info-table td { padding: 8px 10px; border-bottom: 1px solid var(--surface-3); vertical-align: top; }
+.info-table tr:last-child td { border-bottom: none; }
+.info-table td:first-child { color: var(--text-muted); width: 34%; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+.info-table td:not(:first-child) { color: var(--text); font-variant-numeric: tabular-nums; word-break: break-word; }
+.info-table tr.info-stream-head td { padding-top: 14px; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: .85rem; color: var(--text); }
+.info-subhead { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin: 20px 0 0; font-weight: 500; }
+.webcam-preview { width: 100%; max-height: 420px; border-radius: 8px; background: #000; margin-bottom: 12px; }
+</style>
+{% endblock %}
 
 {% block content %}
     <main>
@@ -652,6 +664,371 @@
             </div>
         </div>
 
+        <!-- Remove Silence -->
+        <div id="tab-silence" class="pdf-section card">
+            <div class="card-body">
+                <h2>Remove Silence</h2>
+                <p class="meta">Strip silent gaps from the start, end, and middle of an audio file.</p>
+
+                <div class="drop-zone" id="silence-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <line x1="23" y1="9" x2="17" y2="15"/>
+                        <line x1="17" y1="9" x2="23" y2="15"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="silence-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; quiet passages longer than the minimum are cut out</p>
+                </div>
+
+                <div id="silence-info" class="split-info" hidden>
+                    <span id="silence-name" class="split-name"></span>
+                    <span id="silence-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('silence')">&times;</button>
+                </div>
+
+                <div id="silence-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Silence threshold (dB)</label>
+                            <input type="number" id="silence-threshold" min="-90" max="0" value="-40" step="1">
+                        </div>
+                        <div class="field">
+                            <label>Minimum silence (seconds)</label>
+                            <input type="number" id="silence-min" min="0.05" max="30" value="0.5" step="0.1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="silence-actions" class="pdf-actions" hidden>
+                    <button id="silence-btn" class="btn-download" onclick="doRemoveSilence()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Remove Silence
+                    </button>
+                </div>
+
+                <div id="silence-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Split Audio -->
+        <div id="tab-split-audio" class="pdf-section card">
+            <div class="card-body">
+                <h2>Split Audio</h2>
+                <p class="meta">Cut an audio file into equal parts by length or by number of parts. Download as a ZIP.</p>
+
+                <div class="drop-zone" id="split-audio-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <circle cx="6" cy="6" r="3"/>
+                        <circle cx="6" cy="18" r="3"/>
+                        <line x1="20" y1="4" x2="8.12" y2="15.88"/>
+                        <line x1="14.47" y1="14.48" x2="20" y2="20"/>
+                        <line x1="8.12" y1="8.12" x2="12" y2="12"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="split-audio-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; parts are numbered in order</p>
+                </div>
+
+                <div id="split-audio-info" class="split-info" hidden>
+                    <span id="split-audio-name" class="split-name"></span>
+                    <span id="split-audio-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('split-audio')">&times;</button>
+                </div>
+
+                <div id="split-audio-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Split by</label>
+                            <select id="split-audio-mode" onchange="updateSplitAudioMode()">
+                                <option value="duration">Part length (seconds)</option>
+                                <option value="count">Number of parts</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label id="split-audio-value-label">Seconds per part</label>
+                            <input type="number" id="split-audio-value" min="1" value="60" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="split-audio-actions" class="pdf-actions" hidden>
+                    <button id="split-audio-btn" class="btn-download" onclick="doSplitAudio()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Split Audio
+                    </button>
+                </div>
+
+                <div id="split-audio-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Channels -->
+        <div id="tab-channels" class="pdf-section card">
+            <div class="card-body">
+                <h2>Channels</h2>
+                <p class="meta">Convert between mono and stereo, swap left and right, or keep just one side.</p>
+
+                <div class="drop-zone" id="channels-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M3 18v-6a9 9 0 0118 0v6"/>
+                        <path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="channels-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; choose a channel layout below</p>
+                </div>
+
+                <div id="channels-info" class="split-info" hidden>
+                    <span id="channels-name" class="split-name"></span>
+                    <span id="channels-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('channels')">&times;</button>
+                </div>
+
+                <div id="channels-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Mode</label>
+                            <select id="channels-mode">
+                                <option value="mono">Stereo to mono (mix down)</option>
+                                <option value="stereo">Mono to stereo</option>
+                                <option value="swap">Swap left and right</option>
+                                <option value="left">Left channel only (both sides)</option>
+                                <option value="right">Right channel only (both sides)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="channels-actions" class="pdf-actions" hidden>
+                    <button id="channels-btn" class="btn-download" onclick="doChannels()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert Channels
+                    </button>
+                </div>
+
+                <div id="channels-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Bitrate -->
+        <div id="tab-bitrate" class="pdf-section card">
+            <div class="card-body">
+                <h2>Change Bitrate</h2>
+                <p class="meta">Re-encode audio at a specific bitrate to shrink a file or match a target quality.</p>
+
+                <div class="drop-zone" id="bitrate-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="bitrate-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; lossless inputs (WAV, FLAC) are saved as MP3 when keeping the format</p>
+                </div>
+
+                <div id="bitrate-info" class="split-info" hidden>
+                    <span id="bitrate-name" class="split-name"></span>
+                    <span id="bitrate-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('bitrate')">&times;</button>
+                </div>
+
+                <div id="bitrate-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Bitrate</label>
+                            <select id="bitrate-value">
+                                <option value="64">64 kbps</option>
+                                <option value="96">96 kbps</option>
+                                <option value="128" selected>128 kbps</option>
+                                <option value="192">192 kbps</option>
+                                <option value="256">256 kbps</option>
+                                <option value="320">320 kbps</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <label>Format</label>
+                            <select id="bitrate-format">
+                                <option value="keep">Keep original</option>
+                                <option value="mp3">MP3</option>
+                                <option value="m4a">M4A (AAC)</option>
+                                <option value="ogg">OGG (Vorbis)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="bitrate-actions" class="pdf-actions" hidden>
+                    <button id="bitrate-btn" class="btn-download" onclick="doBitrate()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Change Bitrate
+                    </button>
+                </div>
+
+                <div id="bitrate-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Tag Editor -->
+        <div id="tab-tags" class="pdf-section card">
+            <div class="card-body">
+                <h2>Tag Editor</h2>
+                <p class="meta">Edit title, artist, album and other metadata. Cover art can be set for MP3 and M4A files.</p>
+
+                <div class="drop-zone" id="tags-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+                        <line x1="7" y1="7" x2="7.01" y2="7"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="tags-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; existing tags are loaded automatically</p>
+                </div>
+
+                <div id="tags-info" class="split-info" hidden>
+                    <span id="tags-name" class="split-name"></span>
+                    <span id="tags-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearTagsFile()">&times;</button>
+                </div>
+
+                <div id="tags-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Title</label>
+                            <input type="text" id="tags-title" placeholder="Title">
+                        </div>
+                        <div class="field">
+                            <label>Artist</label>
+                            <input type="text" id="tags-artist" placeholder="Artist">
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label>Album</label>
+                            <input type="text" id="tags-album" placeholder="Album">
+                        </div>
+                        <div class="field">
+                            <label>Year</label>
+                            <input type="text" id="tags-year" placeholder="2024">
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label>Genre</label>
+                            <input type="text" id="tags-genre" placeholder="Genre">
+                        </div>
+                        <div class="field">
+                            <label>Track</label>
+                            <input type="text" id="tags-track" placeholder="1">
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label>Comment</label>
+                            <input type="text" id="tags-comment" placeholder="Comment">
+                        </div>
+                    </div>
+                    <div id="tags-cover-wrap" style="margin-top: 16px;">
+                        <div class="drop-zone" id="tags-cover-drop">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            <label class="drop-browse">Select cover image<input type="file" id="tags-cover-input" accept="image/*" hidden></label>
+                            <p class="drop-hint" id="tags-cover-hint">optional &middot; drop a JPG or PNG here to set the cover art</p>
+                        </div>
+                        <div id="tags-cover-info" class="split-info" hidden>
+                            <span id="tags-cover-name" class="split-name"></span>
+                            <span id="tags-cover-size" class="file-size"></span>
+                            <button class="split-remove" onclick="clearTagsCover()">&times;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tags-actions" class="pdf-actions" hidden>
+                    <button id="tags-btn" class="btn-download" onclick="doWriteTags()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Save Tags
+                    </button>
+                </div>
+
+                <div id="tags-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Audio to Video -->
+        <div id="tab-audio2video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Audio to Video</h2>
+                <p class="meta">Turn an audio file into an MP4 with a waveform, a spectrum analyser, or a still image. Handy for uploading audio to video sites.</p>
+
+                <div class="drop-zone" id="audio2video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <polyline points="5 12 8 12 10 8 12 16 14 10 16 14 17 12 19 12"/>
+                    </svg>
+                    <label class="drop-browse">Select audio file<input type="file" id="audio2video-input" accept="audio/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; output is an H.264 MP4</p>
+                </div>
+
+                <div id="audio2video-info" class="split-info" hidden>
+                    <span id="audio2video-name" class="split-name"></span>
+                    <span id="audio2video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('audio2video')">&times;</button>
+                </div>
+
+                <div id="audio2video-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Style</label>
+                            <select id="audio2video-style" onchange="updateAudio2VideoStyle()">
+                                <option value="waveform">Waveform</option>
+                                <option value="spectrum">Spectrum bars</option>
+                                <option value="image">Still image</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <label>Resolution</label>
+                            <select id="audio2video-resolution">
+                                <option value="1280x720">1280 x 720</option>
+                                <option value="1920x1080">1920 x 1080</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field" id="audio2video-color-field">
+                            <label>Colour</label>
+                            <input type="color" id="audio2video-color" value="#4285f4">
+                        </div>
+                        <div class="field">
+                            <label>Background</label>
+                            <input type="color" id="audio2video-background" value="#000000">
+                        </div>
+                    </div>
+                    <div id="audio2video-image-wrap" style="margin-top: 16px;" hidden>
+                        <div class="drop-zone" id="audio2video-image-drop">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            <label class="drop-browse">Select image<input type="file" id="audio2video-image-input" accept="image/*" hidden></label>
+                            <p class="drop-hint">or drop an image here &middot; shown for the whole track, letterboxed with the background colour</p>
+                        </div>
+                        <div id="audio2video-image-info" class="split-info" hidden>
+                            <span id="audio2video-image-name" class="split-name"></span>
+                            <span id="audio2video-image-size" class="file-size"></span>
+                            <button class="split-remove" onclick="clearAudio2VideoImage()">&times;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="audio2video-actions" class="pdf-actions" hidden>
+                    <button id="audio2video-btn" class="btn-download" onclick="doAudio2Video()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Create Video
+                    </button>
+                </div>
+
+                <div id="audio2video-error" class="error" hidden></div>
+            </div>
+        </div>
+
         <!-- Crop Video -->
         <div id="tab-crop-video" class="pdf-section card">
             <div class="card-body">
@@ -1006,6 +1383,445 @@
             </div>
         </div>
 
+        <!-- Merge Clips -->
+        <div id="tab-merge-video" class="pdf-section card">
+            <div class="card-body">
+                <h2>Merge Clips</h2>
+                <p class="meta">Join two or more video clips into one MP4. Clips are scaled and padded to a common size, and silent clips get a blank audio track so everything lines up.</p>
+
+                <div class="drop-zone" id="merge-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="2" y="7" width="9" height="10" rx="1"/>
+                        <rect x="13" y="7" width="9" height="10" rx="1"/>
+                        <line x1="11" y1="12" x2="13" y2="12"/>
+                    </svg>
+                    <label class="drop-browse">Select video files<input type="file" id="merge-video-input" accept="video/*" multiple hidden></label>
+                    <p class="drop-hint">or drop files here &middot; clips are joined in the order added</p>
+                </div>
+
+                <div id="merge-video-list" class="file-list"></div>
+
+                <div id="merge-video-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Output size</label>
+                            <select id="merge-video-resolution">
+                                <option value="auto">Auto (largest clip)</option>
+                                <option value="match-first">Match first clip</option>
+                                <option value="1280x720">1280 x 720</option>
+                                <option value="1920x1080">1920 x 1080</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="merge-video-actions" class="pdf-actions" hidden>
+                    <button id="merge-video-btn" class="btn-download" onclick="doMergeVideo()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Merge Clips
+                    </button>
+                </div>
+
+                <div id="merge-video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Watermark / Logo -->
+        <div id="tab-video-watermark" class="pdf-section card">
+            <div class="card-body">
+                <h2>Watermark / Logo</h2>
+                <p class="meta">Overlay an image (PNG with transparency works best) on a video.</p>
+
+                <div class="drop-zone" id="video-watermark-video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="video-watermark-video-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a video file here</p>
+                </div>
+
+                <div id="video-watermark-video-info" class="split-info" hidden>
+                    <span id="video-watermark-video-name" class="split-name"></span>
+                    <span id="video-watermark-video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearVideoWatermarkVideo()">&times;</button>
+                </div>
+
+                <div class="drop-zone" id="video-watermark-image-drop" style="margin-top: 16px;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <label class="drop-browse">Select watermark image<input type="file" id="video-watermark-image-input" accept="image/*" hidden></label>
+                    <p class="drop-hint">or drop an image file here</p>
+                </div>
+
+                <div id="video-watermark-image-info" class="split-info" hidden>
+                    <span id="video-watermark-image-name" class="split-name"></span>
+                    <span id="video-watermark-image-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearVideoWatermarkImage()">&times;</button>
+                </div>
+
+                <div id="video-watermark-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Position</label>
+                            <select id="video-watermark-position">
+                                <option value="top-left">Top left</option>
+                                <option value="top-right">Top right</option>
+                                <option value="bottom-left">Bottom left</option>
+                                <option value="bottom-right" selected>Bottom right</option>
+                                <option value="center">Center</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label>Size (% of video width)</label>
+                            <input type="number" id="video-watermark-scale" min="1" max="100" value="15" step="1">
+                        </div>
+                        <div class="field">
+                            <label>Opacity (%)</label>
+                            <input type="number" id="video-watermark-opacity" min="0" max="100" value="100" step="5">
+                        </div>
+                        <div class="field">
+                            <label>Margin (px)</label>
+                            <input type="number" id="video-watermark-margin" min="0" max="2000" value="16" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="video-watermark-actions" class="pdf-actions" hidden>
+                    <button id="video-watermark-btn" class="btn-download" onclick="doVideoWatermark()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Add Watermark
+                    </button>
+                </div>
+
+                <div id="video-watermark-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Extract Frames -->
+        <div id="tab-frames" class="pdf-section card">
+            <div class="card-body">
+                <h2>Extract Frames</h2>
+                <p class="meta">Grab a single frame as an image, or pull many frames at an interval or evenly spaced across the video (ZIP).</p>
+
+                <div class="drop-zone" id="frames-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                        <line x1="7" y1="2" x2="7" y2="22"/>
+                        <line x1="17" y1="2" x2="17" y2="22"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <line x1="2" y1="7" x2="7" y2="7"/>
+                        <line x1="2" y1="17" x2="7" y2="17"/>
+                        <line x1="17" y1="17" x2="22" y2="17"/>
+                        <line x1="17" y1="7" x2="22" y2="7"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="frames-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; choose how to pick frames below</p>
+                </div>
+
+                <div id="frames-info" class="split-info" hidden>
+                    <span id="frames-name" class="split-name"></span>
+                    <span id="frames-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('frames')">&times;</button>
+                </div>
+
+                <div id="frames-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Mode</label>
+                            <select id="frames-mode" onchange="updateFramesMode()">
+                                <option value="single">Single frame at a time</option>
+                                <option value="interval">Every N seconds</option>
+                                <option value="count">N evenly spaced frames</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <label>Image format</label>
+                            <select id="frames-format">
+                                <option value="png">PNG</option>
+                                <option value="jpg">JPG</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field" id="frames-time-field">
+                            <label>Time (seconds)</label>
+                            <input type="number" id="frames-time" min="0" value="0" step="0.1">
+                        </div>
+                        <div class="field" id="frames-interval-field" hidden>
+                            <label>Interval (seconds)</label>
+                            <input type="number" id="frames-interval" min="0.1" value="1" step="0.1">
+                        </div>
+                        <div class="field" id="frames-count-field" hidden>
+                            <label>Number of frames</label>
+                            <input type="number" id="frames-count" min="1" max="500" value="10" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="frames-actions" class="pdf-actions" hidden>
+                    <button id="frames-btn" class="btn-download" onclick="doFrames()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Extract Frames
+                    </button>
+                </div>
+
+                <div id="frames-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Change Video Speed -->
+        <div id="tab-video-speed" class="pdf-section card">
+            <div class="card-body">
+                <h2>Change Video Speed</h2>
+                <p class="meta">Speed up or slow down a video. Audio is time-stretched to match, keeping its pitch unless you choose otherwise.</p>
+
+                <div class="drop-zone" id="video-speed-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="13 19 22 12 13 5 13 19"/>
+                        <polygon points="2 19 11 12 2 5 2 19"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="video-speed-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; 0.25x to 4x</p>
+                </div>
+
+                <div id="video-speed-info" class="split-info" hidden>
+                    <span id="video-speed-name" class="split-name"></span>
+                    <span id="video-speed-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('video-speed')">&times;</button>
+                </div>
+
+                <div id="video-speed-options" hidden>
+                    <div class="field-row" style="margin-top: 16px;">
+                        <div class="field">
+                            <label>Speed (0.25 to 4)</label>
+                            <input type="number" id="video-speed-value" min="0.25" max="4" value="1.5" step="0.05">
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px;">
+                        <label class="check-label">
+                            <input type="checkbox" id="video-speed-pitch" checked> Keep audio pitch
+                        </label>
+                    </div>
+                </div>
+
+                <div id="video-speed-actions" class="pdf-actions" hidden>
+                    <button id="video-speed-btn" class="btn-download" onclick="doVideoSpeed()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Change Speed
+                    </button>
+                </div>
+
+                <div id="video-speed-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Stabilize -->
+        <div id="tab-stabilize" class="pdf-section card">
+            <div class="card-body">
+                <h2>Stabilize Video</h2>
+                <p class="meta">Light stabilisation that smooths small camera shakes. It works in a single pass, so expect a gentle correction rather than a gimbal-like result.</p>
+
+                <div class="drop-zone" id="stabilize-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="5" y="5" width="14" height="14" rx="2"/>
+                        <path d="M2 9V5a3 3 0 013-3h4M22 9V5a3 3 0 00-3-3h-4M2 15v4a3 3 0 003 3h4M22 15v4a3 3 0 01-3 3h-4"/>
+                    </svg>
+                    <label class="drop-browse">Select video file<input type="file" id="stabilize-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop a file here &middot; edges are mirrored to hide the correction</p>
+                </div>
+
+                <div id="stabilize-info" class="split-info" hidden>
+                    <span id="stabilize-name" class="split-name"></span>
+                    <span id="stabilize-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('stabilize')">&times;</button>
+                </div>
+
+                <div id="stabilize-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Strength</label>
+                            <select id="stabilize-strength">
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="stabilize-actions" class="pdf-actions" hidden>
+                    <button id="stabilize-btn" class="btn-download" onclick="doStabilize()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Stabilize Video
+                    </button>
+                </div>
+
+                <div id="stabilize-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- GIF to Video -->
+        <div id="tab-gif2video" class="pdf-section card">
+            <div class="card-body">
+                <h2>GIF to Video</h2>
+                <p class="meta">Convert an animated GIF into a much smaller MP4 or WebM.</p>
+
+                <div class="drop-zone" id="gif2video-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <path d="M7 9h2v6H7zM11 9h2M11 9v6M11 12h1.5M15.5 9H18M15.5 9v6M15.5 12h2"/>
+                    </svg>
+                    <label class="drop-browse">Select GIF file<input type="file" id="gif2video-input" accept=".gif,image/gif" hidden></label>
+                    <p class="drop-hint">or drop a .gif here &middot; odd sizes are rounded to even dimensions</p>
+                </div>
+
+                <div id="gif2video-info" class="split-info" hidden>
+                    <span id="gif2video-name" class="split-name"></span>
+                    <span id="gif2video-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearAvFile('gif2video')">&times;</button>
+                </div>
+
+                <div id="gif2video-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Format</label>
+                            <select id="gif2video-format">
+                                <option value="mp4">MP4 (H.264)</option>
+                                <option value="webm">WebM (VP9)</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Play count</label>
+                            <input type="number" id="gif2video-loop" min="1" max="100" value="1" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="gif2video-actions" class="pdf-actions" hidden>
+                    <button id="gif2video-btn" class="btn-download" onclick="doGif2Video()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Convert GIF
+                    </button>
+                </div>
+
+                <div id="gif2video-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Video Info -->
+        <div id="tab-video-info" class="pdf-section card">
+            <div class="card-body">
+                <h2>Video Info</h2>
+                <p class="meta">Inspect a media file: container, duration, bitrate, codecs, resolution, frame rate, and every stream inside.</p>
+
+                <div class="drop-zone" id="video-info-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <label class="drop-browse">Select media file<input type="file" id="video-info-input" accept="video/*,audio/*" hidden></label>
+                    <p class="drop-hint">or drop a video or audio file here &middot; nothing is uploaded anywhere</p>
+                </div>
+
+                <div id="video-info-info" class="split-info" hidden>
+                    <span id="video-info-name" class="split-name"></span>
+                    <span id="video-info-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearVideoInfo()">&times;</button>
+                </div>
+
+                <div id="video-info-options" hidden>
+                    <p class="meta" id="video-info-status" style="margin-top: 16px;">Reading file...</p>
+                    <div id="video-info-result" hidden>
+                        <table class="info-table" id="video-info-table"></table>
+                        <h3 class="info-subhead">Streams</h3>
+                        <table class="info-table" id="video-info-streams"></table>
+                    </div>
+                </div>
+
+                <div id="video-info-actions" class="pdf-actions" hidden>
+                    <button id="video-info-btn" class="btn-secondary" onclick="copyVideoInfoJson()">Copy JSON</button>
+                </div>
+
+                <div id="video-info-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Picture-in-Picture -->
+        <div id="tab-pip" class="pdf-section card">
+            <div class="card-body">
+                <h2>Picture-in-Picture</h2>
+                <p class="meta">Overlay a second video in a corner of the main video. The result runs for the length of the main video.</p>
+
+                <div class="drop-zone" id="pip-main-drop">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <rect x="13" y="11" width="7" height="6" rx="1"/>
+                    </svg>
+                    <label class="drop-browse">Select main video<input type="file" id="pip-main-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop the main (background) video here</p>
+                </div>
+
+                <div id="pip-main-info" class="split-info" hidden>
+                    <span id="pip-main-name" class="split-name"></span>
+                    <span id="pip-main-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearPipMain()">&times;</button>
+                </div>
+
+                <div class="drop-zone" id="pip-overlay-drop" style="margin-top: 16px;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <label class="drop-browse">Select overlay video<input type="file" id="pip-overlay-input" accept="video/*" hidden></label>
+                    <p class="drop-hint">or drop the small (overlay) video here</p>
+                </div>
+
+                <div id="pip-overlay-info" class="split-info" hidden>
+                    <span id="pip-overlay-name" class="split-name"></span>
+                    <span id="pip-overlay-size" class="file-size"></span>
+                    <button class="split-remove" onclick="clearPipOverlay()">&times;</button>
+                </div>
+
+                <div id="pip-options" hidden>
+                    <div class="control-row" style="margin-top: 16px;">
+                        <div class="select-wrap">
+                            <label>Position</label>
+                            <select id="pip-position">
+                                <option value="top-left">Top left</option>
+                                <option value="top-right">Top right</option>
+                                <option value="bottom-left">Bottom left</option>
+                                <option value="bottom-right" selected>Bottom right</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Size (% of video width)</label>
+                            <input type="number" id="pip-scale" min="5" max="100" value="25" step="1">
+                        </div>
+                        <div class="field">
+                            <label>Margin (px)</label>
+                            <input type="number" id="pip-margin" min="0" max="2000" value="16" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pip-actions" class="pdf-actions" hidden>
+                    <button id="pip-btn" class="btn-download" onclick="doPip()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                        Create PiP Video
+                    </button>
+                </div>
+
+                <div id="pip-error" class="error" hidden></div>
+            </div>
+        </div>
+
         <!-- Voice Recorder -->
         <div id="tab-av-record-audio" class="pdf-section card">
             <div class="card-body">
@@ -1090,6 +1906,56 @@
                 </div>
 
                 <div id="recorder-screen-error" class="error" hidden></div>
+            </div>
+        </div>
+
+        <!-- Webcam -->
+        <div id="tab-av-record-webcam" class="pdf-section card">
+            <div class="card-body">
+                <h2>Webcam</h2>
+                <p class="meta">Take a photo or record a video with your camera. Everything stays in your browser.</p>
+
+                <div class="recorder-area">
+                    <video id="webcam-preview" class="webcam-preview" autoplay playsinline muted hidden></video>
+                    <div class="recorder-timer" id="webcam-timer">00:00</div>
+                    <div class="recorder-controls">
+                        <button id="webcam-start" class="btn-download recorder-btn-start" onclick="startWebcam()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            Start Camera
+                        </button>
+                        <button id="webcam-photo" class="btn-download" onclick="takeWebcamPhoto()" hidden>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>
+                            Take Photo
+                        </button>
+                        <button id="webcam-record" class="btn-download recorder-btn-start" onclick="startWebcamRecording()" hidden>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
+                            Record Video
+                        </button>
+                        <button id="webcam-stop" class="btn-danger" onclick="stopWebcamRecording()" hidden>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                            Stop
+                        </button>
+                        <button id="webcam-off" class="btn-secondary" onclick="stopWebcam()" hidden>Turn Off Camera</button>
+                    </div>
+                    <div style="margin-top:12px;">
+                        <label class="check-label">
+                            <input type="checkbox" id="webcam-audio" checked> Include microphone audio when recording
+                        </label>
+                    </div>
+                </div>
+
+                <div id="webcam-result" hidden>
+                    <video id="webcam-player" controls style="width:100%;max-height:400px;margin:16px 0;border-radius:8px;background:#000;"></video>
+                    <div class="pdf-actions">
+                        <button id="webcam-download" class="btn-download" onclick="downloadWebcamRecording()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
+                            Download Recording
+                        </button>
+                        <button class="btn-secondary" onclick="resetWebcamRecording()">New Recording</button>
+                    </div>
+                </div>
+
+                <div id="webcam-error" class="error" hidden></div>
             </div>
         </div>
     </main>

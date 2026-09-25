@@ -323,6 +323,23 @@ def set_file_metadata(filepath, metadata):
 
 # ── Page Routes ──
 
+# ── Extra tool modules ──
+# Each is a Blueprint that owns its own routes (routes_*.py) and pure helpers
+# (tools_*.py), keeping this file from growing further. A module that fails to
+# import only disables its own tools; the rest of the app keeps working.
+def _register_extra_blueprints():
+    import importlib
+    for mod, attr in (("routes_pdf2", "pdf2_bp"), ("routes_images2", "images2_bp"),
+                      ("routes_av2", "av2_bp"), ("routes_convert2", "convert2_bp")):
+        try:
+            m = importlib.import_module(f"sdexe.{mod}")
+            app.register_blueprint(getattr(m, attr))
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("sdexe").warning("tool module %s not loaded: %s", mod, e)
+
+_register_extra_blueprints()
+
+
 @app.route("/")
 def home():
     return render_template("home.html")
