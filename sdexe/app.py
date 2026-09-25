@@ -2629,6 +2629,16 @@ def transcribe_export():
     )
 
 
+def _run_update():
+    import sys
+    from sdexe import ui
+    c = ui.console()
+    with c.status("  [muted]updating sdexe and its downloader engine…[/muted]", spinner="dots"):
+        ok, msg = self_update()
+    c.print(f"  [ok]✓[/ok] {msg}\n" if ok else f"  [err]✗[/err] {msg}\n")
+    sys.exit(0 if ok else 1)
+
+
 # ── Startup helpers ──
 
 def _install_transcribe_deps():
@@ -2779,44 +2789,59 @@ def _find_free_port(host, start_port, max_tries=20):
 
 
 _COMMANDS = ("download", "info", "pdf", "image", "audio", "video", "convert", "file", "mcp", "skill",
-             "setup", "tutorial", "update", "transcribe")
+             "setup", "settings", "tutorial", "update", "transcribe")
 
-_MAIN_HELP = """\
-[bold]sdexe[/bold] [dim]v{version} · local tools for media, PDF, images & files[/dim]
-
-[bold]Usage[/bold]
-  [cyan]sdexe[/cyan]                        start the web app at http://localhost:5001
-  [cyan]sdexe tutorial[/cyan]               a hands-on walkthrough of everything (3 minutes)
-  [cyan]sdexe setup[/cyan]                  check your system, choose whether sdexe opens the browser
-
-  [cyan]sdexe download[/cyan] <url> ...     save video or audio from a link (MP4 1080p60 by default)
-  [cyan]sdexe info[/cyan] <url> ...         title, length, available qualities; what download would fetch
-
-  [cyan]sdexe pdf[/cyan] <command> ...      merge, split, compress, text, OCR, rotate, watermark, encrypt
-  [cyan]sdexe image[/cyan] <command> ...    resize, compress, convert (incl. HEIC), crop, watermark, QR
-  [cyan]sdexe audio[/cyan] <command> ...    convert, trim, speed, normalize, fade, merge, split
-  [cyan]sdexe video[/cyan] <command> ...    convert, trim, compress, extract audio, GIF, merge, frames
-  [cyan]sdexe convert[/cyan] <file> -f FMT  csv, json, yaml, xml, toml, md, html, xlsx; office → pdf
-  [cyan]sdexe file[/cyan] <command> ...     hash, zip, unzip, split
-
-  [cyan]sdexe mcp[/cyan]                    run as an MCP server for Claude, Cursor and other AI apps
-  [cyan]sdexe skill[/cyan] [--install]      a Claude Code skill describing every command
-
-  [cyan]sdexe update[/cyan]                 update sdexe and its downloader engine
-  [cyan]sdexe transcribe[/cyan]             install the optional transcription engine
-
-[bold]Web app options[/bold]
-  -p, --port PORT      server port (default 5001; the next free one if taken)
-  --host HOST          bind address (default 127.0.0.1)
-  --open PAGE          open a specific page: media, pdf, images, convert, av, text
-  --browser            open the browser this time, whatever the setting
-  --no-browser         don't open the browser this time
-  --no-tray            no system tray icon; run the server in the foreground
-  -q, --quiet          no startup banner
-  -V, --version        print the version
-
-Every command takes [cyan]--help[/cyan], [cyan]--json[/cyan] and [cyan]-o[/cyan]. Outputs land in the current folder.
-"""
+def _print_main_help():
+    from rich.text import Text
+    from sdexe import ui
+    c = ui.console()
+    ui.header(c)
+    w = 30
+    groups = [
+        ("Start", [
+            ("sdexe", "the web app at localhost:5001"),
+            ("sdexe tutorial", "a 3-minute hands-on walkthrough"),
+            ("sdexe settings", "defaults, download folder, colours, Claude Code, startup"),
+            ("sdexe setup", "the guided first-run questions, again"),
+        ]),
+        ("Media from links", [
+            ('sdexe download "<link>" …', "video or audio · add -mp3, -a, -720p, --best"),
+            ('sdexe info "<link>"', "qualities, sizes, chapters · a dry run of download"),
+        ]),
+        ("Your files", [
+            ("sdexe pdf <command>", "merge · split · compress · text · OCR · watermark · encrypt"),
+            ("sdexe image <command>", "resize · compress · convert (HEIC too) · crop · QR"),
+            ("sdexe audio <command>", "convert · trim · speed · normalize · fade · merge"),
+            ("sdexe video <command>", "convert · trim · compress · GIF · frames · merge"),
+            ("sdexe convert <file> -f FMT", "csv · json · yaml · xml · toml · md · html · xlsx"),
+            ("sdexe file <command>", "hash · zip · unzip · split"),
+        ]),
+        ("AI agents", [
+            ("sdexe mcp", "MCP server: every tool for Claude, Cursor & co."),
+            ("sdexe skill [--install]", "a Claude Code skill describing every command"),
+        ]),
+        ("Keep it current", [
+            ("sdexe update", "sdexe and its downloader engine"),
+            ("sdexe transcribe", "install the optional transcription engine"),
+        ]),
+    ]
+    for title, items in groups:
+        c.print()
+        c.print(ui.section(title))
+        c.print(ui.rows(items, key_width=w))
+    c.print()
+    c.print(ui.section("Starting the web app"))
+    c.print(ui.rows([
+        ("--browser / --no-browser", "open it this time or not, whatever the setting"),
+        ("-p, --port PORT", "default 5001, or the next free one"),
+        ("--open PAGE", "media, pdf, images, convert, av, text"),
+        ("--no-tray · --host · -q · -V", "no menu bar icon · bind address · no banner · version"),
+    ], key_width=w))
+    c.print()
+    c.print(Text.assemble(("  Every command takes ", "muted"), ("--help", "brand2"), (", ", "muted"),
+                          ("--json", "brand2"), (" and ", "muted"), ("-o", "brand2"),
+                          (". Results land in the current folder.", "muted")))
+    c.print()
 
 
 def main():
@@ -2826,7 +2851,7 @@ def main():
     import sys
     import threading
     import webbrowser
-    from rich.console import Console
+    from sdexe import ui
 
     if len(sys.argv) > 1 and sys.argv[1] == "download":
         from sdexe.cli import download_main
@@ -2837,6 +2862,14 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] in ("setup", "tutorial"):
         from sdexe import cli_home
         sys.exit((cli_home.setup_main if sys.argv[1] == "setup" else cli_home.tutorial_main)(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "update":
+        _run_update()
+    if len(sys.argv) > 1 and sys.argv[1] == "transcribe":
+        _install_transcribe_deps()
+        return
+    if len(sys.argv) > 1 and sys.argv[1] == "settings":
+        from sdexe.settings import settings_main
+        sys.exit(settings_main(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] in ("mcp", "skill"):
         from sdexe import agent
         sys.exit((agent.mcp_main if sys.argv[1] == "mcp" else agent.skill_main)(sys.argv[2:]))
@@ -2847,7 +2880,7 @@ def main():
     parser = argparse.ArgumentParser(prog="sdexe", add_help=False)
     parser.add_argument("-h", "--help", action="store_true")
     parser.add_argument("-V", "--version", action="version", version=f"sdexe {__version__}")
-    parser.add_argument("-p", "--port", type=int, default=5001)
+    parser.add_argument("-p", "--port", type=int)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--browser", action="store_true")
@@ -2859,47 +2892,40 @@ def main():
 
     args, extra = parser.parse_known_args()
 
+    err = ui.console(stderr=True)
     if args.help:
-        Console(highlight=False).print(_MAIN_HELP.format(version=__version__), soft_wrap=True)
+        _print_main_help()
         return
     if args.command and args.command not in _COMMANDS:
         import difflib
         guess = difflib.get_close_matches(args.command, _COMMANDS, n=1)
-        hint = f" Did you mean [cyan]sdexe {guess[0]}[/cyan]?" if guess else " Run [cyan]sdexe --help[/cyan]."
-        Console(stderr=True, highlight=False).print(f"sdexe: unknown command '{args.command}'.{hint}")
+        hint = f" Did you mean [brand]sdexe {guess[0]}[/brand]?" if guess else " Run [brand]sdexe --help[/brand]."
+        err.print(f"sdexe: unknown command '{args.command}'.{hint}")
         sys.exit(2)
     if extra:
-        Console(stderr=True, highlight=False).print(
-            f"sdexe: unknown option {extra[0]}. Run [cyan]sdexe --help[/cyan].")
+        err.print(f"sdexe: unknown option {extra[0]}. Run [brand]sdexe --help[/brand].")
         sys.exit(2)
-    if args.command in ("download", "info"):
+    if args.command:
         # Reached only when options came before the command (sdexe -q download).
-        Console(stderr=True).print(f"sdexe: put [cyan]{args.command}[/cyan] first, e.g. sdexe {args.command} <url>")
+        err.print(f"sdexe: put [brand]{args.command}[/brand] first, e.g. sdexe {args.command} …")
         sys.exit(2)
 
-    if args.command == "transcribe":
-        _install_transcribe_deps()
-        return
-    if args.command == "update" or args.update:
-        console = Console()
-        with console.status("  Updating sdexe and its downloader engine...", spinner="dots"):
-            ok, msg = self_update()
-        console.print(f"  [green]✓[/green]  {msg}\n" if ok else f"  [red]✗[/red]  {msg}\n")
-        sys.exit(0 if ok else 1)
+    if args.update:
+        _run_update()
 
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
     # Flask prints "* Serving Flask app" / "* Debug mode: off"; the screen below says it better.
     import flask.cli
     flask.cli.show_server_banner = lambda *a, **k: None
 
-    from sdexe import cli_home
-    console = Console(highlight=False)
+    from sdexe import cli_home, settings
+    console = ui.console()
     host = args.host
-    port = args.port
+    port = args.port or settings.get("port")
 
     # Graceful Ctrl+C
     def _sigint_handler(sig, frame):
-        console.print("\n  [dim]sdexe stopped.[/dim]\n")
+        console.print("\n  [muted]sdexe stopped.[/muted]\n")
         sys.exit(0)
 
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
@@ -2907,10 +2933,13 @@ def main():
         try:
             cli_home.run_setup(console, first_run=True)
         except (KeyboardInterrupt, EOFError):
-            console.print("\n  [dim]Setup skipped. Run[/dim] [cyan]sdexe setup[/cyan] [dim]any time.[/dim]")
+            console.print("\n  [muted]Setup skipped. Run[/muted] [brand]sdexe setup[/brand] [muted]any time.[/muted]")
     signal.signal(signal.SIGINT, _sigint_handler)
 
-    update_thread, update = cli_home.start_update_check() if not args.quiet else (None, {})
+    check = not args.quiet and settings.get("update_check")
+    update_thread, update = cli_home.start_update_check() if check else (None, {})
+    if not settings.get("tray"):
+        args.no_tray = True
 
     # Port auto-detection
     import socket
@@ -2922,7 +2951,7 @@ def main():
             original_port = port
             port = _find_free_port(host, port + 1)
             if port is None:
-                console.print(f"  [red]Error:[/red] Port {original_port} is in use and no free port found nearby.")
+                console.print(f"  [err]✗[/err] Port {original_port} is in use and no free port found nearby.")
                 sys.exit(1)
             port_note = f"port {original_port} was busy, so this is {port}"
 
@@ -2963,7 +2992,7 @@ def main():
             # kill the server the moment main() ends. Block instead.
             if not _run_tray(port):
                 if not args.quiet:
-                    console.print("  [yellow]System tray unavailable, running without it.[/yellow]\n")
+                    console.print("  [warn]![/warn] [muted]Menu bar icon unavailable here; running without it.[/muted]\n")
                 flask_thread.join()
         except ImportError:
             app.run(host=host, port=port, use_reloader=False)

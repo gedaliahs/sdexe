@@ -295,27 +295,29 @@ class Server:
 
 
 MCP_HELP = """\
-[bold]sdexe mcp[/bold] [dim]· run sdexe as an MCP server (stdio) so AI apps can call its tools[/dim]
+  [title]sdexe mcp[/title] [muted]· sdexe as an MCP server (stdio), so AI apps can call every tool[/muted]
 
-[bold]Add it to[/bold]
-  Claude Code      [cyan]claude mcp add sdexe -- sdexe mcp[/cyan]
-  Claude Desktop   add to claude_desktop_config.json:
-                   [dim]{{"mcpServers": {{"sdexe": {{"command": "{exe}", "args": ["mcp"]}}}}}}[/dim]
-  Cursor, others   command [cyan]{exe}[/cyan], args [cyan]mcp[/cyan]
+  [brand]◆[/brand] [title]Add it to[/title]
+    [brand2]Claude Code[/brand2]      [brand]claude mcp add -s user sdexe -- sdexe mcp[/brand]   [muted]or: sdexe settings[/muted]
+    [brand2]Claude Desktop[/brand2]   [muted]claude_desktop_config.json:[/muted]
+                     [faint]{{"mcpServers": {{"sdexe": {{"command": "{exe}", "args": ["mcp"]}}}}}}[/faint]
+    [brand2]Cursor & others[/brand2]  [muted]command[/muted] [brand]{exe}[/brand][muted], args[/muted] [brand]mcp[/brand]
 
-[bold]Tools[/bold]  {count}: download, media_info, and every pdf / image / audio / video / convert / file command.
-
-Outputs go to the client's working folder, or ~/Downloads when that is not
-writable. Set SDEXE_OUTPUT_DIR to choose another. Each call can also pass "output".
+  [brand]◆[/brand] [title]{count} tools[/title]
+    [muted]download, media_info, and every pdf / image / audio / video / convert / file command.
+    Outputs go to the client's folder, or ~/Downloads when that isn't writable;
+    SDEXE_OUTPUT_DIR changes it, and each call can pass "output".[/muted]
 """
 
 
 def mcp_main(argv) -> int:
     if argv and argv[0] in ("-h", "--help"):
-        from rich.console import Console
         import shutil
+        from sdexe import ui
         exe = shutil.which("sdexe") or "sdexe"
-        Console(highlight=False).print(MCP_HELP.format(exe=exe, count=len(tool_definitions())), soft_wrap=True)
+        c = ui.console()
+        c.print()
+        c.print(MCP_HELP.format(exe=exe, count=len(tool_definitions())), soft_wrap=True)
         return 0
     if sys.stdin.isatty():
         print("sdexe mcp speaks MCP over stdin/stdout and is meant to be started by an AI app.\n"

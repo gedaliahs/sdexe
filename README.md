@@ -55,6 +55,10 @@ Starts the web app at `http://localhost:5001`. All processing happens locally. T
 
 New to it? `sdexe tutorial` is a hands-on, 3-minute walkthrough that runs real commands.
 
+### Settings
+
+`sdexe settings` opens a full-screen settings page (arrow keys, changes save as you go): whether the browser opens on start, port, menu bar icon, update checks, default video format and quality, audio format, MP3 bitrate, download folder, parallel downloads, cover art and tags, the accent colour, plus switches for the zsh link fix, Claude Code (MCP) and the Claude skill. Scripts can use `sdexe settings --json`, `sdexe settings get KEY`, `sdexe settings set KEY VALUE` and `sdexe settings reset`.
+
 > **zsh users:** quote links (`sdexe download "https://youtube.com/watch?v=..."`), or let `sdexe setup` add `alias sdexe='noglob sdexe'` so you don't have to. Without either, zsh stops with "no matches found" before sdexe runs.
 
 ### Download from the terminal

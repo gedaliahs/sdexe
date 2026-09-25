@@ -609,36 +609,39 @@ def _arg_line(arg: Arg) -> tuple[str, str]:
     if arg.type is not bool:
         left += " " + ("|".join(map(str, arg.choices)) if arg.choices and len(arg.choices) <= 5
                        else arg.dest.upper())
-    bits = [arg.help] if arg.help else []
+    bits = [_escape(arg.help)] if arg.help else []
     if arg.choices and len(arg.choices) > 5:
         bits.append("one of " + ", ".join(map(str, arg.choices)))
     if arg.required:
-        bits.append("[bold]required[/bold]")
+        bits.append("[warn]required[/warn]")
     elif arg.default not in (None, "", False) and arg.type is not bool:
-        bits.append(f"[dim]default {arg.default}[/dim]")
+        bits.append(f"[faint]default {_escape(str(arg.default))}[/faint]")
     return left, "  ".join(bits)
 
 
 def command_help(cmd: Cmd) -> str:
-    out = [f"[bold]sdexe {cmd.full}[/bold] [dim]· {cmd.summary}[/dim]", "", "[bold]Usage[/bold]",
-           f"  sdexe {cmd.full} [cyan]{cmd.inputs_help}[/cyan] \\[options]", ""]
+    out = [f"  [title]sdexe {cmd.full}[/title] [muted]· {_escape(cmd.summary)}[/muted]", "",
+           f"  [brand]sdexe {cmd.full}[/brand] [brand2]{_escape(cmd.inputs_help)} \\[options][/brand2]"]
     if cmd.inputs == "each":
-        out += ["  Several files are processed one by one.", ""]
+        out += ["  [muted]Several files are processed one by one.[/muted]"]
     rows = [_arg_line(a) for a in cmd.args]
     out_help = ("text goes to stdout; -o FILE saves it" if _is_text(cmd)
-                else "folder, or a file name for a single input (default: current folder)")
+                else "a folder, or a file name for one input (default: the current folder)")
     rows += [("-o, --output PATH", out_help), ("--json", "one JSON result document on stdout"),
              ("--quiet", "no progress output")]
     width = min(max(len(r[0]) for r in rows), 26) + 3
-    out.append("[bold]Options[/bold]")
+    out += ["", "  [brand]◆[/brand] [title]Options[/title]"]
     for left, right in rows:
         if len(left) + 3 > width:
-            out.append(f"  {left}")
-            out.append(f"  {'':{width}}{right}")
+            out.append(f"    [brand2]{left}[/brand2]")
+            out.append(f"    {'':{width}}[muted]{right}[/muted]")
         else:
-            out.append(f"  {left.ljust(width)}{right}")
+            out.append(f"    [brand2]{left.ljust(width)}[/brand2][muted]{right}[/muted]")
     if cmd.example:
-        out += ["", "[bold]Example[/bold]", f"  {cmd.example}"]
+        ex = cmd.example.split(" ", 2 if cmd.group == "convert" else 3)
+        head, tail = " ".join(ex[:-1]), ex[-1]
+        out += ["", "  [brand]◆[/brand] [title]Example[/title]",
+                f"    [brand]{_escape(head)}[/brand] [brand2]{_escape(tail)}[/brand2]"]
     return "\n".join(out)
 
 
@@ -649,15 +652,19 @@ def _is_text(cmd: Cmd) -> bool:
 def group_help(group: str) -> str:
     cmds = [c for c in COMMANDS if c.group == group]
     width = max(len(c.name) for c in cmds) + 3
-    out = [f"[bold]sdexe {group}[/bold] [dim]· {GROUPS[group]}[/dim]", "", "[bold]Commands[/bold]"]
-    out += [f"  [cyan]{c.name.ljust(width)}[/cyan]{c.summary}" for c in cmds]
-    out += ["", f"Run [cyan]sdexe {group} <command> --help[/cyan] for options."]
+    out = [f"  [title]sdexe {group}[/title] [muted]· {GROUPS[group]}[/muted]", "",
+           "  [brand]◆[/brand] [title]Commands[/title]"]
+    out += [f"    [brand]{c.name.ljust(width)}[/brand][muted]{_escape(c.summary)}[/muted]" for c in cmds]
+    out += ["", f"  [muted]Options for any of them:[/muted] [brand]sdexe {group}[/brand] [brand2]<command> --help[/brand2]"]
     return "\n".join(out)
 
 
 def _print(markup: str):
-    from rich.console import Console
-    Console(highlight=False).print(markup, soft_wrap=True)
+    from sdexe import ui
+    c = ui.console()
+    c.print()
+    c.print(markup, soft_wrap=True)
+    c.print()
 
 
 # ── Running ──
@@ -671,8 +678,8 @@ class Runner:
         self.stdout_tty = sys.stdout.isatty()
         self.console = None
         if sys.stderr.isatty() and not args.quiet:
-            from rich.console import Console
-            self.console = Console(stderr=True, highlight=False)
+            from sdexe import ui
+            self.console = ui.console(stderr=True)
 
     def _dest(self, stem: str, ext: str, sources: list, n_outputs: int) -> Path:
         out = self.args.output
@@ -744,7 +751,8 @@ class Runner:
         entry = {"inputs": [str(Path(s).resolve()) for s in sources], "ok": False}
         try:
             if self.console:
-                with self.console.status(f" [dim]{self.cmd.full}[/dim] {_escape(label)}", spinner="dots"):
+                with self.console.status(f"  [muted]{self.cmd.full}[/muted] {_escape(label)}", spinner="dots",
+                                         spinner_style="brand"):
                     res = call()
                     saved = self._save(res, sources, n_outputs)
             else:
@@ -762,7 +770,7 @@ class Runner:
         if not entry["ok"]:
             msg = f"✗ {label}: {entry['error']}"
             if self.console:
-                self.console.print(f" [red]✗[/red] {_escape(label)}  [red]{_escape(entry['error'])}[/red]")
+                self.console.print(f"  [err]✗[/err] {_escape(label)}  [err]{_escape(entry['error'])}[/err]")
             elif not self.args.json or not sys.stderr.isatty():
                 print(msg, file=sys.stderr)
             return
@@ -782,26 +790,27 @@ class Runner:
             before = sum(Path(s).stat().st_size for s in sources) if sources else 0
             if "folder" in entry:
                 where = _short(entry["folder"])
-                self.console.print(f" [green]✓[/green] {_escape(label)} [dim]→[/dim] {_escape(where)}/ "
-                                   f"[dim]({len(outs)} files)[/dim]")
+                self.console.print(f"  [ok]✓[/ok] {_escape(label)} [faint]→[/faint] [brand]{_escape(where)}/[/brand] "
+                                   f"[muted]{len(outs)} files[/muted]")
             else:
                 o = outs[0]
                 sizes = f"{fmt_size(before)} → {fmt_size(o['size_bytes'])}" if before else fmt_size(o["size_bytes"])
-                self.console.print(f" [green]✓[/green] {_escape(label)} [dim]→[/dim] "
-                                   f"[link=file://{o['path']}]{_escape(_short(o['path']))}[/link]  [dim]{sizes}[/dim]")
+                self.console.print(f"  [ok]✓[/ok] {_escape(label)} [faint]→[/faint] "
+                                   f"[brand][link=file://{o['path']}]{_escape(_short(o['path']))}[/link][/brand]  "
+                                   f"[muted]{sizes}[/muted]")
 
     def _print_data(self, data, label):
         if not self.stdout_tty:
             print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
             return
-        from rich.console import Console
-        c = Console(highlight=False)
-        c.print(f" [bold]{_escape(label)}[/bold]")
+        from sdexe import ui
+        c = ui.console()
+        c.print(f"  [title]{_escape(label)}[/title]")
         width = max((len(str(k)) for k in data), default=0) + 2
         for k, v in data.items():
             if isinstance(v, (dict, list)):
                 v = json.dumps(v, ensure_ascii=False, default=str)
-            c.print(f"   [dim]{str(k).ljust(width)}[/dim]{_escape(v)}", overflow="ellipsis", no_wrap=True)
+            c.print(f"    [muted]{str(k).ljust(width)}[/muted]{_escape(v)}", overflow="ellipsis", no_wrap=True)
         c.print()
 
     def run(self, files: list) -> int:

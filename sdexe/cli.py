@@ -23,7 +23,7 @@ from pathlib import Path
 
 import yt_dlp
 
-from sdexe import media, tools
+from sdexe import media, tools, ui
 from sdexe.app import _friendly_download_error, _safe_filename
 
 
@@ -99,7 +99,27 @@ class Spec:
         return f"{name} · up to {self.height}p{self.fps or ''}"
 
 
-def resolve_spec(tags, output_ext=None) -> Spec:
+def download_defaults() -> dict:
+    """The user's defaults from `sdexe settings`, for when no tag says otherwise."""
+    try:
+        from sdexe import settings
+        v = settings.all_values()
+    except Exception:  # noqa: BLE001 - a broken config must not break downloads
+        v = {}
+    return {
+        "video": v.get("dl_video_format", "mp4"),
+        "quality": v.get("dl_quality", "1080p60"),
+        "audio": v.get("dl_audio_format", "wav"),
+        "bitrate": v.get("dl_mp3_bitrate", "320"),
+        "folder": v.get("dl_folder", ""),
+        "jobs": v.get("dl_jobs", 3),
+        "cover_art": v.get("dl_cover_art", True),
+        "tags": v.get("dl_tags", True),
+    }
+
+
+def resolve_spec(tags, output_ext=None, defaults=None) -> Spec:
+    d = defaults or download_defaults()
     formats, kinds, qualities = [], [], []
     for kind, value in tags:
         {"format": formats, "kind": kinds, "quality": qualities}[kind].append(value)
@@ -123,7 +143,7 @@ def resolve_spec(tags, output_ext=None) -> Spec:
         if kind == "video" and fmt in media.AUDIO_FORMATS:
             raise UsageError(f"{fmt} is an audio format. For video use mp4, webm or mkv.")
     else:
-        fmt = "wav" if kind == "audio" else "mp4"
+        fmt = d["audio"] if kind == "audio" else d["video"]
 
     spec = Spec(fmt=fmt)
     q = qualities[0] if qualities else {}
@@ -131,7 +151,7 @@ def resolve_spec(tags, output_ext=None) -> Spec:
         if q.get("height"):
             spec.warnings.append(f"{q['label']} is a video quality, ignored for {fmt}.")
         if fmt == "mp3":
-            spec.bitrate = q.get("bitrate") or "320"
+            spec.bitrate = q.get("bitrate") or d["bitrate"]
         elif q.get("bitrate"):
             why = "lossless" if fmt in ("wav", "flac") else "kept at the source stream's quality"
             spec.warnings.append(f"{fmt} is {why}, so {q['label']} is ignored. Bitrate applies to mp3.")
@@ -143,7 +163,9 @@ def resolve_spec(tags, output_ext=None) -> Spec:
         elif q.get("height"):
             spec.height, spec.fps = q["height"], q.get("fps")
         else:
-            spec.height, spec.fps = 1080, 60
+            tag = classify_tag(d["quality"]) or ("quality", {"height": 1080, "fps": 60})
+            spec.best = bool(tag[1].get("best"))
+            spec.height, spec.fps = tag[1].get("height"), tag[1].get("fps")
     return spec
 
 
@@ -214,7 +236,7 @@ def _parser():
     p.add_argument("--limit", type=int)
     p.add_argument("--start")
     p.add_argument("--end")
-    p.add_argument("-j", "--jobs", type=int, default=3)
+    p.add_argument("-j", "--jobs", type=int)
     p.add_argument("--json", action="store_true")
     p.add_argument("--quiet", action="store_true")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -277,58 +299,60 @@ def parse_args(argv, prog="download"):
 
 
 HELP = """\
-[bold]sdexe download[/bold] [dim]· save video or audio from a link, straight to disk[/dim]
+  [title]sdexe download[/title] [muted]· save video or audio from a link, straight to disk[/muted]
 
-[bold]Usage[/bold]
-  sdexe download [cyan]<url>[/cyan] [cyan]\\[url ...][/cyan] [green]\\[format][/green] [green]\\[quality][/green] \\[options]
+  [brand]sdexe download[/brand] [brand2]"<link>" \\["<link>" …] \\[format] \\[quality] \\[options][/brand2]
 
-  With no tags you get [bold]MP4 video, up to 1080p60[/bold]. Audio only defaults to [bold]WAV[/bold] (lossless).
-  Tags can be written as -mp3, --mp3, mp3, -f mp3; quality as -720p, 720p, -q 720p.
+  With no tags you get [title]{video_default}[/title]; [brand2]-a[/brand2] gets [title]{audio_default}[/title].
+  [muted]Those are your defaults: change them in[/muted] [brand]sdexe settings[/brand][muted].[/muted]
+  [muted]Tags can be written -mp3, --mp3, mp3 or -f mp3; quality as -720p, 720p or -q 720p.[/muted]
 
-[bold]Formats[/bold]
-  [green]video[/green]   mp4 [dim](default)[/dim], webm, mkv
-  [green]audio[/green]   wav [dim](default for -a)[/dim], mp3, flac, m4a, opus
-  [green]-a[/green], [green]--audio[/green]   audio only, as WAV unless a format is given
+  [brand]◆[/brand] [title]Formats[/title]
+    [brand2]video[/brand2]        mp4 · webm · mkv
+    [brand2]audio[/brand2]        wav · mp3 · flac · m4a · opus
+    [brand2]-a, --audio[/brand2]  audio only, in your audio format unless a tag says otherwise
 
-[bold]Quality[/bold]
-  [green]video[/green]   2160p/4k, 1440p, 1080p, 720p, 480p, 360p  [dim]add fps: 1080p30, 720p60[/dim]
-          [dim]default 1080p60: the best stream at or under 1080p, 60fps preferred,
-          stepping down when a video doesn't offer that[/dim]
-  [green]best[/green]    highest available: no resolution cap (4K/8K if offered), top fps and bitrate
-  [green]mp3[/green]     128, 192, 256, 320 [dim](default 320 kbps)[/dim]
+  [brand]◆[/brand] [title]Quality[/title]
+    [brand2]video[/brand2]        2160p/4k · 1440p · 1080p · 720p · 480p · 360p   [muted]add fps: 1080p30, 720p60[/muted]
+                 [muted]a ceiling: the best stream at or under it, stepping down when a video has less[/muted]
+    [brand2]best[/brand2]         no cap: 4K/8K when offered, top frame rate and bitrate
+    [brand2]mp3[/brand2]          128 · 192 · 256 · 320 kbps
 
-[bold]Options[/bold]
-  -o, --output PATH          folder to save into (default: current folder), or a
-                             file name like clip.mp4 when downloading one link
-  -i, --input FILE           read links from a file, one per line ([dim]-[/dim] for stdin)
-  --playlist                 download every video in a playlist or channel link
-  --limit N                  only the first N videos of a playlist (implies --playlist)
-  --start TIME, --end TIME   keep only part of the video: 90, 1:30, 1:02:03, 1m30s
-  -j, --jobs N               downloads at once (default 3)
-  --cookies-from-browser B   use your browser's login: chrome, safari, firefox, brave, edge
-  --json                     print one JSON result document on stdout
-  --quiet                    no progress output, errors only
-  -v, --verbose              show yt-dlp's own log
+  [brand]◆[/brand] [title]Options[/title]
+    [brand2]-o, --output PATH[/brand2]          a folder, or a file name like clip.mp4 for one link
+    [brand2]-i, --input FILE[/brand2]           links from a file, one per line ([brand2]-[/brand2] for stdin)
+    [brand2]--playlist[/brand2]                 every video in a playlist or channel link
+    [brand2]--limit N[/brand2]                  only the first N of a playlist (implies --playlist)
+    [brand2]--start TIME, --end TIME[/brand2]   only part: 90, 1:30, 1:02:03, 1m30s
+    [brand2]-j, --jobs N[/brand2]               downloads at once (yours: {jobs})
+    [brand2]--cookies-from-browser B[/brand2]   your browser's login: chrome, safari, firefox, brave, edge
+    [brand2]--json[/brand2]                     one JSON result document on stdout
+    [brand2]--quiet[/brand2]                    no progress, errors only
+    [brand2]-v, --verbose[/brand2]              yt-dlp's own log
 
-[bold]Output[/bold]
-  Saved file paths are printed to stdout, one per line, as each finishes; progress
-  and errors go to stderr. Exit code 0 when everything saved, 1 if any link failed.
+  [brand]◆[/brand] [title]Output[/title]
+    [muted]Saved paths go to stdout, one per line, as each finishes; progress and errors to stderr.
+    Exit code 0 when everything saved, 1 if any link failed. Folder: {folder}.[/muted]
 
-[bold]Examples[/bold]
-  sdexe download https://youtu.be/dQw4w9WgXcQ
-  sdexe download https://youtu.be/dQw4w9WgXcQ -mp3
-  sdexe download https://youtu.be/dQw4w9WgXcQ -720p -o ~/Movies
-  sdexe download https://youtu.be/dQw4w9WgXcQ --best
-  sdexe download URL1 URL2 URL3 -a
-  sdexe download URL --start 1:30 --end 2:00 -o clip.mp4
-  sdexe download "https://youtube.com/playlist?list=..." --playlist -mp3
-  sdexe download URL --json
+  [brand]◆[/brand] [title]Examples[/title]
+    [brand]sdexe download[/brand] [brand2]"https://youtu.be/dQw4w9WgXcQ"[/brand2]
+    [brand]sdexe download[/brand] [brand2]"https://youtu.be/dQw4w9WgXcQ" -mp3[/brand2]
+    [brand]sdexe download[/brand] [brand2]"https://youtu.be/dQw4w9WgXcQ" -720p -o ~/Movies[/brand2]
+    [brand]sdexe download[/brand] [brand2]"<link>" --start 1:30 --end 2:00 -o clip.mp4[/brand2]
+    [brand]sdexe download[/brand] [brand2]"<playlist>" --playlist --limit 10 -mp3[/brand2]
+    [brand]sdexe download[/brand] [brand2]"<link>" --json[/brand2]
 """
 
 
 def print_help(file=None):
-    from rich.console import Console
-    Console(file=file or sys.stdout, highlight=False).print(HELP, soft_wrap=True)
+    from sdexe import settings
+    d = download_defaults()
+    spec_v = resolve_spec([], defaults=d)
+    spec_a = resolve_spec([("kind", "audio")], defaults=d)
+    c = ui.console(file=file or sys.stdout)
+    c.print()
+    c.print(HELP.format(video_default=spec_v.label, audio_default=spec_a.label, jobs=d["jobs"],
+                        folder=settings.BY_KEY["dl_folder"].show(d["folder"])), soft_wrap=True)
 
 
 # ── Downloading ──
@@ -428,8 +452,9 @@ def ydl_base_opts(args, log=None) -> dict:
 
 
 class Downloader:
-    def __init__(self, urls, spec, args, out_dir, out_file=None, clip=(None, None)):
-        self.items = [Item(u) for u in urls]
+    def __init__(self, urls, spec, args, out_dir, out_file=None, clip=(None, None), defaults=None):
+        self.defaults = defaults or download_defaults()
+        self.items = [Item(u, thumbnail=bool(self.defaults["cover_art"])) for u in urls]
         self.spec = spec
         self.args = args
         self.out_dir = out_dir
@@ -447,7 +472,7 @@ class Downloader:
         self.console = None
         if self.stderr_tty and not args.quiet:
             from rich.console import Console
-            self.console = Console(stderr=True, highlight=False)
+            self.console = ui.console(stderr=True)
 
     # stderr events, for when there is no live display
     def _event(self, text, error=False):
@@ -461,7 +486,7 @@ class Downloader:
 
     def _log(self, msg):
         if self.live:
-            self.live.console.print(f"[dim]{_escape(msg)}[/dim]")
+            self.live.console.print(f"[faint]{_escape(msg)}[/faint]")
         else:
             print(msg, file=sys.stderr, flush=True)
 
@@ -472,7 +497,7 @@ class Downloader:
             fps=self.spec.fps,
             bitrate=self.spec.bitrate,
             prefer_fps=True,
-            embed_metadata=True,
+            embed_metadata=bool(self.defaults["tags"]),
             force_container=True,
             thumbnail=item.thumbnail,
         )
@@ -533,7 +558,8 @@ class Downloader:
             if not url or (e.get("title") or "") in ("[Private video]", "[Deleted video]", "[Unavailable video]") \
                     or e.get("availability") in ("private", "needs_auth", "subscriber_only", "premium_only"):
                 continue
-            children.append(Item(url, entry=e, playlist=title, title=e.get("title") or ""))
+            children.append(Item(url, entry=e, playlist=title, title=e.get("title") or "",
+                                 thumbnail=bool(self.defaults["cover_art"])))
         with self.lock:
             idx = self.items.index(item)
             self.items[idx:idx + 1] = [item] + children
@@ -681,26 +707,30 @@ class Downloader:
         else:
             visible = items
 
-        width = self.console.width
-        title_w = max(16, min(46, width - 52))
+        # Exact widths that always add up to the terminal, so Rich never has
+        # to squeeze a column (it would drop the one-character status first).
+        room = self.console.width - 2 - 1 - 18 - 3
+        detail_w = max(12, min(44, room - 16))
+        title_w = max(10, min(46, room - detail_w))
         grid = Table.grid(padding=(0, 1))
-        grid.add_column(width=1)
+        grid.add_column(width=1, no_wrap=True)
         grid.add_column(width=title_w, no_wrap=True, overflow="ellipsis")
-        grid.add_column(width=18)
-        grid.add_column(no_wrap=True, overflow="ellipsis")
+        grid.add_column(width=18, no_wrap=True)
+        grid.add_column(width=detail_w, no_wrap=True, overflow="ellipsis")
 
         for i in visible:
             name = Text(i.name, overflow="ellipsis", no_wrap=True)
             if i.status == "queued":
-                grid.add_row(Text("·", style="dim"), Text(i.name, style="dim"), "", Text("waiting", style="dim"))
+                grid.add_row(Text("·", style="faint"), Text(i.name, style="faint"), "", Text("waiting", style="faint"))
             elif i.status == "running":
                 if i.spinner is None:
-                    i.spinner = Spinner("dots", style="cyan")
+                    i.spinner = Spinner("dots", style="brand")
                 total = i.total
                 downloading = i.stage == "downloading"
                 if downloading and total:
                     pct = min(100.0, i.downloaded / total * 100)
-                    bar = ProgressBar(total=100, completed=pct, width=18, complete_style="cyan")
+                    bar = ProgressBar(total=100, completed=pct, width=18, complete_style="brand",
+                                      finished_style="ok", style="faint")
                     parts = [f"{pct:3.0f}%", f"{fmt_size(i.downloaded)} / {fmt_size(total)}"]
                     if i.speed:
                         parts.append(f"{fmt_size(i.speed)}/s")
@@ -708,31 +738,35 @@ class Downloader:
                         parts.append(fmt_time(i.eta))
                     detail = Text("  ".join(parts))
                 elif downloading:
-                    bar = ProgressBar(total=None, width=18, pulse=True, complete_style="cyan")
+                    bar = ProgressBar(total=None, width=18, pulse=True, complete_style="brand", pulse_style="brand",
+                                      style="faint")
                     detail = Text(fmt_size(i.downloaded) if i.downloaded else "downloading")
                 else:
-                    bar = ProgressBar(total=None, width=18, pulse=True, complete_style="magenta")
-                    detail = Text(i.stage, style="magenta" if i.stage not in ("fetching info", "connecting") else "dim")
+                    bar = ProgressBar(total=None, width=18, pulse=True, complete_style="brand2", pulse_style="brand2",
+                                      style="faint")
+                    detail = Text(i.stage, style="brand2" if i.stage not in ("fetching info", "connecting") else "muted")
                 grid.add_row(i.spinner, name, bar, detail)
             elif i.status == "done":
                 bits = [b for b in (i.quality(), fmt_size(i.path.stat().st_size) if i.path and i.path.exists() else "") if b]
-                grid.add_row(Text("✓", style="green"), name, Text("saved", style="green"), Text(" · ".join(bits), style="dim"))
+                grid.add_row(Text("✓", style="ok"), name, Text("saved", style="ok"), Text(" · ".join(bits), style="muted"))
             else:
-                grid.add_row(Text("✗", style="red"), name, Text("failed", style="red"), Text(i.error, style="red"))
+                grid.add_row(Text("✗", style="err"), name, Text("failed", style="err"), Text(i.error, style="err"))
 
         n_done = sum(i.status == "done" for i in items)
         n_fail = sum(i.status == "failed" for i in items)
         speed = sum(i.speed or 0 for i in running)
         foot = [f"{n_done}/{len(items)} saved"]
         if n_fail:
-            foot.append(f"[red]{n_fail} failed[/red]")
+            foot.append(f"[err]{n_fail} failed[/err]")
         hidden = len(items) - len(visible)
         if hidden:
             foot.append(f"{hidden} more not shown")
         if speed:
             foot.append(f"{fmt_size(speed)}/s")
         foot.append(fmt_time(time.time() - self.started))
-        return Group(grid, Text.from_markup("  [dim]" + "  ·  ".join(foot) + "[/dim]"))
+        from rich.padding import Padding
+        return Group(Padding(grid, (0, 0, 0, 2)), Text(""),
+                     Text.from_markup("  [muted]" + "  ·  ".join(foot) + "[/muted]"))
 
     # ── Run ──
 
@@ -810,11 +844,12 @@ class Downloader:
         clip = ""
         start, end = self.clip
         if start is not None or end is not None:
-            clip = f"  [dim]clip[/dim] {fmt_time(start or 0)}–{fmt_time(end) if end else 'end'}"
-        c.print(f"\n [bold]sdexe[/bold] [dim]download[/dim]  {self._count_label()}  [dim]as[/dim] "
-                f"[cyan]{self.spec.label}[/cyan]{clip}  [dim]→[/dim] {self._where()}")
+            clip = f"  [muted]·  clip[/muted] {fmt_time(start or 0)}–{fmt_time(end) if end else 'end'}"
+        c.print()
+        c.print(f"  [brand]↓[/brand] [title]{self._count_label()}[/title]  [muted]as[/muted] "
+                f"[brand]{self.spec.label}[/brand]{clip}  [muted]→[/muted] {_escape(self._where())}")
         for w in self.spec.warnings:
-            c.print(f" [yellow]![/yellow] {w}")
+            c.print(f"  [warn]![/warn] [muted]{_escape(w)}[/muted]")
         c.print()
 
     def _summary(self, items, interrupted):
@@ -824,22 +859,23 @@ class Downloader:
         elapsed = fmt_time(time.time() - self.started)
         if done:
             noun = "file" if len(done) == 1 else "files"
-            c.print(f" [green]✓[/green] Saved {len(done)} {noun} to {self._where()} [dim]in {elapsed}[/dim]\n")
+            c.print(f"  [ok]✓[/ok] [title]Saved {len(done)} {noun}[/title] [muted]to[/muted] {_escape(self._where())} "
+                    f"[muted]in {elapsed}[/muted]\n")
             for i in done:
                 meta = " · ".join(b for b in (i.quality(), fmt_size(i.path.stat().st_size)) if b)
-                c.print(f"   [link=file://{i.path}]{_escape(i.path.name)}[/link]  [dim]{meta}[/dim]",
+                c.print(f"    [link=file://{i.path}]{_escape(i.path.name)}[/link]  [muted]{meta}[/muted]",
                         overflow="ellipsis", no_wrap=True)
             c.print()
         if failed:
             noun = "link" if len(failed) == 1 else "links"
-            c.print(f" [red]✗[/red] {len(failed)} {noun} failed\n")
+            c.print(f"  [err]✗[/err] [title]{len(failed)} {noun} failed[/title]\n")
             for i in failed:
-                c.print(f"   {_escape(i.title or i.url)}", overflow="ellipsis", no_wrap=True)
+                c.print(f"    {_escape(i.title or i.url)}", overflow="ellipsis", no_wrap=True)
                 if i.title:
-                    c.print(f"   [dim]{_escape(i.url)}[/dim]", overflow="ellipsis", no_wrap=True)
-                c.print(f"   [red]{_escape(i.error)}[/red]\n")
+                    c.print(f"    [faint]{_escape(i.url)}[/faint]", overflow="ellipsis", no_wrap=True)
+                c.print(f"    [err]{_escape(i.error)}[/err]\n")
         if interrupted:
-            c.print(" [yellow]Stopped.[/yellow] Unfinished downloads were discarded.\n")
+            c.print("  [warn]![/warn] [title]Stopped.[/title] [muted]Unfinished downloads were discarded.[/muted]\n")
 
     def _json(self, items):
         results = []
@@ -945,8 +981,12 @@ def download_main(argv) -> int:
             return 0
 
         urls = collect_urls(args, "download")
+        defaults = download_defaults()
+        if args.jobs is None:
+            args.jobs = defaults["jobs"]
 
-        out_dir, out_file = Path.cwd(), None
+        out_dir = Path(defaults["folder"]).expanduser() if defaults["folder"] else Path.cwd()
+        out_file = None
         if args.output:
             out = Path(args.output).expanduser()
             if out.suffix.lstrip(".").lower() in MEDIA_EXTS and not out.is_dir():
@@ -955,7 +995,8 @@ def download_main(argv) -> int:
                 out_file = out.resolve()
             else:
                 out_dir = out.resolve()
-        spec = resolve_spec(tags, output_ext=out_file.suffix.lstrip(".").lower() if out_file else None)
+        spec = resolve_spec(tags, output_ext=out_file.suffix.lstrip(".").lower() if out_file else None,
+                            defaults=defaults)
 
         start = parse_time(args.start) if args.start else None
         end = parse_time(args.end) if args.end else None
@@ -979,7 +1020,7 @@ def download_main(argv) -> int:
         return 1
 
     spec.warnings += youtube_warnings(urls)
-    dl = Downloader(urls, spec, args, out_dir, out_file, clip=(start, end))
+    dl = Downloader(urls, spec, args, out_dir, out_file, clip=(start, end), defaults=defaults)
     if not dl.console:
         for w in spec.warnings:
             print(f"warning: {w}", file=sys.stderr)

@@ -28,8 +28,11 @@ from sdexe import cli_tools, tools  # noqa: E402
 VERBOSE = "--verbose" in sys.argv
 
 
+HOME = None  # a throwaway home, so settings tests never touch the real config
+
+
 def sdexe(*args, cwd):
-    env = {**os.environ, "PYTHONPATH": str(ROOT)}
+    env = {**os.environ, "PYTHONPATH": str(ROOT), "HOME": str(HOME), "ZDOTDIR": str(HOME)}
     cmd = [sys.executable, "-m", "sdexe", *map(str, args)]
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env, timeout=600)
     if VERBOSE:
@@ -210,6 +213,35 @@ def cases(f: dict) -> list:
     return c
 
 
+def settings_checks(work: Path) -> list:
+    """`sdexe settings` get/set/reset, and that a changed default reaches downloads."""
+    out = []
+
+    def check(label, ok, detail=""):
+        out.append((label, "PASS" if ok else "FAIL", detail))
+
+    r = sdexe("settings", "--json", cwd=work)
+    doc = json.loads(r.stdout or "{}")
+    check("settings --json", r.returncode == 0 and doc.get("dl_quality") == "1080p60", r.stderr[:120])
+    r = sdexe("settings", "set", "dl_quality", "720p60", cwd=work)
+    check("settings set", r.returncode == 0)
+    r = sdexe("settings", "get", "dl_quality", cwd=work)
+    check("settings get", r.stdout.strip() == "720p60", r.stdout.strip())
+    r = sdexe("settings", "set", "dl_quality", "999p", cwd=work)
+    check("settings set rejects bad values", r.returncode == 2)
+    r = sdexe("settings", "set", "dl_jobs", "99", cwd=work)
+    check("settings set checks ranges", r.returncode == 2)
+    probe = ("import sys; sys.path.insert(0, %r); from sdexe.cli import resolve_spec; "
+             "print(resolve_spec([]).label)" % str(ROOT))
+    env = {**os.environ, "HOME": str(HOME)}
+    label = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, env=env).stdout.strip()
+    check("download uses the default quality", label.endswith("720p60"), label)
+    r = sdexe("settings", "reset", cwd=work)
+    r2 = sdexe("settings", "get", "dl_quality", cwd=work)
+    check("settings reset", r.returncode == 0 and r2.stdout.strip() == "1080p60", r2.stdout.strip())
+    return out
+
+
 def _available(need: str) -> bool:
     if need == "tesseract":
         from sdexe import tools_pdf2
@@ -221,7 +253,10 @@ def _available(need: str) -> bool:
 
 
 def main() -> int:
+    global HOME
     work = Path(tempfile.mkdtemp(prefix="sdexe-cli-test-"))
+    HOME = work / "home"
+    HOME.mkdir()
     rows = []
     try:
         fx = make_fixtures(work)
@@ -252,6 +287,8 @@ def main() -> int:
             else:
                 what = (f"{len(outs)} file(s)" if outs else "text" if res.get("text") else "data")
                 rows.append((label, "PASS", what))
+
+        rows += settings_checks(work)
 
         # Every command in the table must have at least one case.
         for c in cli_tools.COMMANDS:

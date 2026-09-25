@@ -12,33 +12,32 @@ import sys
 
 import yt_dlp
 
-from sdexe import media
+from sdexe import media, ui
 from sdexe.app import _friendly_download_error
 from sdexe.cli import (UsageError, collect_urls, fmt_size, fmt_time, parse_args, quiet_sdexe_logger,
                        resolve_spec, youtube_warnings, ydl_base_opts, _escape)
 
 HELP = """\
-[bold]sdexe info[/bold] [dim]· what a link holds, and what sdexe download would fetch, without downloading[/dim]
+  [title]sdexe info[/title] [muted]· what a link holds, and what sdexe download would fetch · nothing is downloaded[/muted]
 
-[bold]Usage[/bold]
-  sdexe info [cyan]<url>[/cyan] [cyan]\\[url ...][/cyan] [green]\\[format][/green] [green]\\[quality][/green] \\[options]
+  [brand]sdexe info[/brand] [brand2]"<link>" \\["<link>" …] \\[format] \\[quality] \\[options][/brand2]
 
-  Shows title, uploader, length, every available quality, audio streams, chapters
-  and subtitles. Format and quality tags work exactly as in [cyan]sdexe download[/cyan], so
-  [cyan]sdexe info URL -720p[/cyan] reports the streams [cyan]sdexe download URL -720p[/cyan] would pick.
+  [muted]Title, uploader, length, every quality with its size, audio streams, chapters and subtitles.
+  Takes the same tags as[/muted] [brand]sdexe download[/brand][muted], so[/muted] [brand]sdexe info[/brand] [brand2]"<link>" -720p[/brand2]
+  [muted]shows exactly what[/muted] [brand]sdexe download[/brand] [brand2]"<link>" -720p[/brand2] [muted]would pick.[/muted]
 
-[bold]Options[/bold]
-  --json                     print one JSON document on stdout
-  --playlist                 list the videos in a playlist or channel link
-  --limit N                  only the first N playlist entries (implies --playlist)
-  -i, --input FILE           read links from a file, one per line ([dim]-[/dim] for stdin)
-  --cookies-from-browser B   use your browser's login: chrome, safari, firefox, brave, edge
-  -v, --verbose              show yt-dlp's own log
+  [brand]◆[/brand] [title]Options[/title]
+    [brand2]--json[/brand2]                     one JSON document on stdout
+    [brand2]--playlist[/brand2]                 list every video in a playlist or channel link
+    [brand2]--limit N[/brand2]                  only the first N entries (implies --playlist)
+    [brand2]-i, --input FILE[/brand2]           links from a file, one per line ([brand2]-[/brand2] for stdin)
+    [brand2]--cookies-from-browser B[/brand2]   your browser's login: chrome, safari, firefox, brave, edge
+    [brand2]-v, --verbose[/brand2]              yt-dlp's own log
 
-[bold]Examples[/bold]
-  sdexe info https://youtu.be/dQw4w9WgXcQ
-  sdexe info https://youtu.be/dQw4w9WgXcQ --best --json
-  sdexe info "https://youtube.com/playlist?list=..." --limit 20
+  [brand]◆[/brand] [title]Examples[/title]
+    [brand]sdexe info[/brand] [brand2]"https://youtu.be/dQw4w9WgXcQ"[/brand2]
+    [brand]sdexe info[/brand] [brand2]"https://youtu.be/dQw4w9WgXcQ" --best --json[/brand2]
+    [brand]sdexe info[/brand] [brand2]"<playlist>" --limit 20[/brand2]
 """
 
 _UNAVAILABLE = ("[Private video]", "[Deleted video]", "[Unavailable video]")
@@ -190,62 +189,81 @@ def _size_label(size, approx):
 
 
 def render(console, r, args):
+    from rich.table import Table
+    from rich.text import Text
     if not r["ok"]:
-        console.print(f" [red]✗[/red] {_escape(r['url'])}\n   [red]{_escape(r['error'])}[/red]\n")
+        console.print(f"  [err]✗[/err] {_escape(r['url'])}")
+        console.print(f"    [err]{_escape(r['error'])}[/err]\n")
         return
     if r["type"] == "playlist":
-        by = f" [dim]· {_escape(r['uploader'])}[/dim]" if r.get("uploader") else ""
-        console.print(f" [bold]{_escape(r['title'] or 'Playlist')}[/bold]{by}")
         n = r["count"]
-        console.print(f" [dim]playlist · {n} video{'s' if n != 1 else ''} · {_escape(r['url'])}[/dim]\n")
-        shown = r["entries"] if args.playlist else r["entries"][:10]
-        for i, e in enumerate(shown, 1):
-            dur = fmt_time(e["duration"]) if e.get("duration") else ""
-            console.print(f"  [dim]{i:>3}[/dim]  {_escape(e['title'] or e['url'])}  [dim]{dur}[/dim]",
-                          overflow="ellipsis", no_wrap=True)
-        if len(r["entries"]) > len(shown):
-            console.print(f"  [dim]… {len(r['entries']) - len(shown)} more. Add --playlist to list all.[/dim]")
+        console.print(f"  [title]{_escape(r['title'] or 'Playlist')}[/title]")
+        meta = " · ".join(x for x in (r.get("uploader"), f"{n} video{'s' if n != 1 else ''}", "playlist") if x)
+        console.print(f"  [muted]{_escape(meta)}[/muted]")
+        console.print(f"  [faint]{_escape(r['url'])}[/faint]\n")
+        t = Table.grid(padding=(0, 2))
+        t.add_column(style="faint", justify="right")
+        t.add_column(no_wrap=True, overflow="ellipsis", max_width=max(console.width - 20, 20))
+        t.add_column(style="muted", justify="right")
+        for i, e in enumerate(r["entries"], 1):
+            t.add_row(str(i), _escape(e["title"] or e["url"]), fmt_time(e["duration"]) if e.get("duration") else "")
+        console.print(ui._indent(t, 2))
+        if r.get("note") and r["count"] > len(r["entries"]):
+            console.print(f"\n  [muted]… {r['count'] - len(r['entries'])} more ·[/muted] [brand2]--playlist[/brand2] "
+                          f"[muted]lists them all[/muted]")
         console.print()
         return
 
     meta = [r.get("uploader"), fmt_time(r["duration"]) if r.get("duration") else None, r.get("upload_date"),
             f"{_num(r['view_count'])} views" if r.get("view_count") else None, r.get("source")]
-    console.print(f" [bold]{_escape(r['title'])}[/bold]")
-    console.print(f" [dim]{_escape(' · '.join(m for m in meta if m))}[/dim]")
-    console.print(f" [dim]{_escape(r['webpage_url'])}[/dim]\n")
+    console.print(f"  [title]{_escape(r['title'])}[/title]")
+    console.print(f"  [muted]{_escape(' · '.join(m for m in meta if m))}[/muted]")
+    console.print(f"  [faint]{_escape(r['webpage_url'])}[/faint]")
+    if r["is_live"]:
+        console.print("  [warn]● live stream[/warn]")
+    console.print()
 
-    from rich.table import Table
-    t = Table.grid(padding=(0, 2))
-    t.add_column(style="dim", width=10)
-    t.add_column()
-    if r["video_formats"]:
-        rows = []
-        for v in r["video_formats"]:
-            size = _size_label(v["size_bytes"], v["approx_size"])
-            rows.append(f"[cyan]{v['quality']}[/cyan] [dim]{v['vcodec'] or ''}{'  ' + size if size else ''}[/dim]")
-        t.add_row("Video", "\n".join(rows))
-    if r["audio_formats"]:
-        t.add_row("Audio", ", ".join(f"{a['abr_kbps']} kbps {a['acodec'] or ''}" for a in r["audio_formats"]))
     d = r.get("download")
     if d:
-        parts = [d.get("quality")] if d.get("quality") else []
-        codecs = " + ".join(c for c in (d.get("vcodec"), d.get("acodec")) if c)
-        if codecs:
-            parts.append(codecs)
-        size = _size_label(d.get("size_bytes"), d.get("approx_size"))
-        if size:
-            parts.append(size)
-        t.add_row("Download", f"[green]{d['format'].upper()}[/green] {' · '.join(parts)}  [dim]({d['requested']})[/dim]")
+        line = Text("    ")
+        line.append(d["format"].upper(), style="brand.bold")
+        for part in (d.get("quality"), " + ".join(x for x in (d.get("vcodec"), d.get("acodec")) if x),
+                     _size_label(d.get("size_bytes"), d.get("approx_size"))):
+            if part:
+                line.append("  ·  ", style="faint")
+                line.append(part)
+        line.append(f"    {d['requested']}", style="faint")
+        console.print(ui.section("sdexe download would get"))
+        console.print(line)
+        console.print()
+
+    if r["video_formats"]:
+        console.print(ui.section("Video qualities"))
+        t = Table.grid(padding=(0, 3))
+        t.add_column(style="brand", no_wrap=True)
+        t.add_column(style="muted")
+        t.add_column(style="muted", justify="right")
+        for v in r["video_formats"]:
+            t.add_row(v["quality"], v["vcodec"] or "", _size_label(v["size_bytes"], v["approx_size"]))
+        console.print(ui._indent(t, 4))
+        console.print()
+    if r["audio_formats"]:
+        console.print(ui.section("Audio"))
+        console.print("    " + "  [faint]·[/faint]  ".join(
+            f"{a['abr_kbps']} kbps [muted]{a['acodec'] or ''}[/muted]" for a in r["audio_formats"]))
+        console.print()
     if r["chapters"]:
-        t.add_row("Chapters", ", ".join(f"{fmt_time(c['start'] or 0)} {_escape(c['title'])}" for c in r["chapters"][:6])
-                  + (f" [dim]+{len(r['chapters']) - 6}[/dim]" if len(r["chapters"]) > 6 else ""))
+        console.print(ui.section(f"Chapters · {len(r['chapters'])}"))
+        for ch in r["chapters"][:8]:
+            console.print(f"    [muted]{fmt_time(ch['start'] or 0):>7}[/muted]  {_escape(ch['title'])}")
+        if len(r["chapters"]) > 8:
+            console.print(f"    [faint]… {len(r['chapters']) - 8} more[/faint]")
+        console.print()
     if r["subtitles"] or r["auto_captions"]:
         subs = ", ".join(r["subtitles"][:12]) or "none"
-        t.add_row("Subtitles", subs + (" [dim]+ auto captions[/dim]" if r["auto_captions"] else ""))
-    if r["is_live"]:
-        t.add_row("Live", "[yellow]this is a live stream[/yellow]")
-    console.print(t)
-    console.print()
+        console.print(ui.section("Subtitles"))
+        console.print(f"    {subs}" + ("  [muted]+ auto captions[/muted]" if r["auto_captions"] else ""))
+        console.print()
 
 
 def info_main(argv) -> int:
@@ -253,11 +271,12 @@ def info_main(argv) -> int:
     try:
         args, tags = parse_args(argv, prog="info")
         if args.help:
-            from rich.console import Console
-            Console(highlight=False).print(HELP, soft_wrap=True)
+            c = ui.console()
+            c.print()
+            c.print(HELP, soft_wrap=True)
             return 0
         urls = collect_urls(args, "info")
-        spec = resolve_spec(tags)
+        spec = resolve_spec(tags)  # the user's defaults when no tag is given
     except UsageError as e:
         print(f"sdexe info: {e}", file=sys.stderr)
         return 2
@@ -273,10 +292,9 @@ def info_main(argv) -> int:
 
     console = None
     if not args.json:
-        from rich.console import Console
-        console = Console(highlight=False, soft_wrap=False)
+        console = ui.console()
         for w in spec.warnings + youtube_warnings(urls):
-            Console(stderr=True, highlight=False).print(f" [yellow]![/yellow] {w}")
+            ui.console(stderr=True).print(f"  [warn]![/warn] [muted]{_escape(w)}[/muted]")
         console.print()
 
     results = []
@@ -284,7 +302,7 @@ def info_main(argv) -> int:
         for url in urls:
             try:
                 if console and sys.stdout.isatty():
-                    with console.status(f" [dim]reading {_escape(url)}[/dim]", spinner="dots"):
+                    with console.status(f"  [muted]reading {_escape(url)}[/muted]", spinner="dots"):
                         info = ydl.extract_info(url, download=False)
                 else:
                     info = ydl.extract_info(url, download=False)
