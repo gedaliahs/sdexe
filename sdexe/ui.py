@@ -2,9 +2,13 @@
 screen is made from. Everything that prints for a person goes through here, so
 the accent setting recolours all of it at once.
 
+The look is mostly black, white and grays, with one accent colour used
+sparingly: selection, the main action, progress, key hints.
+
 Markup styles every sdexe console understands:
-  brand, brand2   the accent gradient's two ends
-  muted           secondary text
+  brand           the accent (use little of it)
+  brand2          light gray: arguments, flags, placeholders
+  muted, faint    secondary and tertiary text
   ok, warn, err   outcomes
   cmd             something to type
   key             a keyboard key, in hints
@@ -19,16 +23,23 @@ from rich.text import Text
 from rich.theme import Theme
 from rich import box
 
-# (start, end) of each accent's gradient.
+# One colour each. Everything else is grayscale.
 ACCENTS = {
-    "aurora": ("#b18cff", "#3ddbf5"),
-    "sunset": ("#ff9a5a", "#ff5fa2"),
-    "mint": ("#3ee6a0", "#3ddbf5"),
-    "ember": ("#ff6b6b", "#ffc53d"),
-    "ocean": ("#5b9dff", "#9b7bff"),
-    "mono": ("#e8e8e8", "#9a9a9a"),
+    "orange": "#f0883e",
+    "white": "#f2f2f2",
+    "green": "#5fcf8a",
+    "violet": "#a38bf0",
+    "blue": "#6aa5f0",
+    "pink": "#f07aaa",
 }
-DEFAULT_ACCENT = "aurora"
+DEFAULT_ACCENT = "orange"
+
+# The grays.
+TEXT = "#e6e6e6"
+LIGHT = "#bdbdbd"
+MUTED = "#8c8c8c"
+FAINT = "#5a5a5a"
+LINE = "#2c2c2c"
 
 OK, WARN, ERR = "✓", "!", "✗"
 BULLET = "◆"
@@ -59,24 +70,29 @@ def set_accent(name: str):
     _accent_cache = name if name in ACCENTS else DEFAULT_ACCENT
 
 
-def colors() -> tuple:
+def accent() -> str:
     return ACCENTS[accent_name()]
 
 
+def colors() -> tuple:
+    """(accent, light gray): the two colours sdexe draws with."""
+    return accent(), LIGHT
+
+
 def theme() -> Theme:
-    a, b = colors()
+    a = accent()
     return Theme({
         "brand": a,
-        "brand2": b,
+        "brand2": LIGHT,
         "brand.bold": f"bold {a}",
-        "link": f"bold underline {a}",
-        "ok.bold": "bold #4ade80",
-        "muted": "#8a8f98",
-        "faint": "#5c6068",
-        "ok": "#4ade80",
-        "warn": "#fbbf24",
-        "err": "#f87171",
-        "cmd": a,
+        "link": f"underline {TEXT}",
+        "ok.bold": "bold #6fcf8f",
+        "muted": MUTED,
+        "faint": FAINT,
+        "ok": "#6fcf8f",
+        "warn": "#e8b04a",
+        "err": "#ef6f6f",
+        "cmd": TEXT,
         "key": f"bold {a}",
         "title": "bold",
     })
@@ -110,11 +126,11 @@ def gradient(text: str, start: str | None = None, end: str | None = None, bold: 
 
 
 def wordmark(tagline: str | None = None, version: str | None = None, indent: int = 2) -> Text:
-    """The two-row SDEXE mark, with the version and a tagline beside it."""
+    """The two-row SDEXE mark, in plain white, with the version and a tagline beside it."""
     lines = []
     for row, right in zip(_WORDMARK, (version or "", tagline or "")):
         line = Text(" " * indent)
-        line.append_text(gradient(row))
+        line.append(row, style=TEXT)
         if right:
             line.append("   ")
             line.append(right, style="muted" if row is _WORDMARK[1] else "faint")
@@ -134,25 +150,22 @@ def header(c: Console, subtitle: str | None = None):
 
 
 def section(title: str) -> Text:
-    t = Text("  ")
-    t.append(BULLET + " ", style="brand")
-    t.append(title, style="title")
-    return t
+    return Text.assemble(("  ", ""), (title, "title"))
 
 
 def cmd(line: str) -> Text:
-    """A command as sdexe prints it: `sdexe` faint, the command in the accent,
-    placeholders and flags in the second accent."""
+    """A command as sdexe prints it: `sdexe` faint, the command in white,
+    placeholders and flags in light gray."""
     t = Text()
     for i, tok in enumerate(line.split(" ")):
         if i:
             t.append(" ")
         if tok == "sdexe":
-            style = "brand" if line.strip() == "sdexe" else "faint"
+            style = "cmd" if line.strip() == "sdexe" else "faint"
         elif tok.startswith(("<", "[", '"', "-", "…")) or tok in ("|", "...") or (tok.isupper() and len(tok) > 1):
             style = "brand2"
         else:
-            style = "brand"
+            style = "cmd"
         t.append(tok, style=style)
     return t
 

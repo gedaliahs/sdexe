@@ -1,9 +1,12 @@
 """The clickable terminal app `sdexe` opens while the web app runs.
 
 Built on Textual: buttons, fields, lists and progress bars that work with the
-mouse or the keyboard. It drives the same code as the commands:
-cli.Downloader for downloads, cli_search for search, `python -m sdexe ...` for
-the file tools, and the settings table for settings.
+mouse or the keyboard. The look is black and gray with one accent colour, used
+only for the main action, the current place and progress.
+
+It drives the same code as the commands: cli.Downloader for downloads,
+cli_search for search, `python -m sdexe ...` for the file tools, and the
+settings table for settings.
 """
 
 import json
@@ -18,7 +21,7 @@ from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.theme import Theme
 from textual.widgets import (Button, ContentSwitcher, DataTable, DirectoryTree, Footer, Input, Label,
@@ -28,92 +31,161 @@ from textual.widgets.option_list import Option
 from sdexe import __version__, settings, ui
 from sdexe.cli import download_defaults, fmt_size, fmt_time
 
-# ── Look ──
+BG, SURFACE, RAISED, HOVER, LINE = "#0e0e0e", "#141414", "#1c1c1c", "#262626", "#2a2a2a"
+
 
 def _theme() -> Theme:
-    a, b = ui.colors()
     return Theme(
-        name=f"sdexe-{ui.accent_name()}", primary=a, secondary=b, accent=b,
-        foreground="#e6e7ec", background="#121318", surface="#1a1b22", panel="#23252e",
-        success="#4ade80", warning="#fbbf24", error="#f87171", dark=True,
+        name=f"sdexe-{ui.accent_name()}", primary=ui.accent(), secondary=ui.LIGHT, accent=ui.accent(),
+        foreground=ui.TEXT, background=BG, surface=SURFACE, panel=RAISED,
+        success="#6fcf8f", warning="#e8b04a", error="#ef6f6f", dark=True,
     )
 
 
-CSS = """
-Screen { background: $background; }
+CSS = f"""
+* {{ scrollbar-size-vertical: 1; scrollbar-size-horizontal: 1; scrollbar-color: {LINE};
+     scrollbar-color-hover: #3a3a3a; scrollbar-color-active: #4a4a4a; scrollbar-background: $background;
+     scrollbar-background-hover: $background; scrollbar-background-active: $background;
+     scrollbar-corner-color: $background; }}
+Screen {{ background: $background; color: $foreground; }}
 
-#top { height: 4; padding: 0 2; background: $surface; }
-#brand { width: auto; padding: 1 0 0 0; }
-#status { width: 1fr; padding: 1 0 0 4; }
-#open-web { margin: 1 0 0 1; min-width: 20; }
+/* Top bar */
+#top {{ height: 3; padding: 1 2 0 3; border-bottom: solid {LINE}; }}
+#name {{ width: auto; text-style: bold; }}
+#ver {{ width: 1fr; color: {ui.FAINT}; padding: 0 0 0 2; }}
+#open-web {{ background: $background; color: {ui.MUTED}; padding: 0 1; min-width: 0; }}
+#open-web:hover {{ color: $foreground; background: $background; text-style: underline; }}
 
-#body { height: 1fr; }
-#nav { width: 20; padding: 1 1; background: $surface; border-right: tall $panel; }
-#nav Button { width: 100%; margin: 0; border: none; height: 3; background: $surface; text-style: none;
-               content-align: left middle; padding: 0 2; }
-#nav Button:hover { background: $panel; }
-#nav Button.-current { background: $panel; color: $primary; text-style: bold; }
-#main { width: 1fr; padding: 1 3; }
+/* Sidebar */
+#body {{ height: 1fr; }}
+#nav {{ width: 18; padding: 1 0; border-right: solid {LINE}; }}
+.navitem {{ width: 100%; height: 1; margin: 0 0 1 0; padding: 0 3; background: $background; color: {ui.MUTED};
+            border: none; content-align: left middle; text-align: left; text-style: none; }}
+.navitem:hover {{ color: $foreground; background: {SURFACE}; }}
+.navitem:focus {{ color: $foreground; background: {SURFACE}; text-style: none; }}
+.navitem.-current {{ color: $foreground; text-style: bold; background: {SURFACE};
+                     border-left: outer $primary; padding: 0 2; }}
+#nav-spacer {{ height: 1fr; }}
 
-.title { text-style: bold; color: $foreground; margin: 0 0 0 0; }
-.subtitle { color: $text-muted; margin: 0 0 1 0; }
-.section { color: $primary; text-style: bold; margin: 1 0 0 0; }
-.hint { color: $text-muted; }
-.field-label { color: $text-muted; margin: 1 0 0 0; }
+#main {{ width: 1fr; padding: 1 4; }}
+
+/* Type */
+.title {{ text-style: bold; margin: 0 0 1 0; }}
+.hint {{ color: {ui.MUTED}; }}
+.faint {{ color: {ui.FAINT}; }}
+.section {{ color: {ui.MUTED}; text-style: bold; margin: 2 0 1 0; }}
+.label {{ color: {ui.MUTED}; margin: 1 0 0 0; }}
+
+/* Controls: flat, gray, one line */
+Button {{ height: 1; min-width: 8; border: none; padding: 0 2; background: {RAISED}; color: $foreground;
+          text-style: none; }}
+Button:hover {{ background: {HOVER}; }}
+Button:focus {{ background: {HOVER}; text-style: bold; }}
+Button.-primary {{ background: $primary; color: {BG}; text-style: bold; }}
+Button.-primary:hover {{ background: $primary 85%; }}
+Button:disabled {{ background: {SURFACE}; color: {ui.FAINT}; }}
+
+Input {{ height: 3; border: round {LINE}; background: $background; padding: 0 1;
+         scrollbar-size-horizontal: 0; }}
+Input:focus {{ border: round #5a5a5a; background: $background; background-tint: $foreground 0%; }}
+Input > .input--selection {{ background: #3a3a3a; color: $foreground; }}
+Input > .input--placeholder {{ color: {ui.FAINT}; }}
+Input > .input--cursor {{ background: $primary; color: {BG}; }}
+
+Select {{ width: 26; }}
+Select > SelectCurrent {{ border: round {LINE}; background: $background; }}
+Select:focus > SelectCurrent {{ border: round #5a5a5a; background: $background; }}
+Select > SelectOverlay {{ background: {SURFACE}; border: round {LINE}; }}
+
+Switch {{ border: none; height: 1; width: 6; padding: 0; background: {RAISED}; }}
+Switch:focus {{ border: none; background: {HOVER}; }}
+Switch > .switch--slider {{ color: #3c3c3c; background: {RAISED}; }}
+Switch.-on > .switch--slider {{ color: $primary; }}
+
+DataTable {{ background: $background; }}
+DataTable > .datatable--header {{ background: $background; color: {ui.MUTED}; text-style: bold; }}
+DataTable > .datatable--cursor {{ background: {HOVER}; color: $foreground; text-style: bold; }}
+DataTable > .datatable--hover {{ background: {SURFACE}; }}
+DataTable > .datatable--header-hover {{ background: $background; }}
+
+OptionList {{ background: $background; border: none; padding: 0; }}
+OptionList:focus {{ border: none; }}
+OptionList > .option-list--option {{ color: {ui.LIGHT}; }}
+OptionList > .option-list--option-highlighted {{ background: {HOVER}; color: $foreground; text-style: bold; }}
+OptionList > .option-list--option-hover {{ background: {SURFACE}; }}
+OptionList > .option-list--option-disabled {{ color: {ui.FAINT}; text-style: bold; }}
+
+Bar > .bar--bar {{ color: $primary; background: {HOVER}; }}
+Bar > .bar--complete {{ color: #6fcf8f; background: {HOVER}; }}
+Bar > .bar--indeterminate {{ color: $primary; background: {HOVER}; }}
+PercentageStatus {{ color: {ui.MUTED}; }}
+
+Footer {{ background: $background; }}
+FooterKey {{ background: $background; }}
+FooterKey > .footer-key--key {{ color: $foreground; background: $background; text-style: bold; }}
+FooterKey > .footer-key--description {{ color: {ui.MUTED}; background: $background; }}
+
+Toast {{ background: {RAISED}; border-left: outer $primary; }}
+Toast.-error {{ border-left: outer $error; }}
+
+/* A field with its button beside it */
+.bar {{ height: 3; }}
+.bar Input {{ width: 1fr; }}
+.bar Button {{ height: 1; margin: 1 0 0 1; padding: 0 3; }}
+.bar Select {{ margin: 0 0 0 1; }}
+
+/* Rows of controls */
+.row {{ height: auto; margin: 1 0 0 0; }}
+.row > * {{ margin: 0 1 0 0; }}
+.inline {{ height: 1; margin: 1 0 0 0; }}
+.inline > * {{ margin: 0 2 0 0; }}
+.inline Label {{ width: auto; }}
+.grow {{ width: 1fr; }}
 
 /* Home */
-#tiles { grid-size: 3; grid-rows: 8; grid-gutter: 1 2; height: auto; margin: 1 0; }
-.tile { height: 8; width: 100%; background: $surface; border: round $panel; content-align: left top;
-        padding: 1 2; text-align: left; }
-.tile:hover { border: round $primary; background: $panel; }
-.tile:focus { border: round $secondary; }
-#home-checks { margin: 1 0 0 0; color: $text-muted; }
+#home-box {{ width: 1fr; }}
+#tools {{ height: 1; }}
+#tools Button {{ margin: 0 1 0 0; }}
+#home-recent {{ height: auto; }}
+#recent-empty {{ color: {ui.FAINT}; }}
 
-/* Forms */
-.row { height: auto; margin: 1 0 0 0; }
-.row > * { margin: 0 1 0 0; }
-Input { width: 1fr; }
-Select { width: 30; }
-.go { min-width: 16; }
-#dl-rows { height: 1fr; margin: 1 0 0 0; }
-.dlrow { height: 1; margin: 0 0 1 0; }
-.dlrow .icon { width: 2; }
-.dlrow .name { width: 1fr; min-width: 16; }
-.dlrow ProgressBar { width: 28; }
-.dlrow .detail { width: 36; color: $text-muted; }
-.dlrow Button { min-width: 8; height: 1; border: none; margin: 0 0 0 1; }
-.ok { color: $success; }
-.bad { color: $error; }
+/* Downloads */
+#dl-rows {{ height: 1fr; }}
+.dlrow {{ height: 1; margin: 0 0 1 0; }}
+.dlrow .icon {{ width: 2; }}
+.dlrow .name {{ width: 1fr; min-width: 16; }}
+.dlrow ProgressBar {{ width: 24; }}
+.dlrow .detail {{ width: 34; color: {ui.MUTED}; }}
+.dlrow Button {{ background: $background; color: {ui.MUTED}; min-width: 6; padding: 0 1; }}
+.dlrow Button:hover {{ color: $foreground; background: {SURFACE}; }}
 
 /* Search */
-#results { height: 1fr; margin: 1 0 0 0; }
+#q {{ width: 1fr; }}
+#results {{ height: 1fr; margin: 1 0 0 0; }}
 
 /* Files */
-#file-list { width: 34; height: 1fr; border: round $panel; }
-#file-form { width: 1fr; height: 1fr; padding: 0 0 0 2; }
-#file-output { height: auto; max-height: 16; margin: 1 0 0 0; border: round $panel; padding: 0 1; }
+#file-list {{ width: 26; height: 1fr; border-right: solid {LINE}; padding: 0 1 0 0; }}
+#file-form {{ width: 1fr; height: 1fr; padding: 0 0 0 3; }}
+#file-form Input {{ height: 1; border: none; background: {SURFACE}; padding: 0 1; }}
+#file-form Input:focus {{ background: {RAISED}; }}
+#file-form Select {{ width: 30; }}
+#file-form Select > SelectCurrent {{ border: none; background: {SURFACE}; height: 1; padding: 0 1; }}
+#file-head {{ height: 1; }}
+#file-head Label {{ width: 1fr; text-style: bold; }}
+#file-output {{ height: auto; margin: 1 0 0 0; color: {ui.LIGHT}; }}
 
-/* Settings and tool forms: one line per field */
-.setting { height: 1; margin: 0 0 1 0; }
-.setting Label { width: 40; color: $foreground; }
-Switch.-compact, .setting Switch, #file-form Switch { border: none; height: 1; padding: 0; width: 6;
-                                                      background: $surface; }
-.setting Input { width: 44; }
-.setting Select { width: 44; }
-#file-form Input, #file-form Select { margin: 0 0 0 0; }
-#file-form .field-label { margin: 1 0 0 0; }
-#file-head { height: 1; margin: 0 0 1 0; }
-#file-head Label { width: 1fr; }
-#file-head Button { min-width: 10; }
-#file-form .setting Button { width: auto; min-width: 10; margin: 0 0 0 1; }
-#file-done { height: 1; margin: 1 0 0 0; }
-#file-done Label { width: 1fr; }
-#settings-note { margin: 1 0 0 0; }
+/* Settings */
+.setting {{ height: 1; margin: 0 0 1 0; }}
+.setting Label {{ width: 40; }}
+.setting Input {{ height: 1; border: none; width: 36; background: {SURFACE}; padding: 0 1; }}
+.setting Input:focus {{ background: {RAISED}; }}
+.setting Select {{ width: 36; }}
+.setting Select > SelectCurrent {{ border: none; background: {SURFACE}; height: 1; padding: 0 1; }}
 
 /* File picker */
-FilePicker { align: center middle; }
-#picker { width: 80%; height: 80%; background: $surface; border: round $primary; padding: 1 2; }
-#picker DirectoryTree { height: 1fr; }
+FilePicker {{ align: center middle; background: $background 60%; }}
+#picker {{ width: 80%; height: 80%; background: {SURFACE}; border: round {LINE}; padding: 1 2; }}
+#picker DirectoryTree {{ height: 1fr; background: {SURFACE}; }}
 """
 
 
@@ -160,9 +232,8 @@ class FilePicker(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(id="picker"):
             yield Label("Pick a file", classes="title")
-            yield Label("Click folders to open them, click a file to add it · Esc to cancel", classes="subtitle")
             yield DirectoryTree(str(self.start))
-            with Horizontal(classes="row"):
+            with Horizontal(classes="inline"):
                 yield Button("Up a folder", id="picker-up")
                 yield Button("Home", id="picker-home")
                 yield Button("Cancel", id="picker-cancel")
@@ -189,13 +260,14 @@ class DownloadRow(Horizontal):
     def __init__(self, item):
         super().__init__(classes="dlrow")
         self.item = item
+        self.last = None
 
     def compose(self) -> ComposeResult:
-        yield Label("·", classes="icon")
+        yield Label("·", classes="icon faint")
         yield Label(self.item.name, classes="name")
-        yield ProgressBar(total=100, show_eta=False, show_percentage=True)
+        yield ProgressBar(total=100, show_eta=False, show_percentage=False)
         yield Label("waiting", classes="detail")
-        yield Button("Show", classes="show", disabled=True)
+        yield Button("show", classes="show", disabled=True)
 
     def sync(self):
         i = self.item
@@ -204,10 +276,11 @@ class DownloadRow(Horizontal):
                                          self.query_one(".show", Button))
         name.update(i.name)
         if i.status == "running":
-            icon.update(Text("↓", style="bold"))
+            icon.update("↓")
             if i.stage == "downloading" and i.total:
-                bar.update(total=100, progress=min(100.0, i.downloaded / i.total * 100))
-                bits = [f"{fmt_size(i.downloaded)} / {fmt_size(i.total)}"]
+                pct = min(100.0, i.downloaded / i.total * 100)
+                bar.update(total=100, progress=pct)
+                bits = [f"{pct:.0f}%", f"{fmt_size(i.downloaded)} of {fmt_size(i.total)}"]
                 if i.speed:
                     bits.append(f"{fmt_size(i.speed)}/s")
                 detail.update("  ".join(bits))
@@ -215,75 +288,81 @@ class DownloadRow(Horizontal):
                 bar.update(total=None)
                 detail.update(i.stage)
         elif i.status == "done":
-            icon.update(Text("✓", style="bold #4ade80"))
+            icon.update(Text("✓", style="#6fcf8f"))
             bar.update(total=100, progress=100)
             bits = [b for b in (i.quality(), fmt_size(i.path.stat().st_size) if i.path and i.path.exists() else "") if b]
-            detail.update(Text("saved · " + " · ".join(bits), style="#4ade80"))
+            detail.update(" · ".join(bits))
             show.disabled = False
         elif i.status == "failed":
-            icon.update(Text("✗", style="bold #f87171"))
-            bar.update(total=100, progress=0)
-            detail.update(Text(i.error, style="#f87171"))
+            icon.update(Text("✗", style="#ef6f6f"))
+            bar.display = False
+            detail.update(Text(i.error, style="#ef6f6f"))
+            detail.styles.width = "1fr"
             show.display = False
 
     @on(Button.Pressed, ".show")
-    def show(self):
+    def show(self, event: Button.Pressed):
+        event.stop()
         if self.item.path:
             reveal(str(self.item.path))
 
 
 # ── Panes ──
 
-VIDEO_OPTS = [("MP4 · video", "mp4"), ("MKV · video", "mkv"), ("WebM · video", "webm"),
-              ("WAV · audio, lossless", "wav"), ("FLAC · audio, lossless", "flac"), ("MP3 · audio", "mp3"),
-              ("M4A · audio", "m4a"), ("Opus · audio", "opus")]
+FORMATS = [("MP4 video", "mp4"), ("MKV video", "mkv"), ("WebM video", "webm"),
+           ("WAV audio", "wav"), ("FLAC audio", "flac"), ("MP3 audio", "mp3"),
+           ("M4A audio", "m4a"), ("Opus audio", "opus")]
+TOOL_GROUPS = [("PDF", "pdf"), ("Images", "image"), ("Audio", "audio"), ("Video", "video"),
+               ("Convert", "convert"), ("Files", "file")]
 
 
 def _quality_opts(fmt: str):
     if fmt == "mp3":
         return [(f"{b} kbps", b) for b in ("320", "256", "192", "128")]
     if fmt in ("wav", "flac", "m4a", "opus"):
-        return [("as the source", "source")]
-    return [(label.split(" · ")[0].capitalize() if not label[0].isupper() else label, v)
+        return [("Source quality", "source")]
+    return [(label.split(" · ")[0][:1].upper() + label.split(" · ")[0][1:], v)
             for v, label in settings.BY_KEY["dl_quality"].choices]
+
+
+def _default_label() -> str:
+    from sdexe.cli import resolve_spec
+    return resolve_spec([]).label
 
 
 class Home(VerticalScroll):
     def compose(self) -> ComposeResult:
-        yield Label("What do you want to do?", classes="title")
-        yield Label("Click a tile, or use the buttons on the left. Everything runs on this computer.",
-                    classes="subtitle")
-        with Grid(id="tiles"):
-            yield Button("[b]↓  Download[/b]\n[dim]paste a link from YouTube,\nTikTok, SoundCloud and 1000+ more[/dim]",
-                         id="go-download", classes="tile")
-            yield Button("[b]⌕  Search[/b]\n[dim]find a video or song by\nname, then download it[/dim]",
-                         id="go-search", classes="tile")
-            yield Button("[b]▤  Files[/b]\n[dim]PDF, images, audio, video,\ndata conversion[/dim]",
-                         id="go-files", classes="tile")
-            yield Button("[b]◎  Web app[/b]\n[dim]the same tools in your\nbrowser, drag and drop[/dim]",
-                         id="go-web", classes="tile")
-            yield Button("[b]≡  Settings[/b]\n[dim]defaults, folder, colours,\nClaude Code[/dim]",
-                         id="go-settings", classes="tile")
-            yield Button("[b]?  Help[/b]\n[dim]commands, and a hands-on\ntutorial[/dim]",
-                         id="go-help", classes="tile")
-        yield Static(id="home-checks")
+        yield Label("Paste a link, or type what you're looking for", classes="title")
+        with Horizontal(classes="bar"):
+            yield Input(placeholder="https://…   or   artist - song", id="home-box")
+            yield Button("Go", variant="primary", id="home-go")
+        yield Label(f"A link downloads right away as {_default_label()}. Words search YouTube.",
+                    classes="hint", id="home-hint")
+        yield Label("RECENT", classes="section")
+        yield Label("Nothing downloaded yet.", id="recent-empty")
+        yield Vertical(id="home-recent")
+        yield Label("TOOLS", classes="section")
+        with Horizontal(id="tools"):
+            for label, group in TOOL_GROUPS:
+                yield Button(label, id=f"tool-{group}")
 
 
 class DownloadPane(Vertical):
     def compose(self) -> ComposeResult:
         d = download_defaults()
         yield Label("Download", classes="title")
-        yield Label("Paste one or more links (space between them), pick a format, press Download.",
-                    classes="subtitle")
-        yield Input(placeholder="https://…   or   ytsearch:song name   (top YouTube result)", id="dl-links")
+        yield Input(placeholder="Paste one or more links, separated by spaces", id="dl-links")
         with Horizontal(classes="row"):
-            yield Select(VIDEO_OPTS, value=d["video"], allow_blank=False, id="dl-format")
+            yield Select(FORMATS, value=d["video"], allow_blank=False, id="dl-format")
             yield Select(_quality_opts(d["video"]), value=d["quality"], allow_blank=False, id="dl-quality")
+        with Horizontal(classes="inline"):
             yield Switch(value=False, id="dl-playlist")
-            yield Label("whole playlist", classes="hint")
-        with Horizontal(classes="row"):
-            yield Input(value=d["folder"] or str(Path.cwd()), placeholder="folder to save into", id="dl-folder")
-            yield Button("Download", variant="primary", id="dl-go", classes="go")
+            yield Label("Whole playlist", classes="hint")
+        yield Label("Save to", classes="label")
+        with Horizontal(classes="bar"):
+            yield Input(value=d["folder"] or str(Path.cwd()), placeholder="Folder to save into", id="dl-folder")
+            yield Button("Download", variant="primary", id="dl-go")
+        yield Label("", classes="section", id="dl-heading")
         yield VerticalScroll(id="dl-rows")
 
     @on(Select.Changed, "#dl-format")
@@ -301,47 +380,43 @@ class DownloadPane(Vertical):
 class SearchPane(Vertical):
     def compose(self) -> ComposeResult:
         yield Label("Search", classes="title")
-        yield Label("Find something by name. Pick a result, then download it as video or audio.",
-                    classes="subtitle")
-        with Horizontal(classes="row"):
-            yield Input(placeholder="what are you looking for?", id="q")
+        with Horizontal(classes="bar"):
+            yield Input(placeholder="What are you looking for?", id="q")
             yield Select([("YouTube", "youtube"), ("SoundCloud", "soundcloud")], value="youtube",
                          allow_blank=False, id="q-source")
-            yield Button("Search", variant="primary", id="q-go", classes="go")
-        yield DataTable(id="results", cursor_type="row", zebra_stripes=True)
-        with Horizontal(classes="row"):
-            yield Button("Download video", id="q-video", variant="primary", disabled=True)
+            yield Button("Search", variant="primary", id="q-go")
+        yield DataTable(id="results", cursor_type="row", zebra_stripes=False)
+        with Horizontal(classes="inline"):
+            yield Button("Download video", id="q-video", disabled=True)
             yield Button("Download audio", id="q-audio", disabled=True)
-            yield Button("Open the page", id="q-open", disabled=True)
+            yield Button("Open page", id="q-open", disabled=True)
             yield Label("", id="q-status", classes="hint")
 
 
 class FilesPane(Horizontal):
     def compose(self) -> ComposeResult:
-        from sdexe.cli_tools import COMMANDS, GROUPS
+        from sdexe.cli_tools import COMMANDS
         options = []
-        for group in GROUPS:
-            options.append(Option(Text(group.upper(), style="bold"), disabled=True))
+        for label, group in TOOL_GROUPS:
+            options.append(Option(label.upper(), id=f"group-{group}", disabled=True))
             for c in (c for c in COMMANDS if c.group == group):
-                options.append(Option(f"  {c.name or 'convert a file'}", id=c.full))
+                options.append(Option(f" {c.name or 'convert a file'}", id=c.full))
         yield OptionList(*options, id="file-list")
         with VerticalScroll(id="file-form"):
-            yield Label("Pick a tool on the left", classes="title")
-            yield Label("Merge PDFs, resize images, trim audio, make GIFs, convert data and more.",
-                        classes="subtitle")
+            yield Label("Pick a tool", classes="title")
+            yield Label("Merge PDFs, resize images, trim audio, make GIFs, convert data.", classes="hint")
 
 
 class SettingsPane(VerticalScroll):
     def compose(self) -> ComposeResult:
         yield Label("Settings", classes="title")
-        yield Label("Changes save as you make them. Scripts can use sdexe settings set KEY VALUE.",
-                    classes="subtitle")
+        yield Label("Changes save as you make them.", classes="hint")
         values = settings.all_values()
         section = None
         for s in settings.SETTINGS:
             if s.section != section:
                 section = s.section
-                yield Label(section, classes="section")
+                yield Label(section.upper(), classes="section")
             with Horizontal(classes="setting"):
                 yield Label(s.label)
                 v = values[s.key]
@@ -353,13 +428,13 @@ class SettingsPane(VerticalScroll):
                 else:
                     yield Input(value=str(v), placeholder=s.show(""), id=f"set-{s.key}", compact=True,
                                 type="integer" if s.kind == "int" else "text", tooltip=s.help)
-        yield Label("Integrations", classes="section")
+        yield Label("INTEGRATIONS", classes="section")
         if settings.zshrc():
             with Horizontal(classes="setting"):
                 yield Label("Paste links without quotes (zsh)")
                 yield Switch(value=settings.zsh_alias_on(), id="int-zsh")
         with Horizontal(classes="setting"):
-            yield Label("Claude Code can use sdexe (MCP)")
+            yield Label("Claude Code can use sdexe")
             yield Switch(value=False, id="int-mcp", disabled=True)
         with Horizontal(classes="setting"):
             yield Label("Claude Code skill")
@@ -370,12 +445,11 @@ class SettingsPane(VerticalScroll):
 class HelpPane(VerticalScroll):
     def compose(self) -> ComposeResult:
         yield Label("Help", classes="title")
-        yield Label("Everything here also works as a typed command, which is handy for scripts and AI agents.",
-                    classes="subtitle")
-        with Horizontal(classes="row"):
-            yield Button("Start the tutorial", variant="primary", id="help-tutorial")
+        yield Label("Everything here also works as a typed command.", classes="hint")
+        with Horizontal(classes="inline"):
+            yield Button("Take the tutorial", id="help-tutorial")
             yield Button("Open the web app", id="help-web")
-        yield Label("Commands", classes="section")
+        yield Label("COMMANDS", classes="section")
         yield Static(_themed(ui.rows([
             ('sdexe download "<link>"', "save video or audio · -mp3, -a, -720p, --best"),
             ('sdexe search "<words>"', "find by name"),
@@ -386,9 +460,10 @@ class HelpPane(VerticalScroll):
             ("sdexe mcp", "every tool for Claude, Cursor & co."),
             ("sdexe --classic", "start without this app"),
         ], indent=0)))
-        yield Label("Keys", classes="section")
-        yield Static(_themed(ui.rows([("d / s / f", "download · search · files"), (", ", "settings"),
-                                      ("o", "open the web app"), ("q", "quit sdexe")], indent=0, commands=False)))
+        yield Label("KEYS", classes="section")
+        yield Static(_themed(ui.rows([("d  s  f", "download · search · files"), (",", "settings"),
+                                      ("o", "open the web app"), ("esc", "home, and out of the text box"), ("ctrl+q", "quit")],
+                                     indent=0, commands=False)))
 
 
 # ── App ──
@@ -400,14 +475,15 @@ class SdexeApp(App):
     TITLE = "sdexe"
     CSS = CSS
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
+        Binding("ctrl+q", "quit", "Quit", priority=True),
+        Binding("q", "quit", "Quit", show=False),
         Binding("d", "go('download')", "Download"),
         Binding("s", "go('search')", "Search"),
         Binding("f", "go('files')", "Files"),
         Binding("comma", "go('settings')", "Settings"),
-        Binding("o", "open_web", "Open web app"),
-        Binding("question_mark", "go('help')", "Help"),
-        Binding("escape", "go('home')", "Home", show=False),
+        Binding("o", "open_web", "Web app"),
+        Binding("question_mark", "go('help')", "Help", show=False),
+        Binding("escape", "home", "Home", show=False),
     ]
 
     def __init__(self, url: str | None = None, note: str = "", update: dict | None = None):
@@ -419,21 +495,21 @@ class SdexeApp(App):
         self.rows = {}
         self.search_results = []
         self.current_cmd = None
+        self.last_outputs = []
 
-    # layout
     def compose(self) -> ComposeResult:
         with Horizontal(id="top"):
-            yield Static(ui.wordmark(None, None, indent=0), id="brand")
-            yield Static(id="status")
+            yield Label("sdexe", id="name")
+            yield Label(f"v{__version__}", id="ver")
             if self.url:
-                yield Button("Open in browser", id="open-web", variant="primary")
+                yield Button(f"{self.url.replace('http://', '')}  ↗", id="open-web",
+                             tooltip="Open the web app in your browser")
         with Horizontal(id="body"):
             with Vertical(id="nav"):
-                for pane, label in zip(PANES, ("⌂  Home", "↓  Download", "⌕  Search", "▤  Files",
-                                                "≡  Settings", "?  Help")):
-                    yield Button(label, id=f"nav-{pane}")
-                yield Static("")
-                yield Button("⏻  Quit", id="nav-quit")
+                for pane in PANES:
+                    yield Button(pane.capitalize(), id=f"nav-{pane}", classes="navitem")
+                yield Static(id="nav-spacer")
+                yield Button("Quit", id="nav-quit", classes="navitem")
             with ContentSwitcher(id="main", initial="home"):
                 yield Home(id="home")
                 yield DownloadPane(id="download")
@@ -444,54 +520,35 @@ class SdexeApp(App):
         yield Footer()
 
     def on_mount(self):
+        for field in self.query(Input):
+            field.select_on_focus = False
         from sdexe.cli import quiet_sdexe_logger
         quiet_sdexe_logger()  # error logs would print over the screen
         theme = _theme()
         self.register_theme(theme)
         self.theme = theme.name
         self._mark_nav("home")
-        self._status()
         table = self.query_one("#results", DataTable)
-        title_w = max(24, self.size.width - 20 - 6 - 22 - 8 - 8 - 12)
+        title_w = max(24, self.size.width - 18 - 8 - 22 - 8 - 8 - 12)
         table.add_column("Title", width=title_w)
         table.add_column("Channel", width=22)
         table.add_column("Length", width=8)
         table.add_column("Views", width=8)
         self.set_interval(0.3, self._tick)
-        self.set_timer(3.5, self._status)  # the update check finishes after we open
-        self._load_checks()
+        self.set_timer(3.5, self._update_note)
         self._load_mcp_state()
+        self.query_one("#home-box", Input).focus()
 
-    def _status(self):
-        t = Text()
-        if self.url:
-            t.append("● ", style="#4ade80")
-            t.append("web app running at ", style="#8a8f98")
-            t.append(self.url, style=f"bold {ui.colors()[0]}")
-        else:
-            t.append("terminal only", style="#8a8f98")
-        t.append(f"\nv{__version__}", style="#5c6068")
-        if self.update_info.get("latest"):
-            from sdexe.cli_home import _newer
-            if _newer(self.update_info["latest"], __version__):
-                t.append(f" · {self.update_info['latest']} is out: sdexe update", style="#fbbf24")
+    def _update_note(self):
+        latest = self.update_info.get("latest")
+        from sdexe.cli_home import _newer
+        bits = []
+        if latest and _newer(latest, __version__):
+            bits.append(f"{latest} is out · sdexe update")
         if self.note:
-            t.append(f" · {self.note}", style="#fbbf24")
-        self.query_one("#status", Static).update(t)
-
-    @work(thread=True)
-    def _load_checks(self):
-        from sdexe.cli_home import system_checks
-        checks = system_checks()
-        t = Text()
-        for ok, name, detail, fix in checks:
-            t.append("✓ " if ok else "! ", style="#4ade80" if ok else "#fbbf24")
-            t.append(f"{name} ", style="bold")
-            t.append(detail, style="#8a8f98")
-            if fix:
-                t.append(f"  → {fix}", style=ui.colors()[0])
-            t.append("\n")
-        self.call_from_thread(self.query_one("#home-checks", Static).update, t)
+            bits.append(self.note)
+        if bits:
+            self.query_one("#ver", Label).update(Text(f"v{__version__}   " + " · ".join(bits), style=ui.FAINT))
 
     @work(thread=True)
     def _load_mcp_state(self):
@@ -514,9 +571,14 @@ class SdexeApp(App):
     def action_go(self, pane: str):
         self.query_one("#main", ContentSwitcher).current = pane
         self._mark_nav(pane)
-        focus = {"download": "#dl-links", "search": "#q", "files": "#file-list"}.get(pane)
+        focus = {"home": "#home-box", "download": "#dl-links", "search": "#q", "files": "#file-list"}.get(pane)
         if focus:
             self.query_one(focus).focus()
+
+    def action_home(self):
+        """Esc: home, with the cursor out of the box so letter shortcuts work."""
+        self.action_go("home")
+        self.query_one("#nav-home", Button).focus()
 
     def action_open_web(self):
         if self.url:
@@ -530,19 +592,18 @@ class SdexeApp(App):
         bid = event.button.id or ""
         if bid.startswith("nav-"):
             if bid == "nav-quit":
-                self.exit()
+                self.action_quit()
             else:
                 self.action_go(bid[4:])
-        elif bid.startswith("go-"):
-            if bid == "go-web":
-                self.action_open_web()
-            else:
-                self.action_go(bid[3:])
+        elif bid.startswith("tool-"):
+            self.open_group(bid[5:])
         elif bid in ("open-web", "help-web"):
             self.action_open_web()
         elif bid == "help-tutorial":
             with self.suspend():
                 subprocess.call([sys.executable, "-m", "sdexe", "tutorial"])
+        elif bid == "home-go":
+            self.home_go()
         elif bid == "dl-go":
             self.start_download()
         elif bid == "q-go":
@@ -559,19 +620,58 @@ class SdexeApp(App):
             self.push_screen(FilePicker(Path.cwd()), self._add_file)
         elif bid == "file-clear":
             self.query_one("#file-files", Input).value = ""
-        elif bid == "file-show" and getattr(self, "last_outputs", None):
+        elif bid == "file-show" and self.last_outputs:
             reveal(self.last_outputs[0])
+
+    # home: one box for links and searches
+    @on(Input.Submitted, "#home-box")
+    def home_submitted(self):
+        self.home_go()
+
+    def home_go(self):
+        from sdexe import cli
+        box = self.query_one("#home-box", Input)
+        text = box.value.strip()
+        if not text:
+            self.notify("Paste a link, or type what you're looking for.", severity="warning")
+            return
+        try:
+            tokens = shlex.split(text)
+        except ValueError:
+            tokens = text.split()
+        urls = [u for u in (cli.normalize_url(t) for t in tokens) if u]
+        box.value = ""
+        if urls and len(urls) == len(tokens):
+            d = download_defaults()
+            self.start_download(urls, fmt=d["video"], quality=d["quality"], stay=True)
+        else:
+            self.query_one("#q", Input).value = text
+            self.action_go("search")
+            self.run_search()
+
+    def open_group(self, group: str):
+        self.action_go("files")
+        tools = self.query_one("#file-list", OptionList)
+        for i, opt in enumerate(tools._options):
+            if opt.id and not opt.id.startswith("group-") and opt.id.split(" ")[0] == group:
+                tools.highlighted = i
+                break
 
     # downloads
     @on(Input.Submitted, "#dl-links")
     def links_submitted(self):
         self.start_download()
 
-    def start_download(self, links: list | None = None, fmt: str | None = None, quality: str | None = None):
+    def start_download(self, links: list | None = None, fmt: str | None = None, quality: str | None = None,
+                       stay: bool = False):
         from sdexe import cli
         links_input = self.query_one("#dl-links", Input)
-        raw = links if links is not None else shlex.split(links_input.value.strip() or "''")
-        urls = [u for u in (cli.normalize_url(t) for t in raw if t) if u]
+        if links is None:
+            try:
+                links = shlex.split(links_input.value.strip())
+            except ValueError:
+                links = links_input.value.split()
+        urls = [u for u in (cli.normalize_url(t) for t in links if t) if u]
         if not urls:
             self.notify("Paste a link first (https://…).", severity="warning")
             return
@@ -596,31 +696,43 @@ class SdexeApp(App):
         dl.start()
         self.downloaders.append(dl)
         links_input.value = ""
-        self.action_go("download")
+        if not stay:
+            self.action_go("download")
         self.notify(f"Downloading {len(urls)} {'link' if len(urls) == 1 else 'links'} as {spec.label}.")
 
     def _tick(self):
-        box = self.query_one("#dl-rows", VerticalScroll)
+        dl_box = self.query_one("#dl-rows", VerticalScroll)
+        home_box = self.query_one("#home-recent", Vertical)
+        count = 0
         for dl in self.downloaders:
             with dl.lock:
                 items = [i for i in dl.items if i.status != "expanded"]
             for item in items:
-                row = self.rows.get(id(item))
-                if row is None:
-                    row = DownloadRow(item)
-                    self.rows[id(item)] = row
-                    box.mount(row)
+                count += 1
+                rows = self.rows.get(id(item))
+                if rows is None:
+                    rows = [DownloadRow(item), DownloadRow(item)]
+                    self.rows[id(item)] = rows
+                    dl_box.mount(rows[0])
+                    home_box.mount(rows[1], before=0) if home_box.children else home_box.mount(rows[1])
+                    for extra in list(home_box.children)[5:]:
+                        extra.remove()
                     continue  # sync once mounted
-                was = getattr(row, "_last", None)
-                if item.status in ("done", "failed") and was == item.status:
-                    continue
-                row.sync()
-                if item.status != was and item.status in ("done", "failed"):
-                    if item.status == "done":
-                        self.notify(f"Saved {item.path.name}", title="Download finished")
-                    else:
-                        self.notify(item.error, title=f"Couldn't download {item.name[:40]}", severity="error")
-                row._last = item.status
+                for row in rows:
+                    if not row.is_mounted or (item.status in ("done", "failed") and row.last == item.status):
+                        continue
+                    row.sync()
+                    first_finish = row is rows[0] and item.status != row.last and item.status in ("done", "failed")
+                    row.last = item.status
+                    if first_finish:
+                        if item.status == "done":
+                            self.notify(f"Saved {item.path.name}")
+                        else:
+                            self.notify(item.error, title=item.name[:50], severity="error")
+        if count:
+            self.query_one("#recent-empty", Label).display = False
+            done = sum(1 for dl in self.downloaders for i in dl.items if i.status == "done")
+            self.query_one("#dl-heading", Label).update(f"THIS SESSION · {done} of {count} saved")
 
     # search
     @on(Input.Submitted, "#q")
@@ -650,11 +762,13 @@ class SdexeApp(App):
             table = self.query_one("#results", DataTable)
             table.clear()
             for i, r in enumerate(results):
-                table.add_row(r["title"], r["channel"], fmt_time(r["duration"]) if r["duration"] else "",
-                              _views(r["views"]), key=str(i))
+                table.add_row(r["title"], Text(r["channel"], style=ui.MUTED),
+                              Text(fmt_time(r["duration"]) if r["duration"] else "", style=ui.MUTED),
+                              Text(_views(r["views"]), style=ui.MUTED), key=str(i))
             for b in ("#q-video", "#q-audio", "#q-open"):
                 self.query_one(b, Button).disabled = not results
-            self.query_one("#q-status", Label).update(error or f"{len(results)} results · click one, then download")
+            self.query_one("#q-video", Button).variant = "primary" if results else "default"
+            self.query_one("#q-status", Label).update(error or f"{len(results)} results")
             if results:
                 table.focus()
         self.call_from_thread(show)
@@ -684,24 +798,28 @@ class SdexeApp(App):
         group, _, name = event.option.id.partition(" ")
         cmd = _BY_NAME[(group, name)]
         self.current_cmd = cmd
+        self.last_outputs = []
         form = self.query_one("#file-form", VerticalScroll)
         await form.remove_children()
-        widgets = [Horizontal(Label(f"sdexe {cmd.full}", classes="title"),
-                              Button("Run", variant="primary", id="file-run", compact=True), id="file-head"),
-                   Label(cmd.summary[:1].upper() + cmd.summary[1:] + ".", classes="subtitle")]
+        widgets = [Horizontal(Label(cmd.summary[:1].upper() + cmd.summary[1:]),
+                              Button("Run", variant="primary", id="file-run"), id="file-head"),
+                   Label(f"sdexe {cmd.full}", classes="faint")]
         if cmd.inputs == "none":
-            widgets += [Label(cmd.text_arg.capitalize(), classes="field-label"),
-                        Input(placeholder="type here", id="file-text", compact=True)]
+            widgets += [Label(cmd.text_arg.capitalize(), classes="label"),
+                        Input(placeholder="Type here", id="file-text")]
         else:
-            what = {"many": "files, in order", "pair": cmd.inputs_help.lower(), "each": "one or more files"}[cmd.inputs]
-            widgets += [Label(f"Files · {what} · drag them into this window, or Browse", classes="field-label"),
-                        Horizontal(Input(placeholder="drop files here", id="file-files", compact=True),
-                                   Button("Browse…", id="file-browse", compact=True),
-                                   Button("Clear", id="file-clear", compact=True),
-                                   classes="setting")]
+            what = {"many": "Files, in order", "pair": cmd.inputs_help.capitalize(), "each": "Files"}[cmd.inputs]
+            widgets += [Label(f"{what} · drag them in, or browse", classes="label"),
+                        Horizontal(Input(placeholder="Drop files here", id="file-files", classes="grow"),
+                                   Button("Browse", id="file-browse"), Button("Clear", id="file-clear"),
+                                   classes="inline")]
         for arg in cmd.args:
-            label = arg.flag.lstrip("-").replace("-", " ").capitalize() + (" *" if arg.required else "")
-            widgets.append(Label(label + (f" · {arg.help}" if arg.help else ""), classes="field-label"))
+            label = arg.flag.lstrip("-").replace("-", " ").capitalize()
+            hint = arg.help or ""
+            if arg.required:
+                hint = (hint + " · required").lstrip(" ·")
+            widgets.append(Label(Text.assemble((label, ui.LIGHT), (f"   {hint}" if hint else "", ui.FAINT)),
+                                 classes="label"))
             if arg.type is bool:
                 widgets.append(Switch(value=False, id=f"arg-{arg.dest}"))
             elif arg.choices:
@@ -710,17 +828,17 @@ class SdexeApp(App):
                                       allow_blank=arg.default is None, id=f"arg-{arg.dest}", compact=True))
             else:
                 widgets.append(Input(value="" if arg.default in (None, "") else str(arg.default),
-                                     placeholder="required" if arg.required else "optional",
-                                     id=f"arg-{arg.dest}", compact=True))
+                                     placeholder="required" if arg.required else "optional", id=f"arg-{arg.dest}"))
         text_out = cmd.name in ("text", "ocr", "ascii")
-        widgets += [Label("Save to · a folder" + (" (leave empty to show the text here)" if text_out else ""),
-                          classes="field-label"),
-                    Input(value="" if text_out else str(Path.cwd()), id="file-out", compact=True),
+        widgets += [Label("Save to" + (" · leave empty to show the text here" if text_out else ""), classes="label"),
+                    Input(value="" if text_out else str(Path.cwd()), id="file-out"),
                     Horizontal(Label("", id="file-status", classes="hint"),
                                Button("Show in Finder" if sys.platform == "darwin" else "Show file",
-                                      id="file-show", compact=True, disabled=True), id="file-done"),
+                                      id="file-show", disabled=True), classes="inline"),
                     Static("", id="file-output")]
         await form.mount(*widgets)
+        if cmd.inputs != "none":
+            self.query_one("#file-files", Input).focus()
 
     def _add_file(self, path: str | None):
         if not path:
@@ -752,13 +870,13 @@ class SdexeApp(App):
                 v = w.value
                 if v in (None, "", Select.BLANK, Select.NULL):
                     if arg.required:
-                        self.notify(f"{arg.flag.lstrip('-')} is required.", severity="warning")
+                        self.notify(f"{arg.flag.lstrip('-').capitalize()} is required.", severity="warning")
                         return
                     continue
                 argv += [arg.flag, str(v)]
         out = self.query_one("#file-out", Input).value.strip()
         if out:
-            argv += ["-o", str(Path(out).expanduser()) + ("/" if cmd.name not in ("text", "ocr", "ascii") else "")]
+            argv += ["-o", str(Path(out).expanduser())]
         if cmd.inputs == "none":
             argv += ["--", self.query_one("#file-text", Input).value]
         self.query_one("#file-status", Label).update("working…")
@@ -773,35 +891,36 @@ class SdexeApp(App):
         try:
             doc = json.loads(r.stdout)
         except json.JSONDecodeError:
-            doc = {"ok": False, "results": [{"ok": False, "error": (r.stderr or r.stdout).strip().splitlines()[-1]
-                                             if (r.stderr or r.stdout).strip() else "failed"}]}
+            msg = (r.stderr or r.stdout).strip().splitlines()
+            doc = {"ok": False, "results": [{"ok": False, "error": msg[-1] if msg else "failed"}]}
 
         def show():
             out = Text()
             self.last_outputs = []
             for res in doc.get("results", []):
                 if not res.get("ok"):
-                    out.append("✗ ", style="#f87171")
-                    out.append(res.get("error", "failed") + "\n", style="#f87171")
+                    out.append("✗ ", style="#ef6f6f")
+                    out.append(res.get("error", "failed") + "\n", style="#ef6f6f")
                     continue
                 for o in res.get("outputs") or []:
                     self.last_outputs.append(o["path"])
-                    out.append("✓ ", style="#4ade80")
-                    out.append(_short(o["path"]))
-                    out.append(f"  {fmt_size(o['size_bytes'])}\n", style="#8a8f98")
+                    out.append("✓ ", style="#6fcf8f")
+                    out.append(_short(o["path"]), style=ui.TEXT)
+                    out.append(f"  {fmt_size(o['size_bytes'])}\n", style=ui.MUTED)
                 if res.get("text"):
                     out.append(res["text"][:20000])
                 if res.get("data"):
                     for k, v in res["data"].items():
-                        out.append(f"{k}: ", style="#8a8f98")
+                        out.append(f"{k}  ", style=ui.MUTED)
                         out.append(f"{v}\n")
             self.query_one("#file-output", Static).update(out)
             self.query_one("#file-run", Button).disabled = False
             ok = doc.get("ok")
-            self.query_one("#file-status", Label).update("done" if ok else "something failed")
+            self.query_one("#file-status", Label).update("Done." if ok else "Something failed.")
             self.query_one("#file-show", Button).disabled = not self.last_outputs
             if ok and self.last_outputs:
-                self.notify(f"Saved {len(self.last_outputs)} file(s).", title="Done")
+                n = len(self.last_outputs)
+                self.notify(f"Saved {n} file{'s' if n != 1 else ''}.")
         self.call_from_thread(show)
 
     # settings
@@ -840,13 +959,14 @@ class SdexeApp(App):
         except ValueError as e:
             self.notify(str(e), severity="error")
             return
-        self.query_one("#settings-note", Label).update(f"✓ {s.label}: {s.show(new)}")
+        self.query_one("#settings-note", Label).update(f"Saved · {s.label}: {s.show(new)}")
         if key == "accent":
             theme = _theme()
             self.register_theme(theme)
             self.theme = theme.name
-            self.query_one("#brand", Static).update(ui.wordmark(None, None, indent=0))
-            self._status()
+        if key.startswith("dl_"):
+            self.query_one("#home-hint", Label).update(
+                f"A link downloads right away as {_default_label()}. Words search YouTube.")
 
     @work(thread=True, exclusive=True, group="integration")
     def _integration(self, which: str, on_: bool):
@@ -859,10 +979,8 @@ class SdexeApp(App):
         self.call_from_thread(self.notify, msg, severity=sev)
 
     def action_quit(self):
-        active = [i for dl in self.downloaders for i in dl.items if i.status in ("queued", "running")]
-        if active:
-            for dl in self.downloaders:
-                dl.cancel.set()
+        for dl in self.downloaders:
+            dl.cancel.set()
         self.exit()
 
 

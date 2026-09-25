@@ -878,7 +878,7 @@ class Downloader:
             clip = f"  [muted]·  clip[/muted] {fmt_time(start or 0)}–{fmt_time(end) if end else 'end'}"
         c.print()
         c.print(f"  [brand]↓[/brand] [title]{self._count_label()}[/title]  [muted]as[/muted] "
-                f"[brand]{self.spec.label}[/brand]{clip}  [muted]→[/muted] {_escape(self._where())}")
+                f"{self.spec.label}{clip}  [muted]→[/muted] {_escape(self._where())}")
         for w in self.spec.warnings:
             c.print(f"  [warn]![/warn] [muted]{_escape(w)}[/muted]")
         c.print()

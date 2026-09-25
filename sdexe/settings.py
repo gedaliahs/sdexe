@@ -122,7 +122,7 @@ SETTINGS = [
             "Tags music apps and file browsers show."),
 
     Setting("accent", "Look", "Accent colour", "choice", ui.DEFAULT_ACCENT,
-            "Colours the whole terminal side of sdexe.",
+            "The one colour sdexe uses, for the main button, selection and progress.",
             tuple((name, name) for name in ui.ACCENTS)),
 ]
 BY_KEY = {s.key: s for s in SETTINGS}
@@ -369,8 +369,8 @@ class Hub:
                 t = Text()
                 if selected:
                     t.append("‹ ", style="faint")
-                a, b = ui.ACCENTS[v]
-                t.append_text(ui.gradient(f"■■■ {txt}", a, b))
+                t.append("■ ", style=ui.ACCENTS.get(v, ui.accent()))
+                t.append(txt)
                 if selected:
                     t.append(" ›", style="faint")
                 return t

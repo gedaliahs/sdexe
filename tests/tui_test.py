@@ -50,12 +50,23 @@ async def run():
             await pilot.pause(0.3)
             check(f"sidebar: {pane}", main.current == pane, main.current)
 
-        for tile in ("download", "search", "files", "settings", "help"):
+        for group in ("pdf", "image", "audio", "video", "convert", "file"):
             await pilot.click("#nav-home")
             await pilot.pause(0.2)
-            await pilot.click(f"#go-{tile}")
+            await pilot.click(f"#tool-{group}")
             await pilot.pause(0.3)
-            check(f"home tile: {tile}", main.current == tile, main.current)
+            highlighted = app.query_one("#file-list", OptionList).highlighted_option
+            check(f"home tool button: {group}", main.current == "files" and highlighted is not None
+                  and highlighted.id.split(" ")[0] == group, main.current)
+
+        # The home box: words go to search.
+        await pilot.click("#nav-home")
+        await pilot.pause(0.2)
+        app.query_one("#home-box", Input).value = "some song name"
+        await pilot.click("#home-go")
+        await pilot.pause(0.3)
+        check("home box sends words to search", main.current == "search"
+              and app.query_one("#q", Input).value == "some song name", main.current)
 
         for key, pane in (("escape", "home"), ("d", "download"), ("escape", "home"), ("s", "search"),
                           ("escape", "home"), ("f", "files"), ("escape", "home"), ("comma", "settings")):

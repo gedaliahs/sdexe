@@ -13,3 +13,13 @@ update.md
 CLAUDE.md
 TODO.md
 sdexe-video-script.md
+
+# Media saved while testing sdexe in the repo folder
+*.mp4
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.opus
