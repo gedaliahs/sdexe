@@ -95,6 +95,28 @@
                 </div>
             </div>
 
+            <!-- Startup -->
+            <div class="card">
+                <div class="card-body settings-section">
+                    <div class="settings-header">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                        <h2>Startup</h2>
+                    </div>
+                    <p class="meta">What happens when you run <code>sdexe</code> in a terminal.</p>
+                    <div style="margin-top: 14px;">
+                        <label class="check-label">
+                            <input type="checkbox" id="open-browser">
+                            Open this page in the browser every time
+                        </label>
+                        <p class="meta" style="margin-top:6px; margin-left:24px;">
+                            Off: sdexe starts and prints its address. One run can override it with
+                            <code>sdexe --browser</code> or <code>sdexe --no-browser</code>.
+                        </p>
+                        <span id="startup-status" class="settings-status" style="margin-left:24px;"></span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Notifications -->
             <div class="card">
                 <div class="card-body settings-section">
@@ -225,6 +247,7 @@ async function loadSettings() {
     const res = await fetch("/api/config");
     const cfg = await res.json();
 
+    document.getElementById("open-browser").checked = cfg.open_browser !== false;
     document.getElementById("output-folder").value = cfg.output_folder || "";
     document.getElementById("output-template").value = cfg.output_template || "";
 
@@ -279,6 +302,19 @@ async function saveSettings() {
         setTimeout(() => { status.textContent = ""; }, 2500);
     }
 }
+
+document.getElementById("open-browser").addEventListener("change", async (e) => {
+    const status = document.getElementById("startup-status");
+    const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ open_browser: e.target.checked }),
+    });
+    const data = await res.json();
+    status.textContent = data.error || "Saved";
+    status.className = "settings-status " + (data.error ? "error" : "saved");
+    setTimeout(() => { status.textContent = ""; }, 2500);
+});
 
 document.getElementById("notif-enabled").addEventListener("change", async (e) => {
     const statusEl = document.getElementById("notif-status");

@@ -429,6 +429,8 @@ def set_config_route():
         if err:
             return jsonify({"error": err}), 400
         updates["output_folder"] = resolved
+    if "open_browser" in updates and not isinstance(updates["open_browser"], bool):
+        return jsonify({"error": "open_browser must be true or false"}), 400
     cfg = load_config()
     cfg.update(updates)
     save_config(cfg)
@@ -2700,38 +2702,6 @@ def install_ffmpeg():
     return False, detail[-400:]
 
 
-def _check_ffmpeg(console):
-    """CLI startup check. Silent when ffmpeg is usable (system or bundled);
-    otherwise offers to install a system ffmpeg."""
-    from rich.prompt import Confirm
-
-    if tools.ffmpeg_available():
-        return
-
-    console.print("  [yellow]⚠[/yellow]  [bold]ffmpeg[/bold] not available, needed for audio/video tools.\n")
-    if not Confirm.ask("  Install ffmpeg now?", default=True):
-        console.print("  [dim]Skipping. Audio/video tools may not work.[/dim]\n")
-        return
-    with console.status("  Installing ffmpeg...", spinner="dots"):
-        ok, msg = install_ffmpeg()
-    console.print(f"  [green]✓[/green]  {msg}\n" if ok else f"  [red]✗[/red]  {msg}\n")
-
-
-def _check_for_updates(console):
-    import urllib.request
-    try:
-        with urllib.request.urlopen("https://pypi.org/pypi/sdexe/json", timeout=3) as r:
-            data = json.loads(r.read())
-        latest = data["info"]["version"]
-        if latest != __version__:
-            console.print(
-                f"  [yellow]↑[/yellow]  Update available: [dim]v{__version__}[/dim] → "
-                f"[bold]v{latest}[/bold]  [dim]Run:[/dim] [cyan]sdexe update[/cyan]\n"
-            )
-    except Exception:
-        pass
-
-
 def _run_tray(port):
     try:
         import pystray
@@ -2808,55 +2778,17 @@ def _find_free_port(host, start_port, max_tries=20):
     return None
 
 
-def _print_startup_info(console, host, port):
-    """Print a Rich info table with environment details."""
-    import shutil
-    import sys
-    from rich.table import Table
-
-    ffmpeg_ver = tools.ffmpeg_version() or "not found"
-    resolved = tools.ffmpeg_path()
-    if resolved and resolved != shutil.which("ffmpeg"):
-        ffmpeg_ver = f"{ffmpeg_ver} (bundled)"
-
-    ytdlp_ver = "unknown"
-    try:
-        ytdlp_ver = yt_dlp.version.__version__
-    except Exception:
-        pass
-
-    route_count = sum(1 for rule in app.url_map.iter_rules() if rule.endpoint != "static")
-
-    table = Table(show_header=False, box=None, padding=(0, 2), expand=False)
-    table.add_column(style="dim")
-    table.add_column()
-    table.add_row("Python", f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-    table.add_row("ffmpeg", ffmpeg_ver)
-    table.add_row("yt-dlp", ytdlp_ver)
-    js = media_opts.js_runtime_label()
-    if js and media_opts.ejs_installed():
-        table.add_row("JS", js)
-    elif js:
-        table.add_row("JS", f"{js} [yellow](solver missing, run sdexe update)[/yellow]")
-    else:
-        table.add_row("JS", "[yellow]none, YouTube may hide formats (brew install deno)[/yellow]")
-    table.add_row("Tools", str(route_count))
-    table.add_row("Config", str(CONFIG_DIR))
-    table.add_row("Server", f"[cyan]http://{host}:{port}[/cyan]")
-    table.add_row("Terminal", "[dim]sdexe download <url>[/dim]")
-
-    console.print(table)
-    console.print()
-
-
 _COMMANDS = ("download", "info", "pdf", "image", "audio", "video", "convert", "file", "mcp", "skill",
-             "update", "transcribe")
+             "setup", "tutorial", "update", "transcribe")
 
 _MAIN_HELP = """\
 [bold]sdexe[/bold] [dim]v{version} · local tools for media, PDF, images & files[/dim]
 
 [bold]Usage[/bold]
   [cyan]sdexe[/cyan]                        start the web app at http://localhost:5001
+  [cyan]sdexe tutorial[/cyan]               a hands-on walkthrough of everything (3 minutes)
+  [cyan]sdexe setup[/cyan]                  check your system, choose whether sdexe opens the browser
+
   [cyan]sdexe download[/cyan] <url> ...     save video or audio from a link (MP4 1080p60 by default)
   [cyan]sdexe info[/cyan] <url> ...         title, length, available qualities; what download would fetch
 
@@ -2877,7 +2809,8 @@ _MAIN_HELP = """\
   -p, --port PORT      server port (default 5001; the next free one if taken)
   --host HOST          bind address (default 127.0.0.1)
   --open PAGE          open a specific page: media, pdf, images, convert, av, text
-  --no-browser         don't open the browser
+  --browser            open the browser this time, whatever the setting
+  --no-browser         don't open the browser this time
   --no-tray            no system tray icon; run the server in the foreground
   -q, --quiet          no startup banner
   -V, --version        print the version
@@ -2894,7 +2827,6 @@ def main():
     import threading
     import webbrowser
     from rich.console import Console
-    from rich.panel import Panel
 
     if len(sys.argv) > 1 and sys.argv[1] == "download":
         from sdexe.cli import download_main
@@ -2902,6 +2834,9 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "info":
         from sdexe.cli_info import info_main
         sys.exit(info_main(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] in ("setup", "tutorial"):
+        from sdexe import cli_home
+        sys.exit((cli_home.setup_main if sys.argv[1] == "setup" else cli_home.tutorial_main)(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] in ("mcp", "skill"):
         from sdexe import agent
         sys.exit((agent.mcp_main if sys.argv[1] == "mcp" else agent.skill_main)(sys.argv[2:]))
@@ -2915,6 +2850,7 @@ def main():
     parser.add_argument("-p", "--port", type=int, default=5001)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--browser", action="store_true")
     parser.add_argument("--no-tray", action="store_true")
     parser.add_argument("-q", "--quiet", action="store_true")
     parser.add_argument("--open", metavar="PAGE")
@@ -2952,34 +2888,33 @@ def main():
         sys.exit(0 if ok else 1)
 
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
+    # Flask prints "* Serving Flask app" / "* Debug mode: off"; the screen below says it better.
+    import flask.cli
+    flask.cli.show_server_banner = lambda *a, **k: None
 
-    console = Console()
+    from sdexe import cli_home
+    console = Console(highlight=False)
     host = args.host
     port = args.port
 
     # Graceful Ctrl+C
     def _sigint_handler(sig, frame):
-        console.print("\n  [dim]Shutting down...[/dim]")
+        console.print("\n  [dim]sdexe stopped.[/dim]\n")
         sys.exit(0)
+
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    if interactive and not args.quiet and cli_home.needs_setup():
+        try:
+            cli_home.run_setup(console, first_run=True)
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n  [dim]Setup skipped. Run[/dim] [cyan]sdexe setup[/cyan] [dim]any time.[/dim]")
     signal.signal(signal.SIGINT, _sigint_handler)
 
-    if not args.quiet:
-        console.print()
-        console.print(
-            Panel.fit(
-                f"[bold blue]sdexe[/bold blue]  [dim]v{__version__}[/dim]\n"
-                "[dim]Local tools for media, PDF, images & files[/dim]",
-                border_style="blue",
-                padding=(0, 2),
-            )
-        )
-        console.print()
-
-        _check_ffmpeg(console)
-        _check_for_updates(console)
+    update_thread, update = cli_home.start_update_check() if not args.quiet else (None, {})
 
     # Port auto-detection
     import socket
+    port_note = ""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             s.bind((host, port))
@@ -2989,11 +2924,7 @@ def main():
             if port is None:
                 console.print(f"  [red]Error:[/red] Port {original_port} is in use and no free port found nearby.")
                 sys.exit(1)
-            if not args.quiet:
-                console.print(f"  [yellow]Port {original_port} in use, using {port} instead[/yellow]\n")
-
-    if not args.quiet:
-        _print_startup_info(console, host, port)
+            port_note = f"port {original_port} was busy, so this is {port}"
 
     # Determine URL to open
     open_path = ""
@@ -3001,8 +2932,20 @@ def main():
         open_path = f"/{args.open.strip('/')}"
     url = f"http://{host}:{port}{open_path}"
 
-    if not args.no_browser:
+    open_browser = args.browser or (not args.no_browser and cli_home.opens_browser())
+    if open_browser:
         webbrowser.open(url)
+
+    if not args.quiet:
+        if update_thread:
+            update_thread.join(timeout=1.5)
+        try:
+            import pystray  # noqa: F401
+            has_tray = not args.no_tray
+        except ImportError:
+            has_tray = False
+        cli_home.startup_screen(console, url, opened=open_browser, port_note=port_note, update=update,
+                                tray=has_tray)
 
     # Start server
     if args.no_tray:

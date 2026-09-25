@@ -51,7 +51,11 @@ Upgrades sdexe and its downloader engine in place. The Settings page has a butto
 sdexe
 ```
 
-Opens `http://localhost:5001` in your browser. All processing happens locally.
+Starts the web app at `http://localhost:5001`. All processing happens locally. The first run asks a few setup questions: whether `sdexe` should open the browser each time (also a toggle in Settings; `--browser` / `--no-browser` override it for one run), whether to fix zsh's handling of `?` in links, and whether to connect Claude Code. Run `sdexe setup` to change the answers.
+
+New to it? `sdexe tutorial` is a hands-on, 3-minute walkthrough that runs real commands.
+
+> **zsh users:** quote links (`sdexe download "https://youtube.com/watch?v=..."`), or let `sdexe setup` add `alias sdexe='noglob sdexe'` so you don't have to. Without either, zsh stops with "no matches found" before sdexe runs.
 
 ### Download from the terminal
 
