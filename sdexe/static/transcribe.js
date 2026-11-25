@@ -5,6 +5,20 @@
 let transcribeFile = null;
 let transcribeSegments = [];
 let transcribeSource = null;
+// Goes up when a transcription starts and when its file is replaced or
+// removed, so a run that is no longer wanted can tell and stay quiet.
+let transcribeRun = 0;
+let transcribeBusy = false;
+
+/* Stop following a running transcription (the server finishes it by itself). */
+function dropTranscription() {
+    transcribeRun++;
+    if (transcribeSource) { transcribeSource.close(); transcribeSource = null; }
+    if (transcribeBusy) {
+        transcribeBusy = false;
+        document.getElementById("transcribe-btn").disabled = false;
+    }
+}
 
 function esc(s) {
     return String(s).replace(/[&<>"']/g, c => (
@@ -42,6 +56,9 @@ function hideTranscribeError() {
 function handleTranscribeFiles(files) {
     if (!files || !files.length) return;
     hideTranscribeError();
+    // Picking another file mid-run used to leave the old run going: its
+    // transcript then appeared under the new file's name.
+    dropTranscription();
     transcribeFile = files[0];
     document.getElementById("transcribe-file-name").textContent = transcribeFile.name;
     document.getElementById("transcribe-file-size").textContent = fmtSize(transcribeFile.size);
@@ -53,6 +70,7 @@ function handleTranscribeFiles(files) {
 }
 
 function clearTranscribeFile() {
+    dropTranscription();
     transcribeFile = null;
     transcribeSegments = [];
     document.getElementById("transcribe-file-info").hidden = true;
@@ -69,6 +87,8 @@ async function startTranscription() {
 
     const btn = document.getElementById("transcribe-btn");
     btn.disabled = true;
+    transcribeBusy = true;
+    const run = ++transcribeRun;
 
     const diarizeEl = document.getElementById("transcribe-diarize");
     const tokenEl = document.getElementById("transcribe-hf-token");
@@ -98,19 +118,37 @@ async function startTranscription() {
     try {
         const res = await fetch("/api/transcribe", { method: "POST", body: form });
         const data = await res.json();
+        if (run !== transcribeRun) return;  // the file was changed during the upload
         if (!res.ok || data.error) {
             panel.hidden = true;
+            transcribeBusy = false;
             btn.disabled = false;
             showTranscribeError(data.error || "Could not start transcription.");
             return;
         }
         id = data.id;
     } catch {
+        if (run !== transcribeRun) return;
         panel.hidden = true;
+        transcribeBusy = false;
         btn.disabled = false;
         showTranscribeError("Could not reach the app. Is it still running?");
         return;
     }
+
+    watchTranscription(id, run, 0);
+}
+
+/* Follow one transcription's progress stream. The job runs on the server and
+   its result waits there, so a dropped stream (a laptop that went to sleep) is
+   reconnected to instead of throwing a long transcription away. */
+function watchTranscription(id, run, retries) {
+    const btn = document.getElementById("transcribe-btn");
+    const panel = document.getElementById("transcribe-progress");
+    const fill = document.getElementById("transcribe-progress-fill");
+    const statusEl = document.getElementById("transcribe-progress-status");
+    const pctEl = document.getElementById("transcribe-progress-pct");
+    const detailEl = document.getElementById("transcribe-progress-detail");
 
     if (transcribeSource) transcribeSource.close();
     const source = new EventSource(`/api/transcribe/progress/${encodeURIComponent(id)}`);
@@ -119,12 +157,15 @@ async function startTranscription() {
     const finish = () => {
         source.close();
         if (transcribeSource === source) transcribeSource = null;
+        transcribeBusy = false;
         btn.disabled = false;
     };
 
     source.onmessage = (ev) => {
+        if (run !== transcribeRun) { source.close(); return; }
         let d;
         try { d = JSON.parse(ev.data); } catch { return; }
+        retries = 0;
 
         if (d.error && !d.status) {
             panel.hidden = true;
@@ -148,10 +189,18 @@ async function startTranscription() {
             transcribeSegments = d.segments || [];
             renderTranscript(d.language);
             finish();
+            if (d.note) showTranscribeError(d.note);
         }
     };
 
     source.onerror = () => {
+        source.close();
+        if (run !== transcribeRun) return;
+        if (retries < 5) {
+            statusEl.textContent = "Reconnecting...";
+            setTimeout(() => { if (run === transcribeRun) watchTranscription(id, run, retries + 1); }, 2000);
+            return;
+        }
         panel.hidden = true;
         showTranscribeError("Lost connection while transcribing.");
         finish();
@@ -241,7 +290,7 @@ async function exportTranscript() {
         }
         const blob = await res.blob();
         const cd = res.headers.get("Content-Disposition") || "";
-        const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+        const match = sdexeFilenameMatch(cd);
         const name = match ? match[1] : `transcript.${fmt}`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");

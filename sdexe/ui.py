@@ -61,13 +61,14 @@ def accent_name() -> str:
             name = load_config().get("accent", DEFAULT_ACCENT)
         except Exception:
             name = DEFAULT_ACCENT
-        _accent_cache = name if name in ACCENTS else DEFAULT_ACCENT
+        # isinstance: a list or object in config.json is unhashable, and "in" would raise
+        _accent_cache = name if isinstance(name, str) and name in ACCENTS else DEFAULT_ACCENT
     return _accent_cache
 
 
 def set_accent(name: str):
     global _accent_cache
-    _accent_cache = name if name in ACCENTS else DEFAULT_ACCENT
+    _accent_cache = name if isinstance(name, str) and name in ACCENTS else DEFAULT_ACCENT
 
 
 def accent() -> str:
@@ -206,6 +207,18 @@ def status(ok: bool | None) -> Text:
     if ok is None:
         return Text(WARN, style="warn")
     return Text(OK, style="ok") if ok else Text(ERR, style="err")
+
+
+def file_link(path, label: str | None = None, style: str = "") -> Text:
+    """A clickable file:// link as Text. Built with a Style, not [link=…]
+    markup, because paths often contain "[" ("Song [Official Video].mp4")."""
+    from pathlib import Path
+    from rich.style import Style
+    t = Text(label if label is not None else str(path), style=style)
+    # as_uri: the same link as before here, and file:///C:/… on Windows,
+    # where quoting the path gave file://C%3A%5C… that opens nothing.
+    t.stylize(Style(link=Path(path).resolve().as_uri()))
+    return t
 
 
 def is_interactive() -> bool:

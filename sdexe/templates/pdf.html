@@ -32,7 +32,7 @@
                     </button>
                 </div>
 
-                <div id="merge-error" class="error" hidden></div>
+                <div id="merge-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -56,12 +56,12 @@
                 <div id="split-file-info" class="split-info" hidden>
                     <span id="split-file-name" class="split-name"></span>
                     <span id="split-page-count" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearSplitFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearSplitFile()">&times;</button>
                 </div>
 
                 <div id="split-options" hidden>
                     <div class="field" style="margin-top: 16px;">
-                        <label>Page ranges (leave empty to split all pages)</label>
+                        <label for="split-ranges">Page ranges (leave empty to split all pages)</label>
                         <input type="text" id="split-ranges" placeholder="e.g. 1-3, 5, 7-10">
                     </div>
                 </div>
@@ -73,7 +73,7 @@
                     </button>
                 </div>
 
-                <div id="split-error" class="error" hidden></div>
+                <div id="split-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -102,7 +102,7 @@
                     </button>
                 </div>
 
-                <div id="img-error" class="error" hidden></div>
+                <div id="img-error" class="error" role="alert" hidden></div>
             </div>
         </div>
         <!-- Compress -->
@@ -123,7 +123,7 @@
                 <div id="compress-pdf-info" class="split-info" hidden>
                     <span id="compress-pdf-name" class="split-name"></span>
                     <span id="compress-pdf-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearCompressPdf()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearCompressPdf()">&times;</button>
                 </div>
 
                 <div id="compress-pdf-actions" class="pdf-actions" hidden>
@@ -132,7 +132,7 @@
                         Compress PDF
                     </button>
                 </div>
-                <div id="compress-pdf-error" class="error" hidden></div>
+                <div id="compress-pdf-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -157,7 +157,7 @@
                 <div id="totext-file-info" class="split-info" hidden>
                     <span id="totext-file-name" class="split-name"></span>
                     <span id="totext-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearTotextFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearTotextFile()">&times;</button>
                 </div>
 
                 <div id="totext-actions" class="pdf-actions" hidden>
@@ -166,7 +166,7 @@
                         Extract Text
                     </button>
                 </div>
-                <div id="totext-error" class="error" hidden></div>
+                <div id="totext-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -187,11 +187,11 @@
                 <div id="addpw-file-info" class="split-info" hidden>
                     <span id="addpw-file-name" class="split-name"></span>
                     <span id="addpw-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAddPwFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAddPwFile()">&times;</button>
                 </div>
                 <div id="addpw-options" hidden style="margin-top:16px;">
                     <div class="field">
-                        <label>Password</label>
+                        <label for="addpw-password">Password</label>
                         <input type="password" id="addpw-password" placeholder="Enter password to set">
                     </div>
                 </div>
@@ -201,7 +201,7 @@
                         Protect PDF
                     </button>
                 </div>
-                <div id="addpw-error" class="error" hidden></div>
+                <div id="addpw-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -222,11 +222,11 @@
                 <div id="removepw-file-info" class="split-info" hidden>
                     <span id="removepw-file-name" class="split-name"></span>
                     <span id="removepw-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearRemovePwFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearRemovePwFile()">&times;</button>
                 </div>
                 <div id="removepw-options" hidden style="margin-top:16px;">
                     <div class="field">
-                        <label>Current Password</label>
+                        <label for="removepw-password">Current Password</label>
                         <input type="password" id="removepw-password" placeholder="Enter the existing password">
                     </div>
                 </div>
@@ -236,7 +236,7 @@
                         Unlock PDF
                     </button>
                 </div>
-                <div id="removepw-error" class="error" hidden></div>
+                <div id="removepw-error" class="error" role="alert" hidden></div>
             </div>
         </div>
         <!-- Rotate Pages -->
@@ -259,13 +259,13 @@
                 <div id="rotatepages-file-info" class="split-info" hidden>
                     <span id="rotatepages-file-name" class="split-name"></span>
                     <span id="rotatepages-page-count" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearRotatePagesFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearRotatePagesFile()">&times;</button>
                 </div>
 
                 <div id="rotatepages-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Angle</label>
+                            <label for="rotatepages-angle">Angle</label>
                             <select id="rotatepages-angle">
                                 <option value="90">90° clockwise</option>
                                 <option value="180">180°</option>
@@ -274,7 +274,7 @@
                         </div>
                     </div>
                     <div class="field" style="margin-top: 12px;">
-                        <label>Pages (leave empty to rotate all)</label>
+                        <label for="rotatepages-pages">Pages (leave empty to rotate all)</label>
                         <input type="text" id="rotatepages-pages" placeholder="e.g. 1, 3, 5-7">
                     </div>
                 </div>
@@ -286,7 +286,7 @@
                     </button>
                 </div>
 
-                <div id="rotatepages-error" class="error" hidden></div>
+                <div id="rotatepages-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -309,7 +309,7 @@
                 <div id="extractimages-file-info" class="split-info" hidden>
                     <span id="extractimages-file-name" class="split-name"></span>
                     <span id="extractimages-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearExtractImagesFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearExtractImagesFile()">&times;</button>
                 </div>
 
                 <div id="extractimages-actions" class="pdf-actions" hidden>
@@ -318,7 +318,7 @@
                         Extract Images
                     </button>
                 </div>
-                <div id="extractimages-error" class="error" hidden></div>
+                <div id="extractimages-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -342,25 +342,25 @@
                 <div id="watermark-file-info" class="split-info" hidden>
                     <span id="watermark-file-name" class="split-name"></span>
                     <span id="watermark-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearWatermarkFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearWatermarkFile()">&times;</button>
                 </div>
 
                 <div id="watermark-options" hidden>
                     <div class="field" style="margin-top: 16px;">
-                        <label>Watermark Text</label>
+                        <label for="watermark-text">Watermark Text</label>
                         <input type="text" id="watermark-text" placeholder="e.g. CONFIDENTIAL, DRAFT, Sample">
                     </div>
                     <div class="field-row" style="margin-top: 12px;">
                         <div class="field" style="max-width: 120px;">
-                            <label>Font Size</label>
+                            <label for="watermark-fontsize">Font Size</label>
                             <input type="number" id="watermark-fontsize" value="36" min="8" max="200">
                         </div>
                         <div class="field" style="flex: 1;">
-                            <label>Opacity: <span id="watermark-opacity-val">0.3</span></label>
+                            <label for="watermark-opacity">Opacity: <span id="watermark-opacity-val">0.3</span></label>
                             <input type="range" id="watermark-opacity" min="0.1" max="1.0" step="0.1" value="0.3">
                         </div>
                         <div class="select-wrap">
-                            <label>Position</label>
+                            <label for="watermark-position">Position</label>
                             <select id="watermark-position">
                                 <option value="center">Center</option>
                                 <option value="top-left">Top Left</option>
@@ -378,7 +378,7 @@
                         Add Watermark
                     </button>
                 </div>
-                <div id="watermark-error" class="error" hidden></div>
+                <div id="watermark-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -401,13 +401,13 @@
                 <div id="numberpages-file-info" class="split-info" hidden>
                     <span id="numberpages-file-name" class="split-name"></span>
                     <span id="numberpages-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearNumberPagesFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearNumberPagesFile()">&times;</button>
                 </div>
 
                 <div id="numberpages-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Position</label>
+                            <label for="numberpages-position">Position</label>
                             <select id="numberpages-position">
                                 <option value="bottom-center">Bottom Center</option>
                                 <option value="bottom-left">Bottom Left</option>
@@ -415,7 +415,7 @@
                             </select>
                         </div>
                         <div class="field" style="max-width: 120px;">
-                            <label>Start at</label>
+                            <label for="numberpages-start">Start at</label>
                             <input type="number" id="numberpages-start" value="1" min="1">
                         </div>
                     </div>
@@ -427,7 +427,7 @@
                         Number Pages
                     </button>
                 </div>
-                <div id="numberpages-error" class="error" hidden></div>
+                <div id="numberpages-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -451,12 +451,12 @@
                 <div id="reorder-file-info" class="split-info" hidden>
                     <span id="reorder-file-name" class="split-name"></span>
                     <span id="reorder-page-count" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearReorderFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearReorderFile()">&times;</button>
                 </div>
 
                 <div id="reorder-options" hidden>
                     <div class="field" style="margin-top: 16px;">
-                        <label>Page order (comma-separated page numbers)</label>
+                        <label for="reorder-order">Page order (comma-separated page numbers)</label>
                         <input type="text" id="reorder-order" placeholder="e.g. 3, 1, 2, 4">
                     </div>
                 </div>
@@ -468,7 +468,7 @@
                     </button>
                 </div>
 
-                <div id="reorder-error" class="error" hidden></div>
+                <div id="reorder-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -491,12 +491,12 @@
                 <div id="deletepages-file-info" class="split-info" hidden>
                     <span id="deletepages-file-name" class="split-name"></span>
                     <span id="deletepages-page-count" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearDeletePagesFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearDeletePagesFile()">&times;</button>
                 </div>
 
                 <div id="deletepages-options" hidden>
                     <div class="field" style="margin-top: 16px;">
-                        <label>Pages to delete</label>
+                        <label for="deletepages-pages">Pages to delete</label>
                         <input type="text" id="deletepages-pages" placeholder="e.g. 1, 3, 5-7">
                     </div>
                 </div>
@@ -508,7 +508,7 @@
                     </button>
                 </div>
 
-                <div id="deletepages-error" class="error" hidden></div>
+                <div id="deletepages-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -533,24 +533,24 @@
                 <div id="metadata-file-info" class="split-info" hidden>
                     <span id="metadata-file-name" class="split-name"></span>
                     <span id="metadata-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearMetadataFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearMetadataFile()">&times;</button>
                 </div>
 
                 <div id="metadata-options" hidden>
                     <div class="field" style="margin-top: 16px;">
-                        <label>Title</label>
+                        <label for="metadata-title">Title</label>
                         <input type="text" id="metadata-title" placeholder="Document title">
                     </div>
                     <div class="field" style="margin-top: 12px;">
-                        <label>Author</label>
+                        <label for="metadata-author">Author</label>
                         <input type="text" id="metadata-author" placeholder="Author name">
                     </div>
                     <div class="field" style="margin-top: 12px;">
-                        <label>Subject</label>
+                        <label for="metadata-subject">Subject</label>
                         <input type="text" id="metadata-subject" placeholder="Document subject">
                     </div>
                     <div class="field" style="margin-top: 12px;">
-                        <label>Creator</label>
+                        <label for="metadata-creator">Creator</label>
                         <input type="text" id="metadata-creator" placeholder="Creator application">
                     </div>
                 </div>
@@ -561,7 +561,7 @@
                         Save Metadata
                     </button>
                 </div>
-                <div id="metadata-error" class="error" hidden></div>
+                <div id="metadata-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -586,20 +586,20 @@
                     <span id="pdf2images-file-name" class="split-name"></span>
                     <span id="pdf2images-file-size" class="file-size"></span>
                     <span id="pdf2images-page-count" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearPdf2ImagesFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearPdf2ImagesFile()">&times;</button>
                 </div>
 
                 <div id="pdf2images-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Format</label>
+                            <label for="pdf2images-format">Format</label>
                             <select id="pdf2images-format">
                                 <option value="png">PNG</option>
                                 <option value="jpg">JPG</option>
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Resolution</label>
+                            <label for="pdf2images-dpi">Resolution</label>
                             <select id="pdf2images-dpi">
                                 <option value="72">72 dpi (screen)</option>
                                 <option value="150" selected>150 dpi (standard)</option>
@@ -608,7 +608,7 @@
                         </div>
                     </div>
                     <div class="field" style="margin-top: 12px;">
-                        <label>Pages (leave empty for all)</label>
+                        <label for="pdf2images-pages">Pages (leave empty for all)</label>
                         <input type="text" id="pdf2images-pages" placeholder="e.g. 1, 3, 5-7">
                     </div>
                 </div>
@@ -619,7 +619,7 @@
                         Convert to Images
                     </button>
                 </div>
-                <div id="pdf2images-error" class="error" hidden></div>
+                <div id="pdf2images-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -644,13 +644,13 @@
                 <div id="ocr-file-info" class="split-info" hidden>
                     <span id="ocr-file-name" class="split-name"></span>
                     <span id="ocr-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearOcrFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearOcrFile()">&times;</button>
                 </div>
 
                 <div id="ocr-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Language</label>
+                            <label for="ocr-language">Language</label>
                             <select id="ocr-language">
                                 <option value="eng" selected>English</option>
                                 <option value="fra">French</option>
@@ -680,7 +680,7 @@
                 <div id="ocr-result" hidden>
                     <div class="field" style="margin-top: 16px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                            <label>Recognised Text <span id="ocr-result-meta" class="file-size"></span></label>
+                            <label for="ocr-output">Recognised Text <span id="ocr-result-meta" class="file-size"></span></label>
                             <div style="display: flex; gap: 6px;">
                                 <button class="btn-copy" onclick="copyOcrText(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                                 <button class="btn-copy" onclick="downloadOcrText()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Download .txt</button>
@@ -689,7 +689,7 @@
                         <textarea id="ocr-output" class="convert-textarea" rows="12" readonly placeholder="Recognised text will appear here..."></textarea>
                     </div>
                 </div>
-                <div id="ocr-error" class="error" hidden></div>
+                <div id="ocr-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -711,7 +711,7 @@
                 <div id="office2pdf-file-info" class="split-info" hidden>
                     <span id="office2pdf-file-name" class="split-name"></span>
                     <span id="office2pdf-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearOffice2PdfFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearOffice2PdfFile()">&times;</button>
                 </div>
 
                 <div id="office2pdf-actions" class="pdf-actions" hidden>
@@ -720,7 +720,7 @@
                         Convert to PDF
                     </button>
                 </div>
-                <div id="office2pdf-error" class="error" hidden></div>
+                <div id="office2pdf-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -745,7 +745,7 @@
                     <span id="stamp-file-name" class="split-name"></span>
                     <span id="stamp-file-size" class="file-size"></span>
                     <span id="stamp-page-count" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearStampFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearStampFile()">&times;</button>
                 </div>
 
                 <div id="stamp-options" hidden>
@@ -758,12 +758,12 @@
                         <div id="stamp-image-info" class="split-info" hidden>
                             <span id="stamp-image-name" class="split-name"></span>
                             <span id="stamp-image-size" class="file-size"></span>
-                            <button class="split-remove" onclick="clearStampImage()">&times;</button>
+                            <button class="split-remove" aria-label="Remove file" onclick="clearStampImage()">&times;</button>
                         </div>
                     </div>
                     <div class="field-row" style="margin-top: 12px;">
                         <div class="select-wrap">
-                            <label>Position</label>
+                            <label for="stamp-position">Position</label>
                             <select id="stamp-position">
                                 <option value="bottom-right" selected>Bottom Right</option>
                                 <option value="bottom-left">Bottom Left</option>
@@ -773,16 +773,16 @@
                             </select>
                         </div>
                         <div class="field" style="max-width: 140px;">
-                            <label>Size (% of page width)</label>
+                            <label for="stamp-scale">Size (% of page width)</label>
                             <input type="number" id="stamp-scale" value="25" min="1" max="100">
                         </div>
                         <div class="field" style="flex: 1;">
-                            <label>Opacity: <span id="stamp-opacity-val">100</span>%</label>
+                            <label for="stamp-opacity">Opacity: <span id="stamp-opacity-val">100</span>%</label>
                             <input type="range" id="stamp-opacity" min="5" max="100" step="5" value="100">
                         </div>
                     </div>
                     <div class="field" style="margin-top: 12px;">
-                        <label>Pages (leave empty for all)</label>
+                        <label for="stamp-pages">Pages (leave empty for all)</label>
                         <input type="text" id="stamp-pages" placeholder="e.g. 1, 3, 5-7">
                     </div>
                 </div>
@@ -793,7 +793,7 @@
                         Stamp PDF
                     </button>
                 </div>
-                <div id="stamp-error" class="error" hidden></div>
+                <div id="stamp-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -816,13 +816,13 @@
                     <span id="pagesize-file-name" class="split-name"></span>
                     <span id="pagesize-file-size" class="file-size"></span>
                     <span id="pagesize-page-count" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearPageSizeFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearPageSizeFile()">&times;</button>
                 </div>
 
                 <div id="pagesize-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Paper size</label>
+                            <label for="pagesize-size">Paper size</label>
                             <select id="pagesize-size">
                                 <option value="a4" selected>A4 (210 &times; 297 mm)</option>
                                 <option value="letter">Letter (8.5 &times; 11 in)</option>
@@ -832,7 +832,7 @@
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Scaling</label>
+                            <label for="pagesize-fit">Scaling</label>
                             <select id="pagesize-fit">
                                 <option value="fit" selected>Fit (keep everything visible)</option>
                                 <option value="fill">Fill (cover page, may crop edges)</option>
@@ -847,7 +847,7 @@
                         Resize Pages
                     </button>
                 </div>
-                <div id="pagesize-error" class="error" hidden></div>
+                <div id="pagesize-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -870,7 +870,7 @@
                     <span id="flatten-file-name" class="split-name"></span>
                     <span id="flatten-file-size" class="file-size"></span>
                     <span id="flatten-page-count" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearFlattenFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearFlattenFile()">&times;</button>
                 </div>
 
                 <div id="flatten-actions" class="pdf-actions" hidden>
@@ -879,7 +879,7 @@
                         Flatten PDF
                     </button>
                 </div>
-                <div id="flatten-error" class="error" hidden></div>
+                <div id="flatten-error" class="error" role="alert" hidden></div>
             </div>
         </div>
     </main>

@@ -1,9 +1,23 @@
 let currentUrl = "";
 let playlistEntries = [];
-let completedIds = [];
 let outputFolder = "";
 let lastEntryError = "";
 const downloadHistory = [];
+// Goes up every time a new link is fetched. A fetch, download or batch that
+// started for an earlier link compares its own number and stops touching the page.
+let cardGen = 0;
+let fetchingText = null;
+let singleActive = false;
+let serverDefaults = {};
+
+/* localStorage throws when the browser blocks site data (and when it is
+   full). Preferences are a nicety: without them the page still has to work. */
+function lsGet(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+}
+function lsSet(key, value) {
+    try { localStorage.setItem(key, value); } catch {}
+}
 
 /* ── Toast ── */
 function showToast(message, type = "success", actions = null) {
@@ -37,13 +51,18 @@ function showToast(message, type = "success", actions = null) {
 }
 
 /* ── Web Notifications ── */
+// Settings writes "off" here when its notifications box is unticked. The
+// browser permission can't be taken back from a page, so this is the switch.
+function notificationsWanted() {
+    return lsGet("sdexe_notifications") !== "off";
+}
 function sendNotification(title, body) {
-    if ("Notification" in window && Notification.permission === "granted") {
+    if (notificationsWanted() && "Notification" in window && Notification.permission === "granted") {
         new Notification(title, { body });
     }
 }
 function requestNotifPermission() {
-    if ("Notification" in window && Notification.permission === "default") {
+    if (notificationsWanted() && "Notification" in window && Notification.permission === "default") {
         Notification.requestPermission();
     }
 }
@@ -72,9 +91,16 @@ function scrollIfNeeded(el) {
 function esc(s) {
     const d = document.createElement("div");
     d.textContent = s;
-    return d.innerHTML;
+    // Also safe inside attribute values: value="${esc(v)}".
+    return d.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function escAttr(s) {
+    return esc(s);
 }
 function formatDuration(sec) {
+    // Many sites report fractions of a second: 125.4 came out as "2:5.400000000000006".
+    sec = Math.round(sec);
     if (!sec) return "";
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
@@ -85,7 +111,7 @@ function formatDuration(sec) {
 function parseTime(str) {
     if (!str || !str.trim()) return null;
     const parts = str.trim().split(":").map(Number);
-    if (parts.some(isNaN)) return null;
+    if (parts.some(n => isNaN(n) || n < 0)) return null;
     if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
     if (parts.length === 2) return parts[0] * 60 + parts[1];
     if (parts.length === 1) return parts[0];
@@ -108,18 +134,20 @@ function hideAll() {
 }
 
 /* ── Download History ── */
-async function addToHistory(title, format, id, url) {
+// One save at a time. The server reads the file, adds the item and writes it
+// back, so three batch downloads finishing together overwrote each other's entry.
+let historySaves = Promise.resolve();
+function addToHistory(title, format, id, url) {
     const item = { title, format, id, url: url || currentUrl, ts: Date.now() };
     downloadHistory.unshift(item);
     if (downloadHistory.length > 50) downloadHistory.pop();
     renderHistory();
-    try {
-        await fetch("/api/history", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(item),
-        });
-    } catch {}
+    historySaves = historySaves.then(() => fetch("/api/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item),
+    })).catch(() => {});
+    return historySaves;
 }
 
 function refetchUrl(url) {
@@ -145,14 +173,16 @@ function renderHistory() {
         <div class="history-item">
             <div class="history-info">
                 <span class="history-title">${esc(item.title)}</span>
-                <span class="history-meta"><span class="history-fmt">${esc(item.format.toUpperCase())}</span>${item.ts ? `<span class="history-time">${timeAgo(item.ts)}</span>` : ""}</span>
+                <span class="history-meta"><span class="history-fmt">${esc(String(item.format || "").toUpperCase())}</span>${item.ts ? `<span class="history-time">${timeAgo(item.ts)}</span>` : ""}</span>
             </div>
             <div class="history-actions">
-                ${item.url ? `<button type="button" class="history-refetch" title="Fetch this link again" onclick="refetchUrl(${JSON.stringify(item.url)})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>` : ""}
+                ${item.url ? `<button type="button" class="history-refetch" title="Fetch this link again" data-url="${escAttr(item.url)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>` : ""}
                 ${item.restored ? "" : `<a href="/api/file/${encodeURIComponent(item.id)}" class="history-save"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 3v12M6 9l6 6 6-6"/><path d="M5 21h14"/></svg>Save</a>`}
             </div>
         </div>
     `).join("");
+    list.querySelectorAll(".history-refetch").forEach(btn =>
+        btn.addEventListener("click", () => refetchUrl(btn.dataset.url)));
 }
 function toggleHistory() {
     const list = document.getElementById("history-list");
@@ -160,6 +190,7 @@ function toggleHistory() {
     if (!list) return;
     list.hidden = !list.hidden;
     if (chevron) chevron.classList.toggle("open", !list.hidden);
+    document.querySelector(".history-header")?.setAttribute("aria-expanded", String(!list.hidden));
 }
 
 /* ── Config / Output Folder ── */
@@ -168,6 +199,9 @@ async function loadConfig() {
         const res = await fetch("/api/config");
         const cfg = await res.json();
         outputFolder = cfg.output_folder || "";
+        // The defaults saved on the Settings page, for a browser that has no
+        // choice of its own stored yet.
+        serverDefaults = { format: cfg.default_format, quality: cfg.default_quality };
         updateFolderDisplay();
     } catch {}
     try {
@@ -187,19 +221,30 @@ function updateFolderDisplay() {
     if (!el) return;
     el.textContent = outputFolder || "None (manual save)";
 }
-function promptSetFolder() {
+async function promptSetFolder() {
     const recents = getRecentFolders();
     const hint = recents.length ? `\nRecent: ${recents.slice(0,3).join(", ")}` : "";
     const input = prompt(`Set download folder path (leave empty to disable):${hint}`, outputFolder);
     if (input === null) return;
-    outputFolder = input.trim();
+    const wanted = input.trim();
+    try {
+        const res = await fetch("/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ output_folder: wanted }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error) {
+            showToast(data.error || "Could not use that folder.", "error");
+            return;  // keep the previous folder
+        }
+    } catch {
+        showToast("Could not reach sdexe to save the folder.", "error");
+        return;
+    }
+    outputFolder = wanted;
     updateFolderDisplay();
     if (outputFolder) addRecentFolder(outputFolder);
-    fetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ output_folder: outputFolder }),
-    });
 }
 
 /* ── Clipboard Auto-detect ── */
@@ -231,9 +276,11 @@ function initTextarea() {
 
 /* ── Parse URLs from textarea ── */
 function parseUrls(text) {
-    return text.split("\n")
+    const urls = text.split("\n")
         .map(l => l.trim())
         .filter(l => l && (l.startsWith("http://") || l.startsWith("https://")));
+    // The same link pasted twice is still one download.
+    return [...new Set(urls)];
 }
 
 /* ── Quality Dropdown ── */
@@ -254,7 +301,7 @@ function updateQuality(prefix) {
         const subWrap = document.getElementById("v-subtitle-wrap");
         if (subWrap) subWrap.style.display = fmt === "mp4" ? "block" : "none";
     }
-    localStorage.setItem("sdexe_format", fmt);
+    lsSet("sdexe_format", fmt);
     // Rebuild quality pills
     const pillContainer = document.getElementById(prefix + '-quality-pills');
     if (pillContainer) {
@@ -325,9 +372,17 @@ function hideSkeleton() {
 async function fetchInfo() {
     const text = document.getElementById("url").value.trim();
     if (!text) return;
+    // Pasting starts a fetch, and so does the Enter that often follows it.
+    if (text === fetchingText) return;
+    fetchingText = text;
+    const gen = ++cardGen;
 
     hideError();
     hideAll();
+    // A download started from the card that just went away keeps running; it
+    // reports through a toast and Recent downloads instead (see trackSingleProgress).
+    singleActive = false;
+    resetBtn(document.getElementById("v-dl-btn"), "Download");
     document.getElementById("empty-state").hidden = true;
     showSkeleton();
     document.querySelector(".search-bar").classList.add("is-loading");
@@ -341,7 +396,7 @@ async function fetchInfo() {
 
     try {
         if (urls.length > 1) {
-            await fetchMultipleUrls(urls);
+            await fetchMultipleUrls(urls, gen);
         } else {
             const url = urls[0] || text;
             const res = await fetch("/api/info", {
@@ -350,6 +405,7 @@ async function fetchInfo() {
                 body: JSON.stringify({url}),
             });
             const data = await res.json();
+            if (gen !== cardGen) return;  // a newer fetch owns the page now
             if (!res.ok) { showError(data.error || "Failed to fetch info"); return; }
 
             currentUrl = url;
@@ -361,51 +417,64 @@ async function fetchInfo() {
             }
         }
     } catch (e) {
-        showError("Network error. Is the server running?");
+        if (gen === cardGen) showError("Network error. Is the server running?");
     } finally {
-        hideSkeleton();
-        btn.disabled = false;
-        btn.querySelector(".btn-text").textContent = "Fetch";
-        document.title = "Media Downloader, sdexe";
-        document.querySelector(".search-bar").classList.remove("is-loading");
+        if (gen === cardGen) {
+            fetchingText = null;
+            hideSkeleton();
+            btn.disabled = false;
+            btn.querySelector(".btn-text").textContent = "Fetch";
+            document.title = "Media Downloader, sdexe";
+            document.querySelector(".search-bar").classList.remove("is-loading");
+        }
     }
 }
 
 /* ── Fetch Multiple URLs ── */
-async function fetchMultipleUrls(urls) {
+async function fetchMultipleUrls(urls, gen) {
     const btn = document.getElementById("fetch-btn");
-    const entries = [];
+    // One slot per link so the list keeps the order they were pasted in.
+    const results = new Array(urls.length);
     let errors = 0;
+    let finished = 0;
+    let next = 0;
+    btn.querySelector(".btn-text").textContent = `0 / ${urls.length}`;
 
-    for (let i = 0; i < urls.length; i++) {
-        btn.querySelector(".btn-text").textContent = `${i + 1} / ${urls.length}`;
-        try {
-            const res = await fetch("/api/info", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({url: urls[i]}),
-            });
-            const data = await res.json();
-            if (!res.ok) { errors++; continue; }
-
-            if (data.type === "playlist") {
-                for (const entry of data.entries) {
-                    entries.push(entry);
-                }
-            } else {
-                entries.push({
-                    title: data.title || "Unknown",
-                    url: data.url || urls[i],
-                    duration: data.duration,
-                    id: "",
-                    thumbnail: data.thumbnail || "",
+    // Three lookups at a time (they used to run one after another).
+    async function worker() {
+        while (next < urls.length && gen === cardGen) {
+            const i = next++;
+            try {
+                const res = await fetch("/api/info", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({url: urls[i]}),
                 });
+                const data = await res.json();
+                if (!res.ok) {
+                    errors++;
+                } else if (data.type === "playlist") {
+                    results[i] = data.entries;
+                } else {
+                    results[i] = [{
+                        title: data.title || "Unknown",
+                        url: data.url || urls[i],
+                        duration: data.duration,
+                        id: "",
+                        thumbnail: data.thumbnail || "",
+                    }];
+                }
+            } catch {
+                errors++;
             }
-        } catch {
-            errors++;
+            finished++;
+            if (gen === cardGen) btn.querySelector(".btn-text").textContent = `${finished} / ${urls.length}`;
         }
     }
+    await Promise.all(Array.from({length: Math.min(3, urls.length)}, worker));
+    if (gen !== cardGen) return;
 
+    const entries = results.flat().filter(Boolean);
     if (entries.length === 0) {
         showError(`Could not fetch info for any of the ${urls.length} URLs`);
         return;
@@ -421,13 +490,13 @@ async function fetchMultipleUrls(urls) {
 
 /* ── Restore saved format/quality ── */
 function restoreFormatPrefs(prefix) {
-    const savedFmt = localStorage.getItem("sdexe_format");
+    const savedFmt = lsGet("sdexe_format") || serverDefaults.format;
     if (savedFmt) {
         const fmtEl = document.getElementById(prefix + "-format");
         if (fmtEl && fmtEl.querySelector(`option[value="${savedFmt}"]`)) fmtEl.value = savedFmt;
     }
     updateQuality(prefix);
-    const savedQ = localStorage.getItem("sdexe_quality");
+    const savedQ = lsGet("sdexe_quality") || serverDefaults.quality;
     if (savedQ) {
         const qEl = document.getElementById(prefix + "-quality");
         if (qEl && qEl.querySelector(`option[value="${savedQ}"]`)) qEl.value = savedQ;
@@ -437,13 +506,16 @@ function restoreFormatPrefs(prefix) {
 
 /* ── Recently used folders ── */
 function getRecentFolders() {
-    try { return JSON.parse(localStorage.getItem("sdexe_recent_folders") || "[]"); } catch { return []; }
+    try {
+        const list = JSON.parse(lsGet("sdexe_recent_folders") || "[]");
+        return Array.isArray(list) ? list : [];
+    } catch { return []; }
 }
 function addRecentFolder(path) {
     if (!path) return;
     const recents = getRecentFolders().filter(f => f !== path);
     recents.unshift(path);
-    localStorage.setItem("sdexe_recent_folders", JSON.stringify(recents.slice(0, 5)));
+    lsSet("sdexe_recent_folders", JSON.stringify(recents.slice(0, 5)));
 }
 
 /* ── Render Single Video ── */
@@ -483,13 +555,13 @@ function renderFormatPicker(data) {
     picker.hidden = false;
     pills.style.display = "none";
     mainBtn.style.display = "none";
-    const savedTab = localStorage.getItem("sdexe_format_tab");
+    const savedTab = lsGet("sdexe_format_tab");
     switchFormatTab(savedTab === "audio" || !currentFormats.video.length ? "audio" : "video");
 }
 
 function switchFormatTab(kind) {
     document.querySelectorAll(".fp-tab").forEach(t => t.classList.toggle("active", t.dataset.kind === kind));
-    localStorage.setItem("sdexe_format_tab", kind);
+    lsSet("sdexe_format_tab", kind);
     const subWrap = document.getElementById("v-subtitle-wrap");
     if (subWrap) subWrap.style.display = kind === "video" ? "block" : "none";
 
@@ -525,6 +597,9 @@ function switchFormatTab(kind) {
             <button type="button" class="fp-btn" data-idx="${i}">Download</button>
         </div>`).join("");
     container.querySelectorAll(".fp-btn").forEach(btn => {
+        // Switching between Video and Audio redraws the rows. While a download
+        // is running they stay off, or a second one could be started on top of it.
+        btn.disabled = singleActive;
         btn.addEventListener("click", () => startSingleDownload(rows[btn.dataset.idx].pick, btn));
     });
 }
@@ -581,7 +656,8 @@ function renderPlaylist(data) {
 
     document.getElementById("p-title").textContent = data.title;
     document.getElementById("p-meta").textContent =
-        [data.uploader, `${data.count} videos`].filter(Boolean).join(" \u00B7 ");
+        [data.uploader, `${data.count} videos`,
+         data.skipped ? `${data.skipped} private or unavailable left out` : null].filter(Boolean).join(" \u00B7 ");
     document.getElementById("p-artist").value = data.uploader || "";
     document.getElementById("p-album").value = data.title || "";
 
@@ -597,7 +673,7 @@ function renderPlaylist(data) {
         div.className = "entry";
         div.dataset.index = i;
         div.innerHTML = `
-            <input type="checkbox" checked onchange="updateCount()">
+            <input type="checkbox" checked onchange="updateCount()" aria-label="${esc(entry.title)}">
             <img class="entry-thumb" src="${esc(entry.thumbnail || "")}" alt="" loading="lazy">
             <div class="entry-info">
                 <span class="entry-title">${esc(entry.title)}</span>
@@ -610,6 +686,8 @@ function renderPlaylist(data) {
 
     document.getElementById("p-select-all").checked = true;
     updateCount();
+    // A batch still running for the previous list no longer owns this button.
+    resetBtn(document.getElementById("p-dl-btn"), "Download Selected");
     restoreFormatPrefs("p");
     document.getElementById("playlist-panel").hidden = false;
 }
@@ -657,11 +735,31 @@ async function startSingleDownload(pick = null, rowBtn = null) {
 
     // Clip params
     const clipEnabled = document.getElementById("v-clip-toggle")?.checked;
-    const clipStart = clipEnabled ? parseTime(document.getElementById("v-clip-start").value) : null;
-    const clipEnd = clipEnabled ? parseTime(document.getElementById("v-clip-end").value) : null;
+    const clipStartText = clipEnabled ? document.getElementById("v-clip-start").value.trim() : "";
+    const clipEndText = clipEnabled ? document.getElementById("v-clip-end").value.trim() : "";
+    const clipStart = parseTime(clipStartText);
+    const clipEnd = parseTime(clipEndText);
+    // A time that can't be read used to be dropped without a word, and the
+    // whole video was downloaded instead of the clip.
+    if ((clipStartText && clipStart === null) || (clipEndText && clipEnd === null)) {
+        showError("Clip times look like 1:30 or 90 (seconds).");
+        return;
+    }
+    if (clipStart !== null && clipEnd !== null && clipEnd <= clipStart) {
+        showError("The clip has to end after it starts.");
+        return;
+    }
+    if (clipStart !== null && currentDuration && clipStart >= currentDuration) {
+        showError("The clip starts after the end of the video.");
+        return;
+    }
 
     const btn = rowBtn || document.getElementById("v-dl-btn");
     activeDlBtn = btn;
+    singleActive = true;
+    // What this download is, fixed now: by the time it finishes the card may
+    // show a different link.
+    const job = { gen: cardGen, url: currentUrl, title: metadata.title || "Download", fmt: activeFmtLabel, btn };
     if (rowBtn) {
         document.querySelectorAll(".fp-btn").forEach(b => { b.disabled = true; });
         document.querySelectorAll(".fp-row").forEach(r => r.classList.remove("is-active"));
@@ -693,16 +791,27 @@ async function startSingleDownload(pick = null, rowBtn = null) {
             body: JSON.stringify(body),
         });
         const data = await res.json();
-        if (!res.ok) { showError(data.error || "Download failed"); resetBtn(btn, "Download"); return; }
+        if (job.gen !== cardGen) {
+            // Another link was fetched while this one was starting.
+            if (res.ok) trackSingleProgress(data.id, false, job);
+            return;
+        }
+        if (!res.ok) { showError(data.error || "Download failed"); endSingle(btn); return; }
 
         document.getElementById("v-progress").hidden = false;
         showCancelBtn(data.id);
         const hasMetadata = !!(metadata.title || metadata.artist || metadata.album);
-        trackSingleProgress(data.id, hasMetadata);
+        trackSingleProgress(data.id, hasMetadata, job);
     } catch (e) {
+        if (job.gen !== cardGen) return;
         showError("Network error");
-        resetBtn(btn, "Download");
+        endSingle(btn);
     }
+}
+
+function endSingle(btn) {
+    singleActive = false;
+    resetBtn(btn, "Download");
 }
 
 function showCancelBtn(dlId) {
@@ -721,7 +830,14 @@ function showCancelBtn(dlId) {
     cancelBtn.onclick = async () => {
         cancelBtn.disabled = true;
         cancelBtn.textContent = "Cancelling...";
-        await fetch(`/api/cancel/${dlId}`, { method: "POST" });
+        try {
+            const res = await fetch(`/api/cancel/${dlId}`, { method: "POST" });
+            if (!res.ok) throw new Error("not cancelled");
+        } catch {
+            // Not cancelled: leave the button usable instead of stuck on "Cancelling...".
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = "Cancel";
+        }
     };
 }
 
@@ -730,16 +846,45 @@ function hideCancelBtn() {
     if (btn) btn.hidden = true;
 }
 
-function trackSingleProgress(id, hasMetadata, retries = 0) {
+function trackSingleProgress(id, hasMetadata, job, retries = 0) {
     const fill = document.getElementById("v-progress-fill");
     const statusEl = document.getElementById("v-progress-status");
     const pctEl = document.getElementById("v-progress-pct");
     const detailEl = document.getElementById("v-progress-text");
-    const btn = activeDlBtn || document.getElementById("v-dl-btn");
+    const btn = job.btn;
     const source = new EventSource(`/api/progress/${id}`);
+    // False once another link has been fetched: the card now belongs to that
+    // link, so this download finishes quietly (a toast and a history entry).
+    const onCard = () => job.gen === cardGen;
 
     source.onmessage = (ev) => {
         const d = JSON.parse(ev.data);
+        retries = 0;  // the limit is on failures in a row, not over a long download
+        if (d.error && !d.status) {
+            // The server no longer knows this id (it was restarted).
+            source.close();
+            if (!onCard()) return;
+            fill.classList.add("is-error");
+            hideCancelBtn();
+            showError("sdexe lost track of this download. It was probably restarted. Start the download again.");
+            if (statusEl) statusEl.textContent = "Failed";
+            if (pctEl) pctEl.textContent = "";
+            if (detailEl) detailEl.textContent = "";
+            endSingle(btn);
+            return;
+        }
+        if (!onCard()) {
+            if (d.status === "done") {
+                source.close();
+                addToHistory(job.title, job.fmt, id, job.url);
+                showToast(`${job.title} finished. It is in Recent downloads.`);
+                sendNotification("sdexe", `Downloaded: ${job.title}`);
+            } else if (d.status === "error") {
+                source.close();
+                showToast(`${job.title}: ${d.error || "Download failed"}`, "error");
+            }
+            return;
+        }
         fill.style.width = d.progress + "%";
         const detail = d.detail || "";
         if (d.status === "downloading") {
@@ -768,11 +913,10 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
             }
             if (pctEl) pctEl.textContent = "";
             if (detailEl) detailEl.textContent = "";
-            const title = document.getElementById("v-title").value.trim() || "Download";
-            const fmt = activeFmtLabel || document.getElementById("v-format").value;
-            addToHistory(title, fmt, id);
+            const title = job.title;
+            addToHistory(title, job.fmt, id, job.url);
             if (d.auto_saved && d.saved_path) {
-                const filename = d.saved_path.split("/").pop();
+                const filename = d.saved_path.split(/[\\/]/).pop();
                 const savedPath = d.saved_path;
                 showToast(`Saved: ${filename}`, "success", [
                     { label: "Open file", fn: () => fetch("/api/open-file", {
@@ -789,7 +933,7 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
                 showToast(`${title} ready. Click Save File`);
             }
             sendNotification("sdexe", `Downloaded: ${title}`);
-            resetBtn(btn, "Download");
+            endSingle(btn);
         } else if (d.status === "error") {
             source.close();
             fill.classList.add("is-error");
@@ -798,20 +942,22 @@ function trackSingleProgress(id, hasMetadata, retries = 0) {
             if (statusEl) statusEl.textContent = "Failed";
             if (pctEl) pctEl.textContent = "";
             if (detailEl) detailEl.textContent = "";
-            resetBtn(btn, "Download");
+            endSingle(btn);
         }
     };
     source.onerror = () => {
         source.close();
         if (retries < 3) {
-            if (statusEl) statusEl.textContent = `Connection lost, retrying (${retries + 1}/3)...`;
-            if (pctEl) pctEl.textContent = "";
-            setTimeout(() => trackSingleProgress(id, hasMetadata, retries + 1), 1500);
-        } else {
+            if (onCard()) {
+                if (statusEl) statusEl.textContent = `Connection lost, retrying (${retries + 1}/3)...`;
+                if (pctEl) pctEl.textContent = "";
+            }
+            setTimeout(() => trackSingleProgress(id, hasMetadata, job, retries + 1), 1500);
+        } else if (onCard()) {
             if (statusEl) statusEl.textContent = "Connection lost. Check download history";
             if (pctEl) pctEl.textContent = "";
             hideCancelBtn();
-            resetBtn(btn, "Download");
+            endSingle(btn);
         }
     };
 }
@@ -845,7 +991,7 @@ function updateSummary(current, total, done, failed, currentTitle) {
     document.getElementById("bs-stats").innerHTML = parts.join('<span style="color:var(--border)">|</span>');
 }
 
-function finishSummary(total, done, failed) {
+function finishSummary(total, done, failed, completedIds) {
     const summary = document.getElementById("p-summary");
     summary.classList.add("is-done");
 
@@ -873,8 +1019,11 @@ function finishSummary(total, done, failed) {
         btn.className = "btn-save btn-zip";
         btn.textContent = "Download All as ZIP";
         btn.href = "#";
+        let zipping = false;
         btn.onclick = async (e) => {
             e.preventDefault();
+            if (zipping) return;  // Enter on the focused link gets past pointer-events
+            zipping = true;
             btn.textContent = "Zipping...";
             btn.style.pointerEvents = "none";
             try {
@@ -895,6 +1044,7 @@ function finishSummary(total, done, failed) {
             } catch {
                 btn.textContent = "ZIP failed";
             } finally {
+                zipping = false;
                 btn.style.pointerEvents = "";
             }
         };
@@ -918,8 +1068,15 @@ async function startPlaylistDownload() {
     const album = document.getElementById("p-album").value.trim();
     const btn = document.getElementById("p-dl-btn");
     btn.disabled = true;
-    completedIds = [];
     requestNotifPermission();
+
+    // This batch's own list and results. Fetching another link replaces
+    // playlistEntries and the rows on the page; a batch that kept reading
+    // those would download the new list's links under the old rows.
+    const gen = cardGen;
+    const live = () => gen === cardGen;
+    const batchEntries = playlistEntries;
+    const completedIds = [];
 
     const total = selected.length;
     let done = 0;
@@ -940,14 +1097,17 @@ async function startPlaylistDownload() {
     const CONCURRENCY = Math.min(3, selected.length);
 
     async function worker() {
-        while (queued < selected.length) {
+        // Stops taking new items once the list is gone from the page.
+        while (queued < selected.length && live()) {
             const i = queued++;
             const el = selected[i];
             const idx = parseInt(el.dataset.index);
-            const entry = playlistEntries[idx];
+            const entry = batchEntries[idx];
             const status = el.querySelector(".entry-status");
 
             if (status.querySelector(".entry-save")) {
+                // Downloaded by an earlier run of this list: keep it in the ZIP.
+                if (el.dataset.dlId) completedIds.push(el.dataset.dlId);
                 done++;
                 updateSummary(done + failed, total, done, failed, null);
                 continue;
@@ -963,17 +1123,24 @@ async function startPlaylistDownload() {
             `;
 
             try {
-                const res = await fetch("/api/download", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({
-                        url: entry.url,
-                        format: fmt,
-                        quality,
-                        metadata: {title: entry.title, artist, album},
-                    }),
-                });
-                const data = await res.json();
+                let res, data;
+                for (let attempt = 0; ; attempt++) {
+                    res = await fetch("/api/download", {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({
+                            url: entry.url,
+                            format: fmt,
+                            quality,
+                            metadata: {title: entry.title, artist, album},
+                        }),
+                    });
+                    data = await res.json();
+                    // The server takes 12 new downloads per 10 seconds. A run of
+                    // short or failing items can outpace that: wait, don't fail.
+                    if (res.status !== 429 || attempt >= 5 || !live()) break;
+                    await new Promise(r => setTimeout(r, 2500));
+                }
                 if (!res.ok) {
                     const reason = data.error || `Request failed (${res.status})`;
                     status.innerHTML = `<span class="entry-error" title="${esc(reason)}">${esc(reason)}</span>`;
@@ -984,8 +1151,9 @@ async function startPlaylistDownload() {
                     if (ok) {
                         done++;
                         el.classList.add("is-done");
+                        el.dataset.dlId = data.id;
                         completedIds.push(data.id);
-                        addToHistory(entry.title, fmt, data.id);
+                        addToHistory(entry.title, fmt, data.id, entry.url);
                     } else { failed++; }
                 }
             } catch {
@@ -996,14 +1164,19 @@ async function startPlaylistDownload() {
             }
 
             el.classList.remove("is-active");
-            updateSummary(done + failed, total, done, failed, null);
+            if (live()) updateSummary(done + failed, total, done, failed, null);
         }
     }
 
     const workers = Array.from({length: CONCURRENCY}, worker);
     await Promise.all(workers);
 
-    finishSummary(total, done, failed);
+    if (!live()) {
+        // The list was replaced mid-batch. What finished is in Recent downloads.
+        if (done > 0) showToast(`Earlier batch stopped: ${done} of ${total} downloaded.`);
+        return;
+    }
+    finishSummary(total, done, failed, completedIds);
     resetBtn(btn, "Download Selected");
 }
 
@@ -1015,6 +1188,16 @@ function trackEntryProgress(id, statusEl, retries = 0) {
 
         source.onmessage = (ev) => {
             const d = JSON.parse(ev.data);
+            retries = 0;
+            if (d.error && !d.status) {
+                // The server no longer knows this id (it was restarted).
+                source.close();
+                const reason = "sdexe was restarted during this download";
+                statusEl.innerHTML = `<span class="entry-error" title="${esc(reason)}">${esc(reason)}</span>`;
+                lastEntryError = reason;
+                resolve(false);
+                return;
+            }
             if (fill()) fill().style.width = d.progress + "%";
 
             if (d.status === "downloading" && pct()) {
@@ -1052,6 +1235,14 @@ function trackEntryProgress(id, statusEl, retries = 0) {
     });
 }
 
+/* ── Keyboard: the Recent downloads header is a div, so give it a button's keys ── */
+document.querySelector(".history-header")?.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleHistory();
+    }
+});
+
 /* ── Keyboard: "/" to focus URL bar ── */
 document.addEventListener("keydown", e => {
     if (e.key === "/" && !["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)) {
@@ -1087,7 +1278,7 @@ document.getElementById("url").addEventListener("paste", () => {
 /* ── Persist quality selection ── */
 document.addEventListener("change", e => {
     if (e.target.id === "v-quality" || e.target.id === "p-quality") {
-        localStorage.setItem("sdexe_quality", e.target.value);
+        lsSet("sdexe_quality", e.target.value);
     }
 });
 

@@ -46,7 +46,7 @@
                 <p class="meta">Live statistics as you type.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Text</label>
+                    <label for="wc-input">Text</label>
                     <textarea id="wc-input" class="convert-textarea" rows="10" placeholder="Paste or type your text here..." oninput="updateWordCount()"></textarea>
                 </div>
 
@@ -87,11 +87,11 @@
 
                 <div class="field-row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
                     <div class="field" style="flex: 1; min-width: 180px;">
-                        <label>Find</label>
+                        <label for="fr-find">Find</label>
                         <input type="text" id="fr-find" placeholder="Search for...">
                     </div>
                     <div class="field" style="flex: 1; min-width: 180px;">
-                        <label>Replace with</label>
+                        <label for="fr-replace">Replace with</label>
                         <input type="text" id="fr-replace" placeholder="Replace with...">
                     </div>
                 </div>
@@ -102,7 +102,7 @@
                 </div>
 
                 <div class="field" style="margin-top: 12px;">
-                    <label>Input text</label>
+                    <label for="fr-input">Input text</label>
                     <textarea id="fr-input" class="convert-textarea" rows="6" placeholder="Paste text here..."></textarea>
                 </div>
 
@@ -115,7 +115,7 @@
 
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Output</label>
+                        <label for="fr-output">Output</label>
                         <button class="btn-copy" onclick="copyText('fr-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="fr-output" class="convert-textarea" rows="6" readonly placeholder="Result will appear here..."></textarea>
@@ -133,17 +133,17 @@
 
                 <div class="field-row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
                     <div class="field" style="flex: 3; min-width: 200px;">
-                        <label>Pattern</label>
+                        <label for="rx-pattern">Pattern</label>
                         <input type="text" id="rx-pattern" placeholder="e.g. \b\w+@\w+\.\w+\b" oninput="doRegex()">
                     </div>
                     <div class="field" style="flex: 1; min-width: 80px;">
-                        <label>Flags</label>
+                        <label for="rx-flags">Flags</label>
                         <input type="text" id="rx-flags" value="g" placeholder="g, i, m" oninput="doRegex()">
                     </div>
                 </div>
 
                 <div class="field" style="margin-top: 12px;">
-                    <label>Test string</label>
+                    <label for="rx-input">Test string</label>
                     <textarea id="rx-input" class="convert-textarea" rows="6" placeholder="Paste text to test against..." oninput="doRegex()"></textarea>
                 </div>
 
@@ -161,7 +161,7 @@
                 <p class="meta">Encode or decode text and files as Base64.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Input</label>
+                    <label for="b64-input">Input</label>
                     <textarea id="b64-input" class="convert-textarea" rows="5" placeholder="Paste text or Base64 string..."></textarea>
                 </div>
 
@@ -175,7 +175,7 @@
 
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Output</label>
+                        <label for="b64-output">Output</label>
                         <button class="btn-copy" onclick="copyText('b64-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="b64-output" class="convert-textarea" rows="5" readonly placeholder="Result will appear here..."></textarea>
@@ -191,7 +191,7 @@
                 <p class="meta">Generate cryptographic hashes of text using the browser's Web Crypto API.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Input text</label>
+                    <label for="hash-input">Input text</label>
                     <textarea id="hash-input" class="convert-textarea" rows="4" placeholder="Enter text to hash..."></textarea>
                 </div>
 
@@ -224,11 +224,11 @@
 
                 <div class="field-row" style="margin-top: 16px; gap: 12px;">
                     <div class="field" style="flex: 1;">
-                        <label>Original</label>
+                        <label for="diff-original">Original</label>
                         <textarea id="diff-original" class="convert-textarea" rows="8" placeholder="Paste original text..."></textarea>
                     </div>
                     <div class="field" style="flex: 1;">
-                        <label>Modified</label>
+                        <label for="diff-modified">Modified</label>
                         <textarea id="diff-modified" class="convert-textarea" rows="8" placeholder="Paste modified text..."></textarea>
                     </div>
                 </div>
@@ -256,36 +256,36 @@
 
                     <div style="flex: 1; min-width: 240px;">
                         <div class="field" style="margin-bottom: 12px;">
-                            <label>HEX</label>
+                            <label for="color-hex">HEX</label>
                             <input type="text" id="color-hex" value="#3b82f6" placeholder="#000000" oninput="colorFromHex()" style="font-family: monospace;">
                         </div>
 
                         <div class="field-row" style="gap: 8px; margin-bottom: 12px;">
                             <div class="field">
-                                <label>R</label>
+                                <label for="color-r">R</label>
                                 <input type="number" id="color-r" min="0" max="255" value="59" oninput="colorFromRgb()">
                             </div>
                             <div class="field">
-                                <label>G</label>
+                                <label for="color-g">G</label>
                                 <input type="number" id="color-g" min="0" max="255" value="130" oninput="colorFromRgb()">
                             </div>
                             <div class="field">
-                                <label>B</label>
+                                <label for="color-b">B</label>
                                 <input type="number" id="color-b" min="0" max="255" value="246" oninput="colorFromRgb()">
                             </div>
                         </div>
 
                         <div class="field-row" style="gap: 8px;">
                             <div class="field">
-                                <label>H (0-360)</label>
+                                <label for="color-h">H (0-360)</label>
                                 <input type="number" id="color-h" min="0" max="360" value="217" oninput="colorFromHsl()">
                             </div>
                             <div class="field">
-                                <label>S (%)</label>
+                                <label for="color-s">S (%)</label>
                                 <input type="number" id="color-s" min="0" max="100" value="91" oninput="colorFromHsl()">
                             </div>
                             <div class="field">
-                                <label>L (%)</label>
+                                <label for="color-l">L (%)</label>
                                 <input type="number" id="color-l" min="0" max="100" value="60" oninput="colorFromHsl()">
                             </div>
                         </div>
@@ -306,7 +306,7 @@
                 <p class="meta">Encode or decode URL components.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Input</label>
+                    <label for="url-input">Input</label>
                     <textarea id="url-input" class="convert-textarea" rows="4" placeholder="Paste text or encoded URL..."></textarea>
                 </div>
 
@@ -317,7 +317,7 @@
 
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Output</label>
+                        <label for="url-output">Output</label>
                         <button class="btn-copy" onclick="copyText('url-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="url-output" class="convert-textarea" rows="4" readonly placeholder="Result will appear here..."></textarea>
@@ -333,7 +333,7 @@
                 <p class="meta">Format, validate, and minify JSON.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Input JSON</label>
+                    <label for="json-input">Input JSON</label>
                     <textarea id="json-input" class="convert-textarea" rows="8" placeholder='{"key": "value", "array": [1,2,3]}' style="font-family: ui-monospace, monospace;"></textarea>
                 </div>
 
@@ -344,7 +344,7 @@
 
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Output</label>
+                        <label for="json-output">Output</label>
                         <button class="btn-copy" onclick="copyText('json-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="json-output" class="convert-textarea" rows="8" readonly style="font-family: ui-monospace, monospace;"></textarea>
@@ -360,7 +360,7 @@
                 <p class="meta">Decode a JSON Web Token to inspect its header and payload.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>JWT Token</label>
+                    <label for="jwt-input">JWT Token</label>
                     <textarea id="jwt-input" class="convert-textarea" rows="4" placeholder="eyJhbGciOiJIUzI1NiIs..." style="font-family: ui-monospace, monospace;"></textarea>
                 </div>
 
@@ -380,7 +380,7 @@
                 <p class="meta">Convert text between different cases.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Input</label>
+                    <label for="case-input">Input</label>
                     <textarea id="case-input" class="convert-textarea" rows="4" placeholder="Enter text to convert..."></textarea>
                 </div>
 
@@ -395,7 +395,7 @@
 
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Output</label>
+                        <label for="case-output">Output</label>
                         <button class="btn-copy" onclick="copyText('case-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="case-output" class="convert-textarea" rows="4" readonly></textarea>
@@ -411,7 +411,7 @@
 
                 <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
                     <div class="field" style="width: 120px;">
-                        <label>Count</label>
+                        <label for="uuid-count">Count</label>
                         <input type="number" id="uuid-count" value="1" min="1" max="100">
                     </div>
                     <button class="btn-download" onclick="doUuid()" style="height: 42px; padding: 0 24px; width: auto;">Generate</button>
@@ -419,7 +419,7 @@
 
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>UUIDs</label>
+                        <label for="uuid-output">UUIDs</label>
                         <button class="btn-copy" onclick="copyText('uuid-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="uuid-output" class="convert-textarea" rows="6" readonly style="font-family: ui-monospace, monospace;"></textarea>
@@ -436,14 +436,14 @@
                 <div style="margin-top: 16px; display: flex; gap: 16px; flex-wrap: wrap;">
                     <div style="flex: 1; min-width: 240px;">
                         <div class="field">
-                            <label>Unix Timestamp</label>
+                            <label for="ts-unix">Unix Timestamp</label>
                             <input type="text" id="ts-unix" placeholder="e.g. 1700000000" oninput="tsFromUnix()">
                         </div>
                         <div id="ts-date-display" style="margin-top: 8px; font-size: .85rem; color: var(--text-secondary);"></div>
                     </div>
                     <div style="flex: 1; min-width: 240px;">
                         <div class="field">
-                            <label>Date/Time</label>
+                            <label for="ts-datetime">Date/Time</label>
                             <input type="datetime-local" id="ts-datetime" oninput="tsFromDatetime()" step="1">
                         </div>
                         <div id="ts-unix-display" style="margin-top: 8px; font-size: .85rem; color: var(--text-secondary); font-family: ui-monospace, monospace;"></div>
@@ -464,7 +464,7 @@
 
                 <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
                     <div class="field" style="width: 120px;">
-                        <label>Paragraphs</label>
+                        <label for="lorem-count">Paragraphs</label>
                         <input type="number" id="lorem-count" value="3" min="1" max="20">
                     </div>
                     <button class="btn-download" onclick="doLorem()" style="height: 42px; padding: 0 24px; width: auto;">Generate</button>
@@ -472,7 +472,7 @@
 
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Output</label>
+                        <label for="lorem-output">Output</label>
                         <button class="btn-copy" onclick="copyText('lorem-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="lorem-output" class="convert-textarea" rows="8" readonly></textarea>
@@ -488,7 +488,7 @@
 
                 <div style="margin-top: 16px; display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
                     <div class="field" style="width: 120px;">
-                        <label>Length</label>
+                        <label for="pw-length">Length</label>
                         <input type="number" id="pw-length" value="20" min="4" max="128">
                     </div>
                     <button class="btn-download" onclick="doPassword()" style="height: 42px; padding: 0 24px; width: auto;">Generate</button>
@@ -503,7 +503,7 @@
 
                 <div class="field" style="margin-top: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Password</label>
+                        <label for="pw-output">Password</label>
                         <button class="btn-copy" onclick="copyText('pw-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <input type="text" id="pw-output" readonly style="font-family: ui-monospace, monospace; font-size: 1.1rem; letter-spacing: .05em; padding: 14px;">
@@ -521,7 +521,7 @@
                 <p class="meta">Sort, dedupe, number, join and split lines of text.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Input</label>
+                    <label for="lt-input">Input</label>
                     <textarea id="lt-input" class="convert-textarea" rows="6" placeholder="One item per line..."></textarea>
                 </div>
 
@@ -544,19 +544,19 @@
                 </div>
 
                 <div class="tt-opts">
-                    <div class="field"><label>Prefix</label><input type="text" id="lt-prefix" placeholder="- " style="width: 110px;"></div>
-                    <div class="field"><label>Suffix</label><input type="text" id="lt-suffix" placeholder=";" style="width: 110px;"></div>
+                    <div class="field"><label for="lt-prefix">Prefix</label><input type="text" id="lt-prefix" placeholder="- " style="width: 110px;"></div>
+                    <div class="field"><label for="lt-suffix">Suffix</label><input type="text" id="lt-suffix" placeholder=";" style="width: 110px;"></div>
                     <button class="pill" onclick="doLines('affix')" style="height: 40px;">Add prefix / suffix</button>
                 </div>
                 <div class="tt-opts">
-                    <div class="field"><label>Separator</label><input type="text" id="lt-sep" value=", " placeholder=", or \t" style="width: 110px;"></div>
+                    <div class="field"><label for="lt-sep">Separator</label><input type="text" id="lt-sep" value=", " placeholder=", or \t" style="width: 110px;"></div>
                     <button class="pill" onclick="doLines('join')" style="height: 40px;">Join lines</button>
                     <button class="pill" onclick="doLines('split')" style="height: 40px;">Split by separator</button>
                 </div>
 
                 <div class="field" style="margin-top: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Output</label>
+                        <label for="lt-output">Output</label>
                         <button class="btn-copy" onclick="copyText('lt-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="lt-output" class="convert-textarea" rows="6" readonly placeholder="Result will appear here..."></textarea>
@@ -575,7 +575,7 @@
                 <p class="meta">Translate a cron expression into plain English and preview its next run times.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Cron expression</label>
+                    <label for="cron-input">Cron expression</label>
                     <input type="text" id="cron-input" value="30 9 * * 1-5" placeholder="min hour day month weekday  (or sec min hour day month weekday)" style="font-family: ui-monospace, monospace;" spellcheck="false">
                 </div>
                 <div class="tt-chips" id="cron-examples">
@@ -603,7 +603,7 @@
                 <p class="meta">Encode text as HTML entities or decode named, decimal and hex entities back to text.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Input</label>
+                    <label for="ent-input">Input</label>
                     <textarea id="ent-input" class="convert-textarea" rows="5" placeholder="Paste text or HTML with entities..."></textarea>
                 </div>
 
@@ -627,7 +627,7 @@
 
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Output</label>
+                        <label for="ent-output">Output</label>
                         <button class="btn-copy" onclick="copyText('ent-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="ent-output" class="convert-textarea" rows="5" readonly placeholder="Result will appear here..."></textarea>
@@ -643,7 +643,7 @@
 
                 <div class="tt-opts" style="margin-top: 16px;">
                     <div class="field" style="min-width: 200px;">
-                        <label>Language</label>
+                        <label for="esc-lang">Language</label>
                         <select id="esc-lang">
                             <option value="json">JSON string</option>
                             <option value="js">JavaScript string</option>
@@ -662,13 +662,13 @@
                 </div>
 
                 <div class="field" style="margin-top: 12px;">
-                    <label>Input</label>
+                    <label for="esc-input">Input</label>
                     <textarea id="esc-input" class="convert-textarea" rows="5" placeholder="Paste the raw or escaped string..."></textarea>
                 </div>
 
                 <div class="field" style="margin-top: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Output</label>
+                        <label for="esc-output">Output</label>
                         <button class="btn-copy" onclick="copyText('esc-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <textarea id="esc-output" class="convert-textarea" rows="5" readonly placeholder="Result will appear here..."></textarea>
@@ -685,11 +685,11 @@
 
                 <div class="tt-opts" style="margin-top: 16px; align-items: flex-end;">
                     <div class="field" style="flex: 1 1 240px;">
-                        <label>Number</label>
+                        <label for="nb-input">Number</label>
                         <input type="text" id="nb-input" value="255" placeholder="e.g. 255, 0xFF, -42, 1010" style="font-family: ui-monospace, monospace; width: 100%;" spellcheck="false">
                     </div>
                     <div class="field">
-                        <label>Input base</label>
+                        <label for="nb-base">Input base</label>
                         <select id="nb-base">
                             <option value="2">Binary (2)</option>
                             <option value="8">Octal (8)</option>
@@ -699,7 +699,7 @@
                         </select>
                     </div>
                     <div class="field" id="nb-custom-wrap" hidden>
-                        <label>Base (2-36)</label>
+                        <label for="nb-custom">Base (2-36)</label>
                         <input type="number" id="nb-custom" min="2" max="36" value="36" style="width: 90px;">
                     </div>
                     <label class="check-label" style="padding-bottom: 12px;"><input type="checkbox" id="nb-upper" checked> Uppercase hex</label>
@@ -726,18 +726,18 @@
                 <p class="meta">Convert length, mass, temperature, area, volume, speed, time, data size, energy and pressure.</p>
 
                 <div class="tt-opts" style="margin-top: 16px;">
-                    <div class="field"><label>Category</label><select id="un-cat"></select></div>
+                    <div class="field"><label for="un-cat">Category</label><select id="un-cat"></select></div>
                 </div>
                 <div class="tt-opts" style="align-items: flex-end;">
-                    <div class="field" style="flex: 1 1 140px;"><label>Value</label><input type="number" id="un-value" value="1" step="any" style="width: 100%;"></div>
-                    <div class="field" style="flex: 1 1 160px;"><label>From</label><select id="un-from" style="width: 100%;"></select></div>
+                    <div class="field" style="flex: 1 1 140px;"><label for="un-value">Value</label><input type="number" id="un-value" value="1" step="any" style="width: 100%;"></div>
+                    <div class="field" style="flex: 1 1 160px;"><label for="un-from">From</label><select id="un-from" style="width: 100%;"></select></div>
                     <button class="pill" id="un-swap" title="Swap units" style="height: 40px;">&#8644; Swap</button>
-                    <div class="field" style="flex: 1 1 160px;"><label>To</label><select id="un-to" style="width: 100%;"></select></div>
+                    <div class="field" style="flex: 1 1 160px;"><label for="un-to">To</label><select id="un-to" style="width: 100%;"></select></div>
                 </div>
 
                 <div class="field" style="margin-top: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Result</label>
+                        <label for="un-result">Result</label>
                         <button class="btn-copy" onclick="copyText('un-result', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <input type="text" id="un-result" readonly style="font-family: ui-monospace, monospace; font-size: 1.05rem; padding: 14px;">
@@ -754,15 +754,15 @@
                 <p class="meta">Turn a title into a clean URL slug.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Text</label>
+                    <label for="slug-input">Text</label>
                     <textarea id="slug-input" class="convert-textarea" rows="3" placeholder="e.g. Crème Brûlée &amp; the Art of Dessert" style="min-height: 80px;"></textarea>
                 </div>
 
                 <div class="tt-opts">
-                    <div class="field"><label>Separator</label>
+                    <div class="field"><label for="slug-sep">Separator</label>
                         <select id="slug-sep"><option value="-">Hyphen (-)</option><option value="_">Underscore (_)</option></select>
                     </div>
-                    <div class="field"><label>Max length</label><input type="number" id="slug-max" min="0" placeholder="none" style="width: 100px;"></div>
+                    <div class="field"><label for="slug-max">Max length</label><input type="number" id="slug-max" min="0" placeholder="none" style="width: 100px;"></div>
                 </div>
                 <div style="margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;">
                     <label class="check-label"><input type="checkbox" id="slug-lower" checked> Lowercase</label>
@@ -772,7 +772,7 @@
 
                 <div class="field" style="margin-top: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Slug</label>
+                        <label for="slug-output">Slug</label>
                         <button class="btn-copy" onclick="copyText('slug-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                     <input type="text" id="slug-output" readonly style="font-family: ui-monospace, monospace; font-size: 1.05rem; padding: 14px;">
@@ -794,7 +794,7 @@
 
                 <div id="mt-build">
                     <div class="field" style="margin-top: 12px;">
-                        <label>Paste CSV / TSV (delimiter auto-detected, quoted fields supported)</label>
+                        <label for="mt-input">Paste CSV / TSV (delimiter auto-detected, quoted fields supported)</label>
                         <textarea id="mt-input" class="convert-textarea" rows="5" placeholder="Name, Role, Start&#10;&quot;Smith, John&quot;, Engineer, 2021&#10;Ada, Lead, 2019" style="min-height: 100px;"></textarea>
                     </div>
 
@@ -812,7 +812,7 @@
 
                     <div class="field" style="margin-top: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>Markdown</label>
+                        <label for="mt-output">Markdown</label>
                         <button class="btn-copy" onclick="copyText('mt-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                         <textarea id="mt-output" class="convert-textarea" rows="7" readonly style="font-family: ui-monospace, monospace; white-space: pre; overflow-x: auto;"></textarea>
@@ -821,17 +821,17 @@
 
                 <div id="mt-reverse" hidden>
                     <div class="field" style="margin-top: 12px;">
-                        <label>Markdown table</label>
+                        <label for="mt-md-input">Markdown table</label>
                         <textarea id="mt-md-input" class="convert-textarea" rows="6" placeholder="| Name | Role |&#10;|------|------|&#10;| Ada  | Lead |" style="font-family: ui-monospace, monospace;"></textarea>
                     </div>
                     <div class="tt-opts">
-                        <div class="field"><label>Delimiter</label>
+                        <div class="field"><label for="mt-csv-delim">Delimiter</label>
                             <select id="mt-csv-delim"><option value=",">Comma (CSV)</option><option value="&#9;">Tab (TSV)</option><option value=";">Semicolon</option></select>
                         </div>
                     </div>
                     <div class="field" style="margin-top: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label>CSV</label>
+                        <label for="mt-csv-output">CSV</label>
                         <button class="btn-copy" onclick="copyText('mt-csv-output', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
                     </div>
                         <textarea id="mt-csv-output" class="convert-textarea" rows="6" readonly style="font-family: ui-monospace, monospace;"></textarea>
@@ -847,20 +847,20 @@
                 <p class="meta">Read text aloud with your browser's built-in voices.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Text</label>
+                    <label for="tts-input">Text</label>
                     <textarea id="tts-input" class="convert-textarea" rows="6" placeholder="Type or paste something to read aloud..."></textarea>
                 </div>
 
                 <div class="tt-opts">
-                    <div class="field" style="flex: 1 1 260px;"><label>Voice</label><select id="tts-voice" style="width: 100%;"><option>Loading voices...</option></select></div>
+                    <div class="field" style="flex: 1 1 260px;"><label for="tts-voice">Voice</label><select id="tts-voice" style="width: 100%;"><option>Loading voices...</option></select></div>
                 </div>
                 <div class="field-row" style="gap: 24px; flex-wrap: wrap;">
                     <div class="field" style="min-width: 200px;">
-                        <label>Rate: <span id="tts-rate-val">1.0</span>x</label>
+                        <label for="tts-rate">Rate: <span id="tts-rate-val">1.0</span>x</label>
                         <input type="range" id="tts-rate" min="0.5" max="2" step="0.1" value="1">
                     </div>
                     <div class="field" style="min-width: 200px;">
-                        <label>Pitch: <span id="tts-pitch-val">1.0</span></label>
+                        <label for="tts-pitch">Pitch: <span id="tts-pitch-val">1.0</span></label>
                         <input type="range" id="tts-pitch" min="0" max="2" step="0.1" value="1">
                     </div>
                 </div>

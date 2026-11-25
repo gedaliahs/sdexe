@@ -57,7 +57,7 @@
                     <p class="meta">Where files land after downloading.</p>
 
                     <div class="field" style="margin-top: 16px;">
-                        <label>Output folder</label>
+                        <label for="output-folder">Output folder</label>
                         <div class="folder-input-row">
                             <input type="text" id="output-folder" placeholder="Leave empty to save manually">
                             <button class="btn-settings-browse" onclick="browseFolder()">Browse</button>
@@ -66,7 +66,7 @@
 
                     <div class="field-row" style="margin-top: 14px;">
                         <div class="field">
-                            <label>Default format</label>
+                            <label for="default-format">Default format</label>
                             <select id="default-format" onchange="updateDefaultQuality()">
                                 <option value="mp3">MP3 (Audio)</option>
                                 <option value="mp4">MP4 (Video)</option>
@@ -75,7 +75,7 @@
                             </select>
                         </div>
                         <div class="field">
-                            <label>Default quality</label>
+                            <label for="default-quality">Default quality</label>
                             <select id="default-quality">
                                 <option value="best">Best</option>
                             </select>
@@ -83,7 +83,7 @@
                     </div>
 
                     <div class="field" style="margin-top: 14px;">
-                        <label>Filename template</label>
+                        <label for="output-template">Filename template</label>
                         <input type="text" id="output-template" placeholder="{title}" style="font-family: monospace;">
                         <p class="meta" style="margin-top:4px;">Tokens: <code>{title}</code> <code>{artist}</code> <code>{album}</code> <code>{uploader}</code></p>
                     </div>
@@ -159,6 +159,14 @@
 
 {% block scripts %}
 <script>
+// localStorage throws when the browser blocks site data.
+function lsGet(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+}
+function lsSet(key, value) {
+    try { localStorage.setItem(key, value); } catch {}
+}
+
 function updateDefaultQuality() {
     const fmt = document.getElementById("default-format").value;
     const q = document.getElementById("default-quality");
@@ -174,21 +182,30 @@ function updateDefaultQuality() {
         q.innerHTML = `<option value="best">Lossless</option>`;
         q.disabled = true;
     }
-    const savedQ = localStorage.getItem("sdexe_quality");
-    if (savedQ && q.querySelector(`option[value="${savedQ}"]`)) q.value = savedQ;
+    const savedQ = lsGet("sdexe_quality");
+    if (savedQ && [...q.options].some(o => o.value === savedQ)) q.value = savedQ;
 }
 
 async function browseFolder() {
     const btn = document.querySelector(".btn-settings-browse");
     btn.disabled = true;
     btn.textContent = "Picking…";
+    const status = document.getElementById("folder-status");
     try {
         const res = await fetch("/api/browse-folder", { method: "POST" });
         const data = await res.json();
-        if (!data.cancelled && !data.error && data.path) {
+        if (data.error) {
+            // e.g. a system folder was picked, or this platform has no folder dialog
+            status.textContent = data.error;
+            status.className = "settings-status error";
+        } else if (!data.cancelled && data.path) {
             document.getElementById("output-folder").value = data.path;
+            status.textContent = "";
         }
-    } catch {}
+    } catch {
+        status.textContent = "Could not open the folder picker. Type the path instead.";
+        status.className = "settings-status error";
+    }
     btn.disabled = false;
     btn.textContent = "Browse";
 }
@@ -244,21 +261,28 @@ async function updateYtdlp() {
 }
 
 async function loadSettings() {
-    const res = await fetch("/api/config");
-    const cfg = await res.json();
+    let cfg = {};
+    try {
+        const res = await fetch("/api/config");
+        cfg = await res.json();
+    } catch {
+        const status = document.getElementById("folder-status");
+        status.textContent = "Could not load your settings. Is sdexe still running?";
+        status.className = "settings-status error";
+    }
 
     document.getElementById("open-browser").checked = cfg.open_browser !== false;
     document.getElementById("output-folder").value = cfg.output_folder || "";
     document.getElementById("output-template").value = cfg.output_template || "";
 
-    const fmt = localStorage.getItem("sdexe_format") || cfg.default_format || "mp3";
+    const fmt = lsGet("sdexe_format") || cfg.default_format || "mp3";
     const fmtEl = document.getElementById("default-format");
-    if (fmtEl.querySelector(`option[value="${fmt}"]`)) fmtEl.value = fmt;
+    if ([...fmtEl.options].some(o => o.value === fmt)) fmtEl.value = fmt;
     updateDefaultQuality();
 
-    const quality = localStorage.getItem("sdexe_quality") || cfg.default_quality || "best";
+    const quality = lsGet("sdexe_quality") || cfg.default_quality || "best";
     const qEl = document.getElementById("default-quality");
-    if (qEl.querySelector(`option[value="${quality}"]`)) qEl.value = quality;
+    if ([...qEl.options].some(o => o.value === quality)) qEl.value = quality;
 
     const notifEl = document.getElementById("notif-enabled");
     const statusEl = document.getElementById("notif-status");
@@ -266,7 +290,9 @@ async function loadSettings() {
         notifEl.disabled = true;
         statusEl.textContent = "Notifications not supported in this browser.";
     } else if (Notification.permission === "granted") {
-        notifEl.checked = true;
+        // The browser permission can't be given back, so "off" is remembered
+        // here and the media page checks it before notifying.
+        notifEl.checked = lsGet("sdexe_notifications") !== "off";
     } else if (Notification.permission === "denied") {
         notifEl.disabled = true;
         statusEl.textContent = "Notifications blocked. Enable in browser or system settings.";
@@ -282,20 +308,25 @@ async function saveSettings() {
     status.textContent = "Saving...";
     status.className = "settings-status";
 
-    const res = await fetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ output_folder: folder, default_format: fmt, default_quality: quality, output_template: document.getElementById("output-template").value.trim() }),
-    });
-    const data = await res.json();
+    let data;
+    try {
+        const res = await fetch("/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ output_folder: folder, default_format: fmt, default_quality: quality, output_template: document.getElementById("output-template").value.trim() }),
+        });
+        data = await res.json().catch(() => ({ error: "Unexpected reply from sdexe" }));
+    } catch {
+        data = { error: "Could not reach sdexe. Is it still running?" };
+    }
 
     if (data.error) {
         status.textContent = data.error;
         status.className = "settings-status error";
     } else {
-        localStorage.setItem("sdexe_format", fmt);
+        lsSet("sdexe_format", fmt);
         if (!document.getElementById("default-quality").disabled) {
-            localStorage.setItem("sdexe_quality", quality);
+            lsSet("sdexe_quality", quality);
         }
         status.textContent = "Saved";
         status.className = "settings-status saved";
@@ -305,12 +336,19 @@ async function saveSettings() {
 
 document.getElementById("open-browser").addEventListener("change", async (e) => {
     const status = document.getElementById("startup-status");
-    const res = await fetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ open_browser: e.target.checked }),
-    });
-    const data = await res.json();
+    let data;
+    try {
+        const res = await fetch("/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ open_browser: e.target.checked }),
+        });
+        data = await res.json();
+    } catch {
+        data = { error: "Not saved. Is sdexe still running?" };
+    }
+    // Not saved: put the box back the way it is on disk.
+    if (data.error) e.target.checked = !e.target.checked;
     status.textContent = data.error || "Saved";
     status.className = "settings-status " + (data.error ? "error" : "saved");
     setTimeout(() => { status.textContent = ""; }, 2500);
@@ -318,6 +356,9 @@ document.getElementById("open-browser").addEventListener("change", async (e) => 
 
 document.getElementById("notif-enabled").addEventListener("change", async (e) => {
     const statusEl = document.getElementById("notif-status");
+    // Unticking used to do nothing: downloads kept notifying, and the box
+    // came back ticked on the next visit.
+    lsSet("sdexe_notifications", e.target.checked ? "on" : "off");
     if (e.target.checked) {
         const perm = await Notification.requestPermission();
         e.target.checked = perm === "granted";

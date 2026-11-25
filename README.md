@@ -3,14 +3,14 @@
 **Suite for Downloading, Editing & eXporting Everything**
 
 [![PyPI version](https://img.shields.io/pypi/v/sdexe)](https://pypi.org/project/sdexe/)
-[![Python 3.10+](https://img.shields.io/pypi/pyversions/sdexe)](https://pypi.org/project/sdexe/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/pypi/pyversions/sdexe)](https://pypi.org/project/sdexe/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/gedaliahs/sdexe/blob/main/LICENSE)
 
-Local tools for media downloads, PDF manipulation, image processing, and file conversion. Everything runs on your machine. No uploads, no accounts, no data leaves your device.
+Local tools for media downloads, PDFs, images, audio and video, file conversion, and text. Everything runs on your machine. No uploads, no accounts, no data leaves your device.
 
 ## Install
 
-One command sets up everything on a fresh machine (Homebrew on macOS, Python 3.12, ffmpeg, then sdexe in its own private environment at `~/.sdexe`). Safe to re-run.
+One command sets up whatever a fresh machine is missing (Homebrew on macOS, Python 3.12, ffmpeg), then puts sdexe in its own private environment at `~/.sdexe`. Safe to re-run.
 
 macOS / Linux:
 
@@ -24,7 +24,7 @@ Windows (PowerShell):
 irm https://sdexe.com/install.ps1 | iex
 ```
 
-Already have Python 3.10+? Then just:
+Already have Python 3.11+? Then just:
 
 ```
 pip install sdexe
@@ -42,7 +42,7 @@ Upgrades sdexe and its downloader engine in place. The Settings page has a butto
 
 ### Requirements
 
-- Python 3.10+ (the installer handles this)
+- Python 3.11+ (the installer handles this)
 - [ffmpeg](https://ffmpeg.org/): installed by the installer; otherwise sdexe falls back to a bundled copy and offers to install the full one on first run
 
 ## Usage
@@ -57,7 +57,7 @@ New to it? `sdexe tutorial` is a hands-on, 3-minute walkthrough that runs real c
 
 ### Settings
 
-`sdexe settings` opens a full-screen settings page (arrow keys, changes save as you go): whether the browser opens on start, port, menu bar icon, update checks, default video format and quality, audio format, MP3 bitrate, download folder, parallel downloads, cover art and tags, the accent colour, plus switches for the zsh link fix, Claude Code (MCP) and the Claude skill. Scripts can use `sdexe settings --json`, `sdexe settings get KEY`, `sdexe settings set KEY VALUE` and `sdexe settings reset`.
+`sdexe settings` opens a full-screen settings page (arrow keys, changes save as you go): whether the terminal app and the browser open on start, port, menu bar icon, update checks, default video format and quality, audio format, MP3 bitrate, download folder, parallel downloads, cover art and tags, the accent colour, plus switches for the zsh link fix, Claude Code (MCP) and the Claude skill. Scripts can use `sdexe settings --json`, `sdexe settings get KEY`, `sdexe settings set KEY VALUE` and `sdexe settings reset`.
 
 > **zsh users:** quote links (`sdexe download "https://youtube.com/watch?v=..."`), or let `sdexe setup` add `alias sdexe='noglob sdexe'` so you don't have to. Without either, zsh stops with "no matches found" before sdexe runs.
 
@@ -71,6 +71,7 @@ Saves straight to the current folder, no browser or server needed. Built to be d
 
 | You type | You get |
 |---|---|
+| `sdexe download` | Whatever link you last copied (clipboard) |
 | `sdexe download URL` | MP4, best stream up to 1080p60 |
 | `sdexe download URL -mp3` | MP3, 320 kbps |
 | `sdexe download URL -a` | WAV (lossless) |
@@ -90,7 +91,7 @@ Formats: `mp4`, `webm`, `mkv` for video; `wav`, `mp3`, `flac`, `m4a`, `opus` for
 
 ### Every tool from the terminal
 
-The PDF, image, audio, video and conversion tools work from the command line too, with the same conventions: outputs land in the current folder as `<name>-<action>.<ext>`, nothing is overwritten, `--json` gives one result document, and several files can be passed at once.
+The PDF, image, audio, video and conversion tools work from the command line too, with the same conventions: outputs land in the current folder as `<name>-<action>.<ext>`, inputs are never overwritten (an existing file is only replaced when `-o` names it exactly), `--json` gives one result document, and several files can be passed at once.
 
 ```
 sdexe pdf merge a.pdf b.pdf -o book.pdf
@@ -117,6 +118,8 @@ sdexe skill --install                  # or a Claude Code skill describing every
 `sdexe mcp --help` shows the Claude Desktop config. MCP outputs go to the client's working folder (or `~/Downloads`); set `SDEXE_OUTPUT_DIR` to change it.
 
 ## Features
+
+The web app has 120+ tools. The main ones:
 
 ### Media Downloader
 Download videos and audio from YouTube, Instagram, TikTok, SoundCloud, Twitch, Vimeo, X, and 1000+ other sites.
@@ -149,6 +152,12 @@ Download videos and audio from YouTube, Instagram, TikTok, SoundCloud, Twitch, V
 - **JSON ↔ YAML**: bidirectional
 - **CSV ↔ TSV**: bidirectional
 - **XML → JSON**
+
+### Audio & Video Tools
+Convert, trim, merge, change speed, normalize, extract audio, compress, resize, rotate, crop, make GIFs, burn in subtitles, and more.
+
+### Text Tools
+Word count, find and replace, regex tester, Base64, hashes, diff, JSON formatter, case converter, UUIDs, timestamps, password generator, and more.
 
 ## Development
 

@@ -57,13 +57,13 @@
                     <span id="resize-file-name" class="split-name"></span>
                     <span id="resize-dimensions" class="count-badge"></span>
                     <span id="resize-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearResizeFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearResizeFile()">&times;</button>
                 </div>
 
                 <div id="resize-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Mode</label>
+                            <label for="resize-mode">Mode</label>
                             <select id="resize-mode" onchange="toggleResizeMode()">
                                 <option value="dimensions">Width / Height</option>
                                 <option value="percentage">Percentage</option>
@@ -73,17 +73,17 @@
 
                     <div id="resize-dim-fields" class="field-row" style="margin-top: 10px;">
                         <div class="field">
-                            <label>Width (px)</label>
+                            <label for="resize-width">Width (px)</label>
                             <input type="number" id="resize-width" placeholder="e.g. 800" min="1">
                         </div>
                         <div class="field">
-                            <label>Height (px)</label>
+                            <label for="resize-height">Height (px)</label>
                             <input type="number" id="resize-height" placeholder="e.g. 600" min="1">
                         </div>
                     </div>
 
                     <div id="resize-pct-field" class="field" style="margin-top: 10px;" hidden>
-                        <label>Percentage (%)</label>
+                        <label for="resize-percentage">Percentage (%)</label>
                         <input type="number" id="resize-percentage" placeholder="e.g. 50" min="1" max="1000" value="50">
                     </div>
 
@@ -102,7 +102,7 @@
                     </button>
                 </div>
 
-                <div id="resize-error" class="error" hidden></div>
+                <div id="resize-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -127,7 +127,7 @@
                 <div id="compress-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Quality</label>
+                            <label for="compress-quality">Quality</label>
                             <select id="compress-quality">
                                 <option value="high">High (85%)</option>
                                 <option value="medium" selected>Medium (60%)</option>
@@ -144,7 +144,7 @@
                     </button>
                 </div>
 
-                <div id="compress-error" class="error" hidden></div>
+                <div id="compress-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -169,7 +169,7 @@
                 <div id="iconvert-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Target Format</label>
+                            <label for="iconvert-format">Target Format</label>
                             <select id="iconvert-format">
                                 <option value="png">PNG</option>
                                 <option value="jpg">JPG</option>
@@ -186,7 +186,7 @@
                     </button>
                 </div>
 
-                <div id="iconvert-error" class="error" hidden></div>
+                <div id="iconvert-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -209,25 +209,25 @@
                     <img id="crop-thumb" class="img-thumb" src="" alt="">
                     <span id="crop-file-name" class="split-name"></span>
                     <span id="crop-dimensions" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearCropFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearCropFile()">&times;</button>
                 </div>
 
                 <div id="crop-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Left (px)</label>
+                            <label for="crop-left">Left (px)</label>
                             <input type="number" id="crop-left" value="0" min="0">
                         </div>
                         <div class="field">
-                            <label>Top (px)</label>
+                            <label for="crop-top">Top (px)</label>
                             <input type="number" id="crop-top" value="0" min="0">
                         </div>
                         <div class="field">
-                            <label>Right (px)</label>
+                            <label for="crop-right">Right (px)</label>
                             <input type="number" id="crop-right" placeholder="full width" min="1">
                         </div>
                         <div class="field">
-                            <label>Bottom (px)</label>
+                            <label for="crop-bottom">Bottom (px)</label>
                             <input type="number" id="crop-bottom" placeholder="full height" min="1">
                         </div>
                     </div>
@@ -240,7 +240,7 @@
                     </button>
                 </div>
 
-                <div id="crop-error" class="error" hidden></div>
+                <div id="crop-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -264,7 +264,7 @@
                 <div id="rotate-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Angle</label>
+                            <label for="rotate-angle">Angle</label>
                             <select id="rotate-angle">
                                 <option value="90">90° clockwise</option>
                                 <option value="180">180°</option>
@@ -281,7 +281,7 @@
                     </button>
                 </div>
 
-                <div id="rotate-error" class="error" hidden></div>
+                <div id="rotate-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -305,7 +305,7 @@
                     <img id="stripexif-thumb" class="img-thumb" src="" alt="">
                     <span id="stripexif-file-name" class="split-name"></span>
                     <span id="stripexif-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearStripExifFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearStripExifFile()">&times;</button>
                 </div>
 
                 <div id="stripexif-actions" class="pdf-actions" hidden>
@@ -315,7 +315,7 @@
                     </button>
                 </div>
 
-                <div id="stripexif-error" class="error" hidden></div>
+                <div id="stripexif-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -338,7 +338,7 @@
                 <div id="toico-file-info" class="split-info" hidden>
                     <img id="toico-thumb" class="img-thumb" src="" alt="">
                     <span id="toico-file-name" class="split-name"></span>
-                    <button class="split-remove" onclick="clearToIcoFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearToIcoFile()">&times;</button>
                 </div>
 
                 <div id="toico-options" hidden>
@@ -362,7 +362,7 @@
                     </button>
                 </div>
 
-                <div id="toico-error" class="error" hidden></div>
+                <div id="toico-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -386,7 +386,7 @@
                 <div id="flip-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Direction</label>
+                            <label for="flip-direction">Direction</label>
                             <select id="flip-direction">
                                 <option value="horizontal">Horizontal (mirror)</option>
                                 <option value="vertical">Vertical (upside down)</option>
@@ -402,7 +402,7 @@
                     </button>
                 </div>
 
-                <div id="flip-error" class="error" hidden></div>
+                <div id="flip-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -430,7 +430,7 @@
                     </button>
                 </div>
 
-                <div id="grayscale-error" class="error" hidden></div>
+                <div id="grayscale-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -453,7 +453,7 @@
 
                 <div id="blur-options" hidden>
                     <div class="field" style="margin-top: 16px;">
-                        <label>Blur Radius</label>
+                        <label for="blur-radius">Blur Radius</label>
                         <input type="number" id="blur-radius" value="5" min="1" max="50" step="1">
                     </div>
                 </div>
@@ -465,7 +465,7 @@
                     </button>
                 </div>
 
-                <div id="blur-error" class="error" hidden></div>
+                <div id="blur-error" class="error" role="alert" hidden></div>
             </div>
         </div>
         <!-- QR Code Generator -->
@@ -475,13 +475,13 @@
                 <p class="meta">Generate a QR code from any text or URL.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Text or URL</label>
+                    <label for="qr-text">Text or URL</label>
                     <textarea id="qr-text" rows="3" placeholder="https://example.com" style="width:100%;font-family:inherit;resize:vertical;"></textarea>
                 </div>
 
                 <div class="field-row" style="margin-top: 12px;">
                     <div class="select-wrap">
-                        <label>Size</label>
+                        <label for="qr-size">Size</label>
                         <select id="qr-size">
                             <option value="8">Small</option>
                             <option value="10" selected>Medium</option>
@@ -490,7 +490,7 @@
                         </select>
                     </div>
                     <div class="select-wrap">
-                        <label>Error Correction</label>
+                        <label for="qr-ec">Error Correction</label>
                         <select id="qr-ec">
                             <option value="L">Low (7%)</option>
                             <option value="M" selected>Medium (15%)</option>
@@ -502,11 +502,11 @@
 
                 <div class="field-row" style="margin-top: 12px;">
                     <div class="field">
-                        <label>Foreground</label>
+                        <label for="qr-fill">Foreground</label>
                         <input type="color" id="qr-fill" value="#000000" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
                     </div>
                     <div class="field">
-                        <label>Background</label>
+                        <label for="qr-back">Background</label>
                         <input type="color" id="qr-back" value="#ffffff" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
                     </div>
                 </div>
@@ -528,7 +528,7 @@
                     </div>
                 </div>
 
-                <div id="qr-error" class="error" hidden></div>
+                <div id="qr-error" class="error" role="alert" hidden></div>
             </div>
         </div>
         <!-- Image Watermark -->
@@ -549,17 +549,17 @@
                 <div id="imgwm-file-info" class="split-info" hidden>
                     <img id="imgwm-thumb" class="img-thumb" src="" alt="">
                     <span id="imgwm-file-name" class="split-name"></span>
-                    <button class="split-remove" onclick="clearImgWmFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearImgWmFile()">&times;</button>
                 </div>
 
                 <div id="imgwm-options" hidden>
                     <div class="field" style="margin-top: 16px;">
-                        <label>Watermark Text</label>
+                        <label for="imgwm-text">Watermark Text</label>
                         <input type="text" id="imgwm-text" placeholder="e.g. CONFIDENTIAL">
                     </div>
                     <div class="field-row" style="margin-top: 12px; gap: 12px;">
                         <div class="select-wrap">
-                            <label>Position</label>
+                            <label for="imgwm-position">Position</label>
                             <select id="imgwm-position">
                                 <option value="center" selected>Center</option>
                                 <option value="top-left">Top Left</option>
@@ -569,11 +569,11 @@
                             </select>
                         </div>
                         <div class="field" style="width: 100px;">
-                            <label>Font Size</label>
+                            <label for="imgwm-fontsize">Font Size</label>
                             <input type="number" id="imgwm-fontsize" value="36" min="8" max="200">
                         </div>
                         <div class="field" style="width: 100px;">
-                            <label>Opacity</label>
+                            <label for="imgwm-opacity">Opacity</label>
                             <input type="number" id="imgwm-opacity" value="128" min="1" max="255">
                         </div>
                     </div>
@@ -586,7 +586,7 @@
                     </button>
                 </div>
 
-                <div id="imgwm-error" class="error" hidden></div>
+                <div id="imgwm-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -598,26 +598,26 @@
 
                 <div class="field-row" style="margin-top: 16px; gap: 12px;">
                     <div class="field">
-                        <label>Width (px)</label>
+                        <label for="ph-width">Width (px)</label>
                         <input type="number" id="ph-width" value="800" min="1" max="4000">
                     </div>
                     <div class="field">
-                        <label>Height (px)</label>
+                        <label for="ph-height">Height (px)</label>
                         <input type="number" id="ph-height" value="600" min="1" max="4000">
                     </div>
                 </div>
 
                 <div class="field-row" style="margin-top: 12px; gap: 12px;">
                     <div class="field">
-                        <label>Background</label>
+                        <label for="ph-bg">Background</label>
                         <input type="color" id="ph-bg" value="#cccccc" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
                     </div>
                     <div class="field">
-                        <label>Text Color</label>
+                        <label for="ph-text-color">Text Color</label>
                         <input type="color" id="ph-text-color" value="#666666" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
                     </div>
                     <div class="field" style="flex: 1;">
-                        <label>Custom Text (optional)</label>
+                        <label for="ph-text">Custom Text (optional)</label>
                         <input type="text" id="ph-text" placeholder="e.g. Hero Banner">
                     </div>
                 </div>
@@ -633,7 +633,7 @@
                     <img id="ph-img" src="" alt="Placeholder" style="max-width:100%;border:1px solid var(--border);border-radius:8px;">
                 </div>
 
-                <div id="ph-error" class="error" hidden></div>
+                <div id="ph-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -658,14 +658,14 @@
                 <div id="heic-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Output Format</label>
+                            <label for="heic-format">Output Format</label>
                             <select id="heic-format" onchange="toggleHeicQuality()">
                                 <option value="jpg" selected>JPG</option>
                                 <option value="png">PNG</option>
                             </select>
                         </div>
                         <div class="field" id="heic-quality-field" style="max-width: 140px;">
-                            <label>JPG Quality</label>
+                            <label for="heic-quality">JPG Quality</label>
                             <input type="number" id="heic-quality" value="90" min="1" max="100">
                         </div>
                     </div>
@@ -678,7 +678,7 @@
                     </button>
                 </div>
 
-                <div id="heic-error" class="error" hidden></div>
+                <div id="heic-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -703,27 +703,27 @@
                     <span id="adjust-file-name" class="split-name"></span>
                     <span id="adjust-dimensions" class="count-badge"></span>
                     <span id="adjust-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAdjustFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAdjustFile()">&times;</button>
                 </div>
 
                 <div id="adjust-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Brightness <span class="range-value" id="adjust-brightness-val">100%</span></label>
+                            <label for="adjust-brightness">Brightness <span class="range-value" id="adjust-brightness-val">100%</span></label>
                             <input type="range" id="adjust-brightness" min="0" max="200" value="100" oninput="updateAdjustPreview()">
                         </div>
                         <div class="field">
-                            <label>Contrast <span class="range-value" id="adjust-contrast-val">100%</span></label>
+                            <label for="adjust-contrast">Contrast <span class="range-value" id="adjust-contrast-val">100%</span></label>
                             <input type="range" id="adjust-contrast" min="0" max="200" value="100" oninput="updateAdjustPreview()">
                         </div>
                     </div>
                     <div class="field-row">
                         <div class="field">
-                            <label>Saturation <span class="range-value" id="adjust-saturation-val">100%</span></label>
+                            <label for="adjust-saturation">Saturation <span class="range-value" id="adjust-saturation-val">100%</span></label>
                             <input type="range" id="adjust-saturation" min="0" max="200" value="100" oninput="updateAdjustPreview()">
                         </div>
                         <div class="field">
-                            <label>Sharpness <span class="range-value" id="adjust-sharpness-val">100%</span></label>
+                            <label for="adjust-sharpness">Sharpness <span class="range-value" id="adjust-sharpness-val">100%</span></label>
                             <input type="range" id="adjust-sharpness" min="0" max="200" value="100" oninput="updateAdjustPreview()">
                         </div>
                     </div>
@@ -751,7 +751,7 @@
                     </button>
                 </div>
 
-                <div id="adjust-error" class="error" hidden></div>
+                <div id="adjust-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -774,7 +774,7 @@
                     <img id="exif-thumb" class="img-thumb" src="" alt="">
                     <span id="exif-file-name" class="split-name"></span>
                     <span id="exif-file-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearExifFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearExifFile()">&times;</button>
                 </div>
 
                 <div id="exif-result" hidden style="margin-top: 16px;">
@@ -785,7 +785,7 @@
                     <div class="kv-wrap"><table class="kv-table" id="exif-table"></table></div>
                 </div>
 
-                <div id="exif-error" class="error" hidden></div>
+                <div id="exif-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -808,28 +808,28 @@
                     <img id="border-thumb" class="img-thumb" src="" alt="">
                     <span id="border-file-name" class="split-name"></span>
                     <span id="border-dimensions" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearBorderFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearBorderFile()">&times;</button>
                 </div>
 
                 <div id="border-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Mode</label>
+                            <label for="border-mode">Mode</label>
                             <select id="border-mode" onchange="toggleBorderMode()">
                                 <option value="border" selected>Border (solid frame)</option>
                                 <option value="padding">Padding (transparent if PNG)</option>
                             </select>
                         </div>
                         <div class="field" style="max-width: 120px;">
-                            <label>Size (px)</label>
+                            <label for="border-size">Size (px)</label>
                             <input type="number" id="border-size" value="20" min="0" max="2000">
                         </div>
                         <div class="field" style="max-width: 120px;">
-                            <label>Radius (px)</label>
+                            <label for="border-radius">Radius (px)</label>
                             <input type="number" id="border-radius" value="0" min="0" max="2000">
                         </div>
                         <div class="field" style="max-width: 90px;" id="border-color-field">
-                            <label>Color</label>
+                            <label for="border-color">Color</label>
                             <input type="color" id="border-color" value="#ffffff" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
                         </div>
                     </div>
@@ -843,7 +843,7 @@
                     </button>
                 </div>
 
-                <div id="border-error" class="error" hidden></div>
+                <div id="border-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -866,7 +866,7 @@
                     <img id="favicon-thumb" class="img-thumb" src="" alt="">
                     <span id="favicon-file-name" class="split-name"></span>
                     <span id="favicon-dimensions" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearFaviconFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearFaviconFile()">&times;</button>
                 </div>
 
                 <div id="favicon-options" hidden>
@@ -880,7 +880,7 @@
                     </button>
                 </div>
 
-                <div id="favicon-error" class="error" hidden></div>
+                <div id="favicon-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -903,13 +903,13 @@
                     <img id="upscale-thumb" class="img-thumb" src="" alt="">
                     <span id="upscale-file-name" class="split-name"></span>
                     <span id="upscale-dimensions" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearUpscaleFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearUpscaleFile()">&times;</button>
                 </div>
 
                 <div id="upscale-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Scale Factor</label>
+                            <label for="upscale-factor">Scale Factor</label>
                             <select id="upscale-factor" onchange="updateUpscaleHint()">
                                 <option value="2" selected>2&times;</option>
                                 <option value="3">3&times;</option>
@@ -927,7 +927,7 @@
                     </button>
                 </div>
 
-                <div id="upscale-error" class="error" hidden></div>
+                <div id="upscale-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -951,35 +951,35 @@
                 <div id="collage-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Columns</label>
+                            <label for="collage-columns">Columns</label>
                             <input type="number" id="collage-columns" placeholder="auto" min="1" max="100">
                         </div>
                         <div class="field">
-                            <label>Cell Size (px)</label>
+                            <label for="collage-cell">Cell Size (px)</label>
                             <input type="number" id="collage-cell" value="256" min="8" max="2048">
                         </div>
                         <div class="field">
-                            <label>Gap (px)</label>
+                            <label for="collage-gap">Gap (px)</label>
                             <input type="number" id="collage-gap" value="0" min="0" max="512">
                         </div>
                     </div>
                     <div class="field-row">
                         <div class="select-wrap">
-                            <label>Fit</label>
+                            <label for="collage-fit">Fit</label>
                             <select id="collage-fit">
                                 <option value="contain" selected>Contain (whole image)</option>
                                 <option value="cover">Cover (fill &amp; crop)</option>
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Output</label>
+                            <label for="collage-output">Output</label>
                             <select id="collage-output">
                                 <option value="image" selected>PNG image</option>
                                 <option value="zip">ZIP (sprite.png + sprite.css)</option>
                             </select>
                         </div>
                         <div class="field" style="max-width: 90px;">
-                            <label>Background</label>
+                            <label for="collage-bg">Background</label>
                             <input type="color" id="collage-bg" value="#ffffff" style="height:36px;width:60px;padding:2px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
                         </div>
                     </div>
@@ -999,7 +999,7 @@
                     </button>
                 </div>
 
-                <div id="collage-error" class="error" hidden></div>
+                <div id="collage-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1022,17 +1022,17 @@
                     <img id="ascii-thumb" class="img-thumb" src="" alt="">
                     <span id="ascii-file-name" class="split-name"></span>
                     <span id="ascii-dimensions" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearAsciiFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAsciiFile()">&times;</button>
                 </div>
 
                 <div id="ascii-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field" style="max-width: 140px;">
-                            <label>Width (chars)</label>
+                            <label for="ascii-width">Width (chars)</label>
                             <input type="number" id="ascii-width" value="100" min="10" max="400">
                         </div>
                         <div class="select-wrap">
-                            <label>Character Set</label>
+                            <label for="ascii-charset">Character Set</label>
                             <select id="ascii-charset">
                                 <option value="standard" selected>Standard (70 levels)</option>
                                 <option value="simple">Simple (@%#*+=-:. )</option>
@@ -1066,7 +1066,7 @@
                     <pre id="ascii-output" class="ascii-output"></pre>
                 </div>
 
-                <div id="ascii-error" class="error" hidden></div>
+                <div id="ascii-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1088,7 +1088,7 @@
                     <img id="colorpicker-thumb" class="img-thumb" src="" alt="">
                     <span id="colorpicker-file-name" class="split-name"></span>
                     <span id="colorpicker-dimensions" class="count-badge"></span>
-                    <button class="split-remove" onclick="clearColorPickerFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearColorPickerFile()">&times;</button>
                 </div>
 
                 <div id="colorpicker-work" hidden style="margin-top: 16px;">
@@ -1115,7 +1115,7 @@
                     <p class="drop-hint" id="colorpicker-empty" style="margin-top: 8px;">No colors saved yet.</p>
                 </div>
 
-                <div id="colorpicker-error" class="error" hidden></div>
+                <div id="colorpicker-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 

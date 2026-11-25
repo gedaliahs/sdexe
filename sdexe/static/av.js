@@ -1,6 +1,6 @@
 /* ── State ── */
 const avFiles = {};
-function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 
 /* ── Hash Routing ── */
 showTab(location.hash.slice(1) || "av-convert-audio");
@@ -9,20 +9,43 @@ window.addEventListener("hashchange", () => showTab(location.hash.slice(1) || "a
 setupPageDropOverlay();
 
 /* ── Generic AV file loader ── */
+const AV_EXT = {
+    "audio/": /\.(mp3|wav|ogg|oga|opus|flac|aac|m4a|wma|aiff?|amr|mka)$/i,
+    "video/": /\.(mp4|m4v|mov|webm|mkv|avi|wmv|flv|ts|mts|m2ts|3gp|mpe?g|ogv)$/i,
+    "image/": /\.(png|jpe?g|gif|webp|bmp)$/i,
+};
+
+/* Is the file of the wanted kind ("audio/", "video/", "image/")? Some systems
+   report no MIME type for .mkv, .flac, .opus and the like, so the extension
+   counts too. */
+function avAccepts(f, acceptType) {
+    return !acceptType || f.type.startsWith(acceptType) || AV_EXT[acceptType].test(f.name);
+}
+
+/* A file of the wrong kind used to be dropped without a word. */
+function avWrongType(prefix, acceptType) {
+    const kind = acceptType === "audio/" ? "an audio" : acceptType === "video/" ? "a video" : "an image";
+    avShowError(prefix, `Please select ${kind} file`);
+}
+
+/* Returns true when the file was taken. */
 function loadAvFile(prefix, files, acceptType) {
     const f = files[0];
-    if (!f) return;
-    if (acceptType && !f.type.startsWith(acceptType)) return;
+    if (!f) return false;
+    if (!avAccepts(f, acceptType)) { avWrongType(prefix, acceptType); return false; }
     avFiles[prefix] = f;
+    document.getElementById(`${prefix}-error`).hidden = true;
     document.getElementById(`${prefix}-name`).textContent = f.name;
     document.getElementById(`${prefix}-size`).textContent = formatSize(f.size);
     document.getElementById(`${prefix}-info`).hidden = false;
     document.getElementById(`${prefix}-options`).hidden = false;
     document.getElementById(`${prefix}-actions`).hidden = false;
+    return true;
 }
 
 function clearAvFile(prefix) {
     avFiles[prefix] = null;
+    document.getElementById(`${prefix}-error`).hidden = true;
     document.getElementById(`${prefix}-info`).hidden = true;
     document.getElementById(`${prefix}-options`).hidden = true;
     document.getElementById(`${prefix}-actions`).hidden = true;
@@ -49,7 +72,7 @@ async function avFetch(prefix, endpoint, buildForm, downloadName, loadingText) {
         } else {
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = match ? match[1] : downloadName(f);
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -219,7 +242,7 @@ function renderMergeAudioList() {
     mergeAudioFiles.forEach((f, i) => {
         const item = document.createElement("div");
         item.className = "file-item";
-        item.innerHTML = `<span class="file-name">${esc(f.name)}</span><span class="file-size">${formatSize(f.size)}</span><button class="file-remove" onclick="removeMergeAudio(${i})">&times;</button>`;
+        item.innerHTML = `<span class="file-name">${esc(f.name)}</span><span class="file-size">${formatSize(f.size)}</span><button class="file-remove" aria-label="Remove file" onclick="removeMergeAudio(${i})">&times;</button>`;
         list.appendChild(item);
     });
     const show = mergeAudioFiles.length >= 2;
@@ -352,7 +375,7 @@ async function doFade() {
     const fadeIn = document.getElementById("fade-in").value;
     const fadeOut = document.getElementById("fade-out").value;
     const duration = document.getElementById("fade-duration").value;
-    if (!fadeIn && !fadeOut) {
+    if (!(parseFloat(fadeIn) > 0) && !(parseFloat(fadeOut) > 0)) {
         const err = document.getElementById("fade-error");
         err.textContent = "Set at least one fade duration";
         err.hidden = false;
@@ -492,8 +515,10 @@ let addAudioAudioFile = null;
 
 setupDropZone("add-audio-video-drop", "add-audio-video-input", files => {
     const f = files[0];
-    if (!f || !f.type.startsWith("video/")) return;
+    if (!f) return;
+    if (!avAccepts(f, "video/")) { avWrongType("add-audio", "video/"); return; }
     addAudioVideoFile = f;
+    document.getElementById("add-audio-error").hidden = true;
     document.getElementById("add-audio-video-name").textContent = f.name;
     document.getElementById("add-audio-video-size").textContent = formatSize(f.size);
     document.getElementById("add-audio-video-info").hidden = false;
@@ -502,8 +527,10 @@ setupDropZone("add-audio-video-drop", "add-audio-video-input", files => {
 
 setupDropZone("add-audio-audio-drop", "add-audio-audio-input", files => {
     const f = files[0];
-    if (!f || !f.type.startsWith("audio/")) return;
+    if (!f) return;
+    if (!avAccepts(f, "audio/")) { avWrongType("add-audio", "audio/"); return; }
     addAudioAudioFile = f;
+    document.getElementById("add-audio-error").hidden = true;
     document.getElementById("add-audio-audio-name").textContent = f.name;
     document.getElementById("add-audio-audio-size").textContent = formatSize(f.size);
     document.getElementById("add-audio-audio-info").hidden = false;
@@ -547,7 +574,7 @@ async function doAddAudio() {
         } else {
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = match ? match[1] : addAudioVideoFile.name.replace(/\.[^.]+$/, "") + "_with_audio." + addAudioVideoFile.name.split(".").pop();
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -566,8 +593,10 @@ let burnSubsSrtFile = null;
 
 setupDropZone("burn-subs-video-drop", "burn-subs-video-input", files => {
     const f = files[0];
-    if (!f || !f.type.startsWith("video/")) return;
+    if (!f) return;
+    if (!avAccepts(f, "video/")) { avWrongType("burn-subs", "video/"); return; }
     burnSubsVideoFile = f;
+    document.getElementById("burn-subs-error").hidden = true;
     document.getElementById("burn-subs-video-name").textContent = f.name;
     document.getElementById("burn-subs-video-size").textContent = formatSize(f.size);
     document.getElementById("burn-subs-video-info").hidden = false;
@@ -576,8 +605,10 @@ setupDropZone("burn-subs-video-drop", "burn-subs-video-input", files => {
 
 setupDropZone("burn-subs-srt-drop", "burn-subs-srt-input", files => {
     const f = files[0];
-    if (!f || !f.name.toLowerCase().endsWith(".srt")) return;
+    if (!f) return;
+    if (!f.name.toLowerCase().endsWith(".srt")) { avShowError("burn-subs", "Please select an .srt subtitle file"); return; }
     burnSubsSrtFile = f;
+    document.getElementById("burn-subs-error").hidden = true;
     document.getElementById("burn-subs-srt-name").textContent = f.name;
     document.getElementById("burn-subs-srt-size").textContent = formatSize(f.size);
     document.getElementById("burn-subs-srt-info").hidden = false;
@@ -621,7 +652,7 @@ async function doBurnSubs() {
         } else {
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = match ? match[1] : burnSubsVideoFile.name.replace(/\.[^.]+$/, "") + "_subtitled." + burnSubsVideoFile.name.split(".").pop();
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -644,11 +675,27 @@ let audioAnalyser = null;
 let audioAnimFrame = null;
 let audioTimerInterval = null;
 let audioRecordStart = 0;
+let audioPausedAt = 0;      // when the current pause began, 0 while recording
+let audioStarting = false;  // waiting for the microphone prompt
+
+/* Drop a finished recording from its player so the memory can be freed. */
+function avReleasePlayer(id) {
+    const el = document.getElementById(id);
+    if (el.src && el.src.indexOf("blob:") === 0) URL.revokeObjectURL(el.src);
+    el.removeAttribute("src");
+    el.load();
+}
 
 function startAudioRecording() {
+    // A second click while the permission prompt is up opened a second
+    // microphone stream that nothing ever stopped.
+    if (audioStarting || (audioMediaRecorder && audioMediaRecorder.state !== "inactive")) return;
+    audioStarting = true;
     const err = document.getElementById("recorder-audio-error");
     err.hidden = true;
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        audioStarting = false;
+        audioPausedAt = 0;
         audioRecordStream = stream;
         audioRecordChunks = [];
 
@@ -664,7 +711,7 @@ function startAudioRecording() {
         audioMediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioRecordChunks.push(e.data); };
         audioMediaRecorder.onstop = () => {
             audioRecordBlob = new Blob(audioRecordChunks, { type: "audio/webm" });
-            document.getElementById("recorder-audio-player").src = URL.createObjectURL(audioRecordBlob);
+            sdexeSetBlobSrc(document.getElementById("recorder-audio-player"), audioRecordBlob);
             document.getElementById("recorder-audio-result").hidden = false;
         };
         audioMediaRecorder.start();
@@ -678,6 +725,7 @@ function startAudioRecording() {
         audioRecordStart = Date.now();
         audioTimerInterval = setInterval(updateAudioTimer, 200);
     }).catch(e => {
+        audioStarting = false;
         err.textContent = "Microphone access denied: " + e.message;
         err.hidden = false;
     });
@@ -688,9 +736,13 @@ function pauseAudioRecording() {
     const btn = document.getElementById("recorder-audio-pause");
     if (audioMediaRecorder.state === "recording") {
         audioMediaRecorder.pause();
+        audioPausedAt = Date.now();
         btn.textContent = "Resume";
     } else {
         audioMediaRecorder.resume();
+        // Paused time doesn't count towards the length shown.
+        if (audioPausedAt) audioRecordStart += Date.now() - audioPausedAt;
+        audioPausedAt = 0;
         btn.textContent = "Pause";
     }
 }
@@ -705,7 +757,9 @@ function stopAudioRecording() {
     cancelAnimationFrame(audioAnimFrame);
     clearInterval(audioTimerInterval);
     if (audioCtx) audioCtx.close();
-    document.getElementById("recorder-audio-pause").hidden = true;
+    const pause = document.getElementById("recorder-audio-pause");
+    pause.hidden = true;
+    pause.textContent = "Pause";  // the next recording starts unpaused
     document.getElementById("recorder-audio-stop").hidden = true;
 }
 
@@ -717,10 +771,11 @@ function resetAudioRecording() {
     const canvas = document.getElementById("recorder-audio-waveform");
     canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
     audioRecordBlob = null;
+    avReleasePlayer("recorder-audio-player");
 }
 
 function updateAudioTimer() {
-    const elapsed = Math.floor((Date.now() - audioRecordStart) / 1000);
+    const elapsed = Math.floor(((audioPausedAt || Date.now()) - audioRecordStart) / 1000);
     const min = String(Math.floor(elapsed / 60)).padStart(2, "0");
     const sec = String(elapsed % 60).padStart(2, "0");
     document.getElementById("recorder-audio-timer").textContent = min + ":" + sec;
@@ -812,7 +867,7 @@ async function startScreenRecording() {
         screenMediaRecorder.ondataavailable = e => { if (e.data.size > 0) screenRecordChunks.push(e.data); };
         screenMediaRecorder.onstop = () => {
             screenRecordBlob = new Blob(screenRecordChunks, { type: "video/webm" });
-            document.getElementById("recorder-screen-player").src = URL.createObjectURL(screenRecordBlob);
+            sdexeSetBlobSrc(document.getElementById("recorder-screen-player"), screenRecordBlob);
             document.getElementById("recorder-screen-result").hidden = false;
         };
 
@@ -848,6 +903,7 @@ function resetScreenRecording() {
     document.getElementById("recorder-screen-start").hidden = false;
     document.getElementById("recorder-screen-timer").textContent = "00:00";
     screenRecordBlob = null;
+    avReleasePlayer("recorder-screen-player");
 }
 
 function updateScreenTimer() {
@@ -867,8 +923,9 @@ function downloadScreenRecording() {
 function avPairLoad(prefix, slot, files, acceptType, update) {
     const f = files[0];
     if (!f) return;
-    if (acceptType && !f.type.startsWith(acceptType) && !(acceptType === "image/" && /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name))) return;
+    if (!avAccepts(f, acceptType)) { avWrongType(prefix, acceptType); return; }
     avFiles[`${prefix}-${slot}`] = f;
+    document.getElementById(`${prefix}-error`).hidden = true;
     document.getElementById(`${prefix}-${slot}-name`).textContent = f.name;
     document.getElementById(`${prefix}-${slot}-size`).textContent = formatSize(f.size);
     document.getElementById(`${prefix}-${slot}-info`).hidden = false;
@@ -904,7 +961,7 @@ async function avFetchForm(prefix, endpoint, fd, fallbackName, loadingText) {
         } else {
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = match ? match[1] : fallbackName;
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -999,14 +1056,17 @@ const TAG_FIELDS = ["title", "artist", "album", "year", "genre", "track", "comme
 let tagsCoverFile = null;
 
 setupDropZone("tags-drop", "tags-input", files => {
-    loadAvFile("tags", files, "audio/");
-    if (avFiles["tags"]) readTags();
+    // Only re-read when a new file was taken: re-reading the old one after a
+    // rejected drop wiped whatever had been typed.
+    if (loadAvFile("tags", files, "audio/")) readTags();
 });
 
 setupDropZone("tags-cover-drop", "tags-cover-input", files => {
     const f = files[0];
-    if (!f || !f.type.startsWith("image/")) return;
+    if (!f) return;
+    if (!avAccepts(f, "image/")) { avWrongType("tags", "image/"); return; }
     tagsCoverFile = f;
+    document.getElementById("tags-error").hidden = true;
     document.getElementById("tags-cover-name").textContent = f.name;
     document.getElementById("tags-cover-size").textContent = formatSize(f.size);
     document.getElementById("tags-cover-info").hidden = false;
@@ -1036,6 +1096,7 @@ async function readTags() {
     try {
         const res = await fetch("/api/av/tags/read", { method: "POST", body: fd });
         const data = await res.json();
+        if (avFiles["tags"] !== f) return;   // changed or removed while reading
         if (!res.ok) {
             err.textContent = data.error || "Could not read tags";
             err.hidden = false;
@@ -1048,6 +1109,7 @@ async function readTags() {
             ? "this file already has cover art · drop a new image to replace it"
             : "optional · drop a JPG or PNG here to set the cover art";
     } catch {
+        if (avFiles["tags"] !== f) return;
         err.textContent = "Network error";
         err.hidden = false;
     }
@@ -1071,8 +1133,10 @@ setupDropZone("audio2video-drop", "audio2video-input", files => loadAvFile("audi
 
 setupDropZone("audio2video-image-drop", "audio2video-image-input", files => {
     const f = files[0];
-    if (!f || !f.type.startsWith("image/")) return;
+    if (!f) return;
+    if (!avAccepts(f, "image/")) { avWrongType("audio2video", "image/"); return; }
     audio2videoImageFile = f;
+    document.getElementById("audio2video-error").hidden = true;
     document.getElementById("audio2video-image-name").textContent = f.name;
     document.getElementById("audio2video-image-size").textContent = formatSize(f.size);
     document.getElementById("audio2video-image-info").hidden = false;
@@ -1134,7 +1198,7 @@ function renderMergeVideoList() {
     mergeVideoFiles.forEach((f, i) => {
         const item = document.createElement("div");
         item.className = "file-item";
-        item.innerHTML = `<span class="file-name">${esc(f.name)}</span><span class="file-size">${formatSize(f.size)}</span><button class="file-remove" onclick="removeMergeVideo(${i})">&times;</button>`;
+        item.innerHTML = `<span class="file-name">${esc(f.name)}</span><span class="file-size">${formatSize(f.size)}</span><button class="file-remove" aria-label="Remove file" onclick="removeMergeVideo(${i})">&times;</button>`;
         list.appendChild(item);
     });
     const show = mergeVideoFiles.length >= 2;
@@ -1250,7 +1314,7 @@ async function doStabilize() {
 setupDropZone("gif2video-drop", "gif2video-input", files => {
     const f = files[0];
     if (!f) return;
-    if (f.type !== "image/gif" && !/\.gif$/i.test(f.name)) return;
+    if (f.type !== "image/gif" && !/\.gif$/i.test(f.name)) { avShowError("gif2video", "Please select a GIF file"); return; }
     loadAvFile("gif2video", files);
 });
 
@@ -1272,7 +1336,7 @@ let videoInfoData = null;
 setupDropZone("video-info-drop", "video-info-input", files => {
     const f = files[0];
     if (!f) return;
-    if (!f.type.startsWith("video/") && !f.type.startsWith("audio/") && !/\.(mp4|mov|webm|mkv|avi|m4v|mp3|wav|ogg|flac|aac|m4a|opus|wma|ts|mts|3gp)$/i.test(f.name)) return;
+    if (!f.type.startsWith("video/") && !f.type.startsWith("audio/") && !/\.(mp4|mov|webm|mkv|avi|m4v|mp3|wav|ogg|flac|aac|m4a|opus|wma|ts|mts|3gp)$/i.test(f.name)) { avShowError("video-info", "Please select a video or audio file"); return; }
     loadAvFile("video-info", files);
     fetchVideoInfo();
 });
@@ -1285,7 +1349,8 @@ function clearVideoInfo() {
 
 function fmtDuration(s) {
     if (!s && s !== 0) return "unknown";
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = (s % 60).toFixed(2);
+    const t = Math.round(s * 100) / 100;   // round first, or 59.996 prints as 0:60.00
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = (t % 60).toFixed(2);
     return (h ? h + ":" : "") + String(m).padStart(h ? 2 : 1, "0") + ":" + String(sec).padStart(5, "0") + ` (${s.toFixed(2)} s)`;
 }
 
@@ -1318,6 +1383,7 @@ async function fetchVideoInfo() {
     try {
         const res = await fetch("/api/av/info", { method: "POST", body: fd });
         const data = await res.json();
+        if (avFiles["video-info"] !== f) return;   // changed or removed while reading
         status.hidden = true;
         if (!res.ok) {
             err.textContent = data.error || "Could not read file";
@@ -1366,6 +1432,7 @@ async function fetchVideoInfo() {
         document.getElementById("video-info-result").hidden = false;
         document.getElementById("video-info-actions").hidden = false;
     } catch {
+        if (avFiles["video-info"] !== f) return;
         status.hidden = true;
         err.textContent = "Network error";
         err.hidden = false;
@@ -1410,6 +1477,7 @@ let webcamChunks = [];
 let webcamBlob = null;
 let webcamTimerInterval = null;
 let webcamRecordStart = 0;
+let webcamStarting = false;   // waiting for a permission prompt
 
 function webcamErrorMessage(e) {
     if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")) {
@@ -1425,6 +1493,9 @@ function webcamErrorMessage(e) {
 }
 
 async function startWebcam() {
+    // A second click while the permission prompt is up opened a second camera
+    // stream that Turn Off Camera never stopped.
+    if (webcamStarting || webcamStream) return;
     const err = document.getElementById("webcam-error");
     err.hidden = true;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -1433,6 +1504,7 @@ async function startWebcam() {
         return;
     }
     const wantAudio = document.getElementById("webcam-audio").checked;
+    webcamStarting = true;
     try {
         try {
             webcamStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: wantAudio });
@@ -1454,6 +1526,7 @@ async function startWebcam() {
         err.textContent = webcamErrorMessage(e);
         err.hidden = false;
     }
+    webcamStarting = false;
 }
 
 function stopWebcam() {
@@ -1487,8 +1560,8 @@ function takeWebcamPhoto() {
     }, "image/png");
 }
 
-function startWebcamRecording() {
-    if (!webcamStream) return;
+async function startWebcamRecording() {
+    if (!webcamStream || webcamStarting) return;
     const err = document.getElementById("webcam-error");
     err.hidden = true;
     if (typeof MediaRecorder === "undefined") {
@@ -1496,11 +1569,28 @@ function startWebcamRecording() {
         err.hidden = false;
         return;
     }
+    // The microphone box is read now, not only when the camera was started:
+    // unticking it before Record must leave the sound out, and ticking it
+    // must bring the microphone in.
+    const wantAudio = document.getElementById("webcam-audio").checked;
+    if (wantAudio && !webcamStream.getAudioTracks().length) {
+        webcamStarting = true;
+        try {
+            const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+            if (webcamStream) mic.getAudioTracks().forEach(t => webcamStream.addTrack(t));
+            else mic.getTracks().forEach(t => t.stop());   // camera turned off meanwhile
+        } catch {
+            showToast("Microphone unavailable; recording without audio");
+        }
+        webcamStarting = false;
+        if (!webcamStream) return;
+    }
+    const recStream = new MediaStream(webcamStream.getVideoTracks().concat(wantAudio ? webcamStream.getAudioTracks() : []));
     webcamChunks = [];
     document.getElementById("webcam-result").hidden = true;
     try {
         const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find(m => MediaRecorder.isTypeSupported(m));
-        webcamRecorder = mime ? new MediaRecorder(webcamStream, { mimeType: mime }) : new MediaRecorder(webcamStream);
+        webcamRecorder = mime ? new MediaRecorder(recStream, { mimeType: mime }) : new MediaRecorder(recStream);
     } catch (e) {
         err.textContent = "Could not start recording: " + e.message;
         err.hidden = false;
@@ -1509,7 +1599,7 @@ function startWebcamRecording() {
     webcamRecorder.ondataavailable = e => { if (e.data.size > 0) webcamChunks.push(e.data); };
     webcamRecorder.onstop = () => {
         webcamBlob = new Blob(webcamChunks, { type: "video/webm" });
-        document.getElementById("webcam-player").src = URL.createObjectURL(webcamBlob);
+        sdexeSetBlobSrc(document.getElementById("webcam-player"), webcamBlob);
         document.getElementById("webcam-result").hidden = false;
     };
     webcamRecorder.start();
@@ -1544,6 +1634,7 @@ function resetWebcamRecording() {
     document.getElementById("webcam-result").hidden = true;
     document.getElementById("webcam-timer").textContent = "00:00";
     webcamBlob = null;
+    avReleasePlayer("webcam-player");
 }
 
 function downloadWebcamRecording() {

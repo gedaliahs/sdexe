@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}sdexe{% endblock %}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preload" href="/static/fonts/rubik-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/static/style.css?v={{ version }}">
     {% block head %}{% endblock %}
 </head>
@@ -39,8 +37,8 @@ function showToast(msg, type, actions) {
                 <a href="/media" class="nav-link {% block nav_media %}{% endblock %}">Media</a>
 
                 <div class="nav-group {% block nav_pdf %}{% endblock %}">
-                    <a href="/pdf" class="nav-group-trigger">PDF
-                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <a href="/pdf" class="nav-group-trigger" aria-haspopup="true" aria-expanded="false">PDF
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
                     <div class="nav-group-menu nav-group-cols">
                         <div class="nav-group-col">
@@ -76,8 +74,8 @@ function showToast(msg, type, actions) {
                 </div>
 
                 <div class="nav-group {% block nav_images %}{% endblock %}">
-                    <a href="/images" class="nav-group-trigger">Images
-                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <a href="/images" class="nav-group-trigger" aria-haspopup="true" aria-expanded="false">Images
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
                     <div class="nav-group-menu nav-group-cols">
                         <div class="nav-group-col">
@@ -115,8 +113,8 @@ function showToast(msg, type, actions) {
                 </div>
 
                 <div class="nav-group {% block nav_convert %}{% endblock %}">
-                    <a href="/convert" class="nav-group-trigger">Convert
-                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <a href="/convert" class="nav-group-trigger" aria-haspopup="true" aria-expanded="false">Convert
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
                     <div class="nav-group-menu nav-group-cols">
                         <div class="nav-group-col">
@@ -148,8 +146,8 @@ function showToast(msg, type, actions) {
                 </div>
 
                 <div class="nav-group {% block nav_av %}{% endblock %}">
-                    <a href="/av" class="nav-group-trigger">AV
-                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <a href="/av" class="nav-group-trigger" aria-haspopup="true" aria-expanded="false">AV
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
                     <div class="nav-group-menu nav-group-cols">
                         <div class="nav-group-col">
@@ -206,8 +204,8 @@ function showToast(msg, type, actions) {
                 <a href="/transcribe" class="nav-link {% block nav_transcribe %}{% endblock %}">Transcribe</a>
 
                 <div class="nav-group {% block nav_text %}{% endblock %}">
-                    <a href="/text" class="nav-group-trigger">Text
-                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <a href="/text" class="nav-group-trigger" aria-haspopup="true" aria-expanded="false">Text
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
                     <div class="nav-group-menu nav-group-cols">
                         <div class="nav-group-col">
@@ -247,7 +245,7 @@ function showToast(msg, type, actions) {
                 </div>
             </div>
 
-            <a href="/settings" class="nav-settings {% block nav_settings %}{% endblock %}">
+            <a href="/settings" class="nav-settings {% block nav_settings %}{% endblock %}" aria-label="Settings" title="Settings">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"/>
                     <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
@@ -262,7 +260,7 @@ function showToast(msg, type, actions) {
         <p>Runs locally &middot; No data leaves your machine &middot; <a href="https://github.com/gedaliahs/sdexe" target="_blank" rel="noopener">GitHub</a> &middot; v{{ version }}</p>
     </footer>
 
-    <div id="toast-container"></div>
+    <div id="toast-container" role="status" aria-live="polite"></div>
     <script src="/static/shared.js?v={{ version }}"></script>
     {% block scripts %}{% endblock %}
 </body>

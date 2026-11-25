@@ -12,6 +12,7 @@ directly (JSON-RPC 2.0, one message per line).
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -79,8 +80,11 @@ def _info_tool():
                 "urls": {"type": "array", "items": {"type": "string"}, "minItems": 1},
                 "format": {"type": "string", "enum": list(media.VIDEO_FORMATS + media.AUDIO_FORMATS)},
                 "quality": {"type": "string"},
+                "audio_only": {"type": "boolean"},
                 "playlist": {"type": "boolean", "description": "list every entry of a playlist"},
                 "limit": {"type": "integer", "minimum": 1},
+                "cookies_from_browser": {"type": "string",
+                                         "description": "chrome, safari, firefox, brave or edge"},
             },
             "required": ["urls"],
         },
@@ -127,6 +131,10 @@ def _cmd_tool(cmd: Cmd) -> dict:
             schema["description"] = arg.help
         if arg.choices:
             schema["enum"] = list(arg.choices)
+        if arg.min is not None:
+            schema["minimum"] = arg.min
+        if arg.max is not None:
+            schema["maximum"] = arg.max
         if arg.default not in (None, "") and arg.type is not bool:
             schema["default"] = arg.default
         props[arg.dest] = schema
@@ -161,37 +169,75 @@ def _abs(p: str, base: Path) -> str:
     return str(path if path.is_absolute() else base / path)
 
 
+class ToolInputError(ValueError):
+    """A tool call's arguments don't fit the tool's schema."""
+
+
+def _as_list(value, field: str) -> list:
+    """Arrays of strings. A lone string is one item, not a list of characters."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(v, (str, int, float)) for v in value):
+        return [str(v) for v in value]
+    raise ToolInputError(f"{field} must be a list of strings")
+
+
+def _opt(flag: str, value) -> str:
+    """--flag=value, so a value starting with "-" (watermark text "-DRAFT-", a
+    search for "-ve") isn't read as another option."""
+    # JSON has one number type: 100.0 is a valid integer there, but "100.0"
+    # is not one to the command line.
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return f"{flag}={value}"
+
+
 def tool_argv(name: str, a: dict, base: Path) -> list:
+    if not isinstance(a, dict):
+        raise ToolInputError("arguments must be an object")
     if name == "search":
-        return ["search", str(a.get("query", "")), "-n", str(a.get("limit", 10)),
-                "-s", a.get("source", "youtube")]
+        query = str(a.get("query") or "").strip()
+        if not query:
+            raise ToolInputError("query is required")
+        return ["search", _opt("--limit", int(a.get("limit") or 10)),
+                _opt("--source", a.get("source") or "youtube"), "--", query]
     if name in ("download", "media_info"):
-        argv = ["download" if name == "download" else "info", *a.get("urls", [])]
+        urls = _as_list(a.get("urls"), "urls")
+        if not urls:
+            raise ToolInputError("urls is required")
+        argv = ["download" if name == "download" else "info"]
         if a.get("format"):
-            argv += ["-f", a["format"]]
+            argv.append(_opt("--format", a["format"]))
         if a.get("quality"):
-            argv += ["-q", str(a["quality"])]
+            argv.append(_opt("--quality", a["quality"]))
         if a.get("audio_only"):
             argv.append("--audio")
         if a.get("playlist"):
             argv.append("--playlist")
         if a.get("limit"):
-            argv += ["--limit", str(a["limit"])]
-        for key in ("start", "end"):
-            if a.get(key):
-                argv += [f"--{key}", str(a[key])]
+            argv.append(_opt("--limit", int(a["limit"])))
         if a.get("cookies_from_browser"):
-            argv += ["--cookies-from-browser", a["cookies_from_browser"]]
-        if name == "download" and a.get("output"):
-            argv += ["-o", _abs(a["output"], base)]
-        return argv
+            argv.append(_opt("--cookies-from-browser", a["cookies_from_browser"]))
+        if name == "download":
+            for key in ("start", "end"):
+                if a.get(key):
+                    argv.append(_opt(f"--{key}", a[key]))
+            if a.get("output"):
+                argv.append(_opt("--output", _abs(str(a["output"]), base)))
+        # After "--", so a link can never be read as an option (-i FILE, -o PATH).
+        return argv + ["--", *urls]
 
     cmd = _CMD_BY_TOOL.get(name)
     if not cmd:
         raise KeyError(name)
     argv = cmd.full.split()
     if cmd.inputs != "none":
-        argv += [_abs(f, base) for f in a.get("files", [])]
+        files = _as_list(a.get("files"), "files")
+        if not files:
+            raise ToolInputError("files is required")
+        argv += [_abs(f, base) for f in files]
     for arg in cmd.args:
         if arg.dest not in a or a[arg.dest] is None:
             continue
@@ -199,11 +245,14 @@ def tool_argv(name: str, a: dict, base: Path) -> list:
             if a[arg.dest]:
                 argv.append(arg.flag)
         else:
-            argv += [arg.flag, str(a[arg.dest])]
+            argv.append(_opt(arg.flag, a[arg.dest]))
     if a.get("output"):
-        argv += ["-o", _abs(a["output"], base)]
+        argv.append(_opt("--output", _abs(str(a["output"]), base)))
     if cmd.inputs == "none":
-        argv += ["--", str(a.get(cmd.text_arg, ""))]  # text may start with "-"
+        text = a.get(cmd.text_arg)
+        if text is None or str(text) == "":
+            raise ToolInputError(f"{cmd.text_arg} is required")
+        argv += ["--", str(text)]  # text may start with "-"
     return argv
 
 
@@ -222,17 +271,38 @@ def _default_dir() -> Path:
 
 # ── Server ──
 
+def _signal_tree(proc, force: bool = False):
+    """Stop a tool call and everything it started (ffmpeg, a JS runtime):
+    SIGTERM, or SIGKILL with force."""
+    try:
+        if os.name == "posix":
+            # Each call runs in its own process group.
+            os.killpg(proc.pid, signal.SIGKILL if force else signal.SIGTERM)
+        elif force:
+            proc.kill()
+        else:
+            proc.terminate()
+    except OSError:
+        pass  # already gone
+
+
 class Server:
     def __init__(self):
         self.out_lock = threading.Lock()
-        self.procs = {}
+        self.lock = threading.Lock()
+        self.procs = {}         # request id -> running tool process
+        self.running = set()    # ids of tools/call requests not answered yet
+        self.cancelled = set()  # of those, the ones the client cancelled
         self.base = _default_dir()
 
     def send(self, msg: dict):
         line = json.dumps(msg, ensure_ascii=False)
         with self.out_lock:
-            sys.stdout.write(line + "\n")
-            sys.stdout.flush()
+            try:
+                sys.stdout.write(line + "\n")
+                sys.stdout.flush()
+            except (OSError, ValueError):
+                pass  # the client closed its end; stdin closes next and ends the loop
 
     def reply(self, id_, result=None, error=None):
         msg = {"jsonrpc": "2.0", "id": id_}
@@ -244,7 +314,18 @@ class Server:
 
     def handle(self, msg: dict):
         method, id_ = msg.get("method"), msg.get("id")
-        params = msg.get("params") or {}
+        if not isinstance(method, str):
+            # A response (to a request this server never makes) needs no answer.
+            if "result" not in msg and "error" not in msg:
+                self.reply(id_, error={"code": -32600, "message": "Invalid Request"})
+            return
+        params = msg.get("params")
+        if params is None:
+            params = {}
+        if not isinstance(params, dict):
+            if id_ is not None:
+                self.reply(id_, error={"code": -32602, "message": "params must be an object"})
+            return
         if method == "initialize":
             asked = params.get("protocolVersion")
             self.reply(id_, {
@@ -258,38 +339,93 @@ class Server:
         elif method == "tools/list":
             self.reply(id_, {"tools": tool_definitions()})
         elif method == "tools/call":
+            with self.lock:
+                self.running.add(id_)
             threading.Thread(target=self.call, args=(id_, params), daemon=True).start()
         elif method == "notifications/cancelled":
-            proc = self.procs.get(params.get("requestId"))
-            if proc:
-                proc.kill()
-        elif id_ is not None and not (method or "").startswith("notifications/"):
+            self.cancel(params.get("requestId"))
+        elif id_ is not None and not method.startswith("notifications/"):
             self.reply(id_, error={"code": -32601, "message": f"Method not found: {method}"})
 
+    def cancel(self, id_):
+        with self.lock:
+            if id_ not in self.running:
+                return
+            # Remembered, because the process may not have started yet.
+            self.cancelled.add(id_)
+            proc = self.procs.get(id_)
+        if proc:
+            self._stop(proc)
+
+    def _stop(self, proc, grace: float = 3.0):
+        """SIGTERM first: sdexe treats it like Ctrl+C and removes its temp
+        files. SIGKILL for whatever is still there after the grace period."""
+        _signal_tree(proc)
+
+        def finish():
+            try:
+                proc.wait(timeout=grace)
+            except subprocess.TimeoutExpired:
+                _signal_tree(proc, force=True)
+
+        threading.Thread(target=finish, daemon=True).start()
+
     def call(self, id_, params):
+        # Every request gets an answer: an exception here used to end the
+        # thread silently and leave the client waiting forever.
+        try:
+            self._call(id_, params)
+        except Exception as e:  # noqa: BLE001
+            self.reply(id_, {"content": [{"type": "text", "text": f"sdexe failed: {e}"}], "isError": True})
+        finally:
+            with self.lock:
+                self.running.discard(id_)
+                self.cancelled.discard(id_)
+
+    def _call(self, id_, params):
         name, args = params.get("name"), params.get("arguments") or {}
         try:
             argv = tool_argv(name, args, self.base)
         except KeyError:
             self.reply(id_, error={"code": -32602, "message": f"Unknown tool: {name}"})
             return
+        except (ToolInputError, ValueError, TypeError) as e:
+            self.reply(id_, {"content": [{"type": "text", "text": f"Invalid arguments: {e}"}], "isError": True})
+            return
         self.base.mkdir(parents=True, exist_ok=True)
         # --json must come before a "--" that ends the options.
         cut = argv.index("--") if "--" in argv else len(argv)
-        cmd = [sys.executable, "-m", "sdexe", *argv[:cut], "--json", *argv[cut:]]
+        # The file tools start through sdexe.cli_tools, which skips loading the
+        # web app: about 0.1 s a call instead of 0.25.
+        module = "sdexe.cli_tools" if name in _CMD_BY_TOOL else "sdexe"
+        cmd = [sys.executable, "-m", module, *argv[:cut], "--json", *argv[cut:]]
         try:
+            # Its own process group, so a cancel reaches the ffmpeg it started
+            # too. UTF-8 both ways: file names and titles in the JSON.
             proc = subprocess.Popen(cmd, cwd=self.base, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, text=True)
-            self.procs[id_] = proc
+                                    stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                                    env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                                    start_new_session=os.name == "posix")
+            with self.lock:
+                self.procs[id_] = proc
+                cancelled = id_ in self.cancelled
+            if cancelled:
+                self._stop(proc)
             out, err = proc.communicate()
         finally:
-            self.procs.pop(id_, None)
+            with self.lock:
+                self.procs.pop(id_, None)
+                cancelled = id_ in self.cancelled
+        if cancelled:
+            return  # the client stopped waiting; a cancelled request gets no response
 
         try:
             doc = json.loads(out)
         except json.JSONDecodeError:
-            # Usage errors (exit 2) print a one-line message on stderr, no JSON.
-            text = (err or out or "sdexe produced no output").strip().splitlines()[-1]
+            doc = None
+        if not isinstance(doc, dict):
+            lines = (err or out).strip().splitlines()
+            text = lines[-1] if lines else "sdexe produced no output"
             self.reply(id_, {"content": [{"type": "text", "text": text}], "isError": True})
             return
         self.reply(id_, {
@@ -299,20 +435,40 @@ class Server:
         })
 
     def serve(self):
-        for line in sys.stdin:
-            line = line.strip()
-            if not line:
-                continue
+        try:
+            for line in sys.stdin:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                except json.JSONDecodeError:
+                    self.send({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}})
+                    continue
+                for m in (msg if isinstance(msg, list) and msg else [msg]):
+                    if not isinstance(m, dict):
+                        self.send({"jsonrpc": "2.0", "id": None,
+                                   "error": {"code": -32600, "message": "Invalid Request"}})
+                        continue
+                    try:
+                        self.handle(m)
+                    except Exception as e:  # noqa: BLE001 - one bad message must not end the server
+                        if m.get("id") is not None:
+                            self.reply(m["id"], error={"code": -32603, "message": f"Internal error: {e}"})
+        finally:
+            self.shutdown()
+
+    def shutdown(self, grace: float = 3.0):
+        """The client went away: stop every tool still running, ffmpeg included."""
+        with self.lock:
+            procs = list(self.procs.values())
+        for proc in procs:
+            _signal_tree(proc)
+        for proc in procs:
             try:
-                msg = json.loads(line)
-            except json.JSONDecodeError:
-                self.send({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}})
-                continue
-            for m in (msg if isinstance(msg, list) else [msg]):
-                if isinstance(m, dict):
-                    self.handle(m)
-        for proc in list(self.procs.values()):
-            proc.kill()
+                proc.wait(timeout=grace)
+            except subprocess.TimeoutExpired:
+                _signal_tree(proc, force=True)
 
 
 MCP_HELP = """\
@@ -325,7 +481,7 @@ MCP_HELP = """\
     [brand2]Cursor & others[/brand2]  [muted]command[/muted] [brand]{exe}[/brand][muted], args[/muted] [brand]mcp[/brand]
 
   [brand]◆[/brand] [title]{count} tools[/title]
-    [muted]download, media_info, and every pdf / image / audio / video / convert / file command.
+    [muted]search, download, media_info, and every pdf / image / audio / video / convert / file command.
     Outputs go to the client's folder, or ~/Downloads when that isn't writable;
     SDEXE_OUTPUT_DIR changes it, and each call can pass "output".[/muted]
 """
@@ -344,7 +500,19 @@ def mcp_main(argv) -> int:
         print("sdexe mcp speaks MCP over stdin/stdout and is meant to be started by an AI app.\n"
               "Run `sdexe mcp --help` to see how to add it.", file=sys.stderr)
         return 2
-    Server().serve()
+    # MCP is UTF-8 whatever the locale says (Windows defaults to cp1252, where
+    # a title in Japanese ended the reply with a UnicodeEncodeError).
+    for stream in (sys.stdin, sys.stdout):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+    from sdexe.cli import _interrupt_on_sigterm
+    _interrupt_on_sigterm()  # so `kill` runs shutdown() below, like stdin closing does
+    try:
+        Server().serve()
+    except KeyboardInterrupt:
+        return 130
     return 0
 
 
@@ -362,10 +530,12 @@ def skill_markdown() -> str:
         "",
         "# sdexe",
         "",
-        "Every command writes outputs to the current folder (or `-o PATH`) and never overwrites an "
-        "existing file. Add `--json` for one machine-readable result document on stdout; otherwise "
-        "stdout carries only saved paths (or the text, for text commands). Exit code 0 = all inputs "
-        "succeeded, 1 = some failed, 2 = bad usage. Every command has `--help`.",
+        "Every command writes outputs to the current folder (or `-o PATH`) and picks a new name "
+        "rather than overwrite an existing file; only an exact `-o FILE` name is written as given, "
+        "and never over an input. Add `--json` for one machine-readable result document on stdout; "
+        "otherwise stdout carries only saved paths (or the text, for text commands). Exit code 0 = "
+        "all inputs succeeded, 1 = some failed, 2 = bad usage, 130 = interrupted. Every command has "
+        "`--help`.",
         "",
         "## Media downloads",
         "",
@@ -378,6 +548,8 @@ def skill_markdown() -> str:
         "sdexe download URL --start 1:30 --end 2:00 -o clip.mp4",
         "sdexe download PLAYLIST_URL --playlist --limit 20 -mp3",
         "sdexe info URL --json                 # qualities, sizes, chapters; dry run of download",
+        "sdexe search \"WORDS\" --json           # find links by name (YouTube; -s soundcloud)",
+        "sdexe download \"ytsearch:WORDS\" -mp3  # download the top search hit in one step",
         "```",
         "",
         "If YouTube says to confirm you're not a bot or the video is age-restricted, retry with "

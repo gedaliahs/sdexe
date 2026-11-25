@@ -23,7 +23,7 @@ setupPageDropOverlay();
 /* ── Merge ── */
 setupDropZone("merge-drop", "merge-input", files => {
     for (const f of files) {
-        if (f.type === "application/pdf" || f.name.endsWith(".pdf")) {
+        if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
             mergeFiles.push(f);
         }
     }
@@ -42,12 +42,13 @@ function renderMergeList() {
             <span class="drag-handle">&#9776;</span>
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeMergeFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeMergeFile(${i})">&times;</button>
         `;
         setupDragItem(div, mergeFiles, renderMergeList);
         list.appendChild(div);
     });
     document.getElementById("merge-actions").hidden = mergeFiles.length < 2;
+    document.getElementById("merge-error").hidden = true;
 }
 
 function removeMergeFile(i) {
@@ -89,26 +90,19 @@ setupDropZone("split-drop", "split-input", async files => {
     const f = files[0];
     if (!f) return;
     splitFile = f;
+    document.getElementById("split-error").hidden = true;
 
     document.getElementById("split-file-name").textContent = f.name;
     document.getElementById("split-file-info").hidden = false;
     document.getElementById("split-options").hidden = false;
     document.getElementById("split-actions").hidden = false;
 
-    // Get page count
-    const form = new FormData();
-    form.append("file", f);
-    try {
-        const res = await fetch("/api/pdf/page-count", { method: "POST", body: form });
-        const data = await res.json();
-        if (data.pages) {
-            document.getElementById("split-page-count").textContent = `${data.pages} pages`;
-        }
-    } catch {}
+    fetchPageCount(f, "split-page-count", () => splitFile === f);
 });
 
 function clearSplitFile() {
     splitFile = null;
+    document.getElementById("split-error").hidden = true;
     document.getElementById("split-file-info").hidden = true;
     document.getElementById("split-options").hidden = true;
     document.getElementById("split-actions").hidden = true;
@@ -117,7 +111,8 @@ function clearSplitFile() {
 }
 
 async function doSplit() {
-    if (!splitFile) return;
+    const file = splitFile;
+    if (!file) return;
     const btn = document.getElementById("split-btn");
     const err = document.getElementById("split-error");
     err.hidden = true;
@@ -125,7 +120,7 @@ async function doSplit() {
     btn.textContent = "Splitting...";
 
     const form = new FormData();
-    form.append("file", splitFile);
+    form.append("file", file);
     form.append("ranges", document.getElementById("split-ranges").value);
 
     try {
@@ -168,18 +163,19 @@ function renderImgList() {
         div.draggable = true;
         div.dataset.index = i;
 
-        const thumb = URL.createObjectURL(f);
+        const thumb = sdexeFileURL(f);
         div.innerHTML = `
             <span class="drag-handle">&#9776;</span>
             <img class="img-thumb" src="${thumb}" alt="">
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeImgFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeImgFile(${i})">&times;</button>
         `;
         setupDragItem(div, imgFiles, renderImgList);
         list.appendChild(div);
     });
     document.getElementById("img-actions").hidden = imgFiles.length === 0;
+    document.getElementById("img-error").hidden = true;
 }
 
 function removeImgFile(i) {
@@ -253,6 +249,7 @@ setupDropZone("compress-drop", "compress-pdf-input", files => {
     const f = files[0];
     if (!f) return;
     compressPdfFile = f;
+    document.getElementById("compress-pdf-error").hidden = true;
     document.getElementById("compress-pdf-name").textContent = f.name;
     document.getElementById("compress-pdf-size").textContent = formatSize(f.size);
     document.getElementById("compress-pdf-info").hidden = false;
@@ -261,12 +258,14 @@ setupDropZone("compress-drop", "compress-pdf-input", files => {
 
 function clearCompressPdf() {
     compressPdfFile = null;
+    document.getElementById("compress-pdf-error").hidden = true;
     document.getElementById("compress-pdf-info").hidden = true;
     document.getElementById("compress-pdf-actions").hidden = true;
 }
 
 async function doCompressPdf() {
-    if (!compressPdfFile) return;
+    const file = compressPdfFile;
+    if (!file) return;
     const btn = document.getElementById("compress-pdf-btn");
     const err = document.getElementById("compress-pdf-error");
     err.hidden = true;
@@ -274,7 +273,7 @@ async function doCompressPdf() {
     btn.textContent = "Compressing...";
 
     const form = new FormData();
-    form.append("file", compressPdfFile);
+    form.append("file", file);
 
     try {
         const res = await fetch("/api/pdf/compress", { method: "POST", body: form });
@@ -284,7 +283,7 @@ async function doCompressPdf() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = compressPdfFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_compressed.pdf");
             showToast("Saved: " + base + "_compressed.pdf");
         }
@@ -301,6 +300,7 @@ setupDropZone("totext-drop", "totext-input", files => {
     const f = files[0];
     if (!f) return;
     totextFile = f;
+    document.getElementById("totext-error").hidden = true;
     document.getElementById("totext-file-name").textContent = f.name;
     document.getElementById("totext-file-size").textContent = formatSize(f.size);
     document.getElementById("totext-file-info").hidden = false;
@@ -309,12 +309,14 @@ setupDropZone("totext-drop", "totext-input", files => {
 
 function clearTotextFile() {
     totextFile = null;
+    document.getElementById("totext-error").hidden = true;
     document.getElementById("totext-file-info").hidden = true;
     document.getElementById("totext-actions").hidden = true;
 }
 
 async function doToText() {
-    if (!totextFile) return;
+    const file = totextFile;
+    if (!file) return;
     const btn = document.getElementById("totext-btn");
     const err = document.getElementById("totext-error");
     err.hidden = true;
@@ -322,7 +324,7 @@ async function doToText() {
     btn.textContent = "Extracting...";
 
     const form = new FormData();
-    form.append("file", totextFile);
+    form.append("file", file);
 
     try {
         const res = await fetch("/api/pdf/to-text", { method: "POST", body: form });
@@ -332,7 +334,7 @@ async function doToText() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = totextFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + ".txt");
             showToast("Saved: " + base + ".txt");
         }
@@ -349,6 +351,7 @@ setupDropZone("addpw-drop", "addpw-input", files => {
     const f = files[0];
     if (!f) return;
     addPwFile = f;
+    document.getElementById("addpw-error").hidden = true;
     document.getElementById("addpw-file-name").textContent = f.name;
     document.getElementById("addpw-file-size").textContent = formatSize(f.size);
     document.getElementById("addpw-file-info").hidden = false;
@@ -358,13 +361,15 @@ setupDropZone("addpw-drop", "addpw-input", files => {
 
 function clearAddPwFile() {
     addPwFile = null;
+    document.getElementById("addpw-error").hidden = true;
     document.getElementById("addpw-file-info").hidden = true;
     document.getElementById("addpw-options").hidden = true;
     document.getElementById("addpw-actions").hidden = true;
 }
 
 async function doAddPassword() {
-    if (!addPwFile) return;
+    const file = addPwFile;
+    if (!file) return;
     const password = document.getElementById("addpw-password").value;
     if (!password) { document.getElementById("addpw-error").textContent = "Enter a password"; document.getElementById("addpw-error").hidden = false; return; }
     const btn = document.getElementById("addpw-btn");
@@ -374,7 +379,7 @@ async function doAddPassword() {
     btn.textContent = "Protecting...";
 
     const form = new FormData();
-    form.append("file", addPwFile);
+    form.append("file", file);
     form.append("password", password);
 
     try {
@@ -385,7 +390,7 @@ async function doAddPassword() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = addPwFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_protected.pdf");
             showToast("Saved: " + base + "_protected.pdf");
         }
@@ -402,6 +407,7 @@ setupDropZone("removepw-drop", "removepw-input", files => {
     const f = files[0];
     if (!f) return;
     removePwFile = f;
+    document.getElementById("removepw-error").hidden = true;
     document.getElementById("removepw-file-name").textContent = f.name;
     document.getElementById("removepw-file-size").textContent = formatSize(f.size);
     document.getElementById("removepw-file-info").hidden = false;
@@ -411,13 +417,15 @@ setupDropZone("removepw-drop", "removepw-input", files => {
 
 function clearRemovePwFile() {
     removePwFile = null;
+    document.getElementById("removepw-error").hidden = true;
     document.getElementById("removepw-file-info").hidden = true;
     document.getElementById("removepw-options").hidden = true;
     document.getElementById("removepw-actions").hidden = true;
 }
 
 async function doRemovePassword() {
-    if (!removePwFile) return;
+    const file = removePwFile;
+    if (!file) return;
     const password = document.getElementById("removepw-password").value;
     const btn = document.getElementById("removepw-btn");
     const err = document.getElementById("removepw-error");
@@ -426,7 +434,7 @@ async function doRemovePassword() {
     btn.textContent = "Unlocking...";
 
     const form = new FormData();
-    form.append("file", removePwFile);
+    form.append("file", file);
     form.append("password", password);
 
     try {
@@ -437,7 +445,7 @@ async function doRemovePassword() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = removePwFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_unlocked.pdf");
             showToast("Saved: " + base + "_unlocked.pdf");
         }
@@ -454,23 +462,17 @@ setupDropZone("rotatepages-drop", "rotatepages-input", async files => {
     const f = files[0];
     if (!f) return;
     rotatePagesFile = f;
+    document.getElementById("rotatepages-error").hidden = true;
     document.getElementById("rotatepages-file-name").textContent = f.name;
     document.getElementById("rotatepages-file-info").hidden = false;
     document.getElementById("rotatepages-options").hidden = false;
     document.getElementById("rotatepages-actions").hidden = false;
-    const form = new FormData();
-    form.append("file", f);
-    try {
-        const res = await fetch("/api/pdf/page-count", { method: "POST", body: form });
-        const data = await res.json();
-        if (data.pages) {
-            document.getElementById("rotatepages-page-count").textContent = `${data.pages} pages`;
-        }
-    } catch {}
+    fetchPageCount(f, "rotatepages-page-count", () => rotatePagesFile === f);
 });
 
 function clearRotatePagesFile() {
     rotatePagesFile = null;
+    document.getElementById("rotatepages-error").hidden = true;
     document.getElementById("rotatepages-file-info").hidden = true;
     document.getElementById("rotatepages-options").hidden = true;
     document.getElementById("rotatepages-actions").hidden = true;
@@ -479,7 +481,8 @@ function clearRotatePagesFile() {
 }
 
 async function doRotatePages() {
-    if (!rotatePagesFile) return;
+    const file = rotatePagesFile;
+    if (!file) return;
     const btn = document.getElementById("rotatepages-btn");
     const err = document.getElementById("rotatepages-error");
     err.hidden = true;
@@ -487,7 +490,7 @@ async function doRotatePages() {
     btn.textContent = "Rotating...";
 
     const form = new FormData();
-    form.append("file", rotatePagesFile);
+    form.append("file", file);
     form.append("angle", document.getElementById("rotatepages-angle").value);
     const pagesVal = document.getElementById("rotatepages-pages").value.trim();
     form.append("pages", pagesVal || "all");
@@ -500,7 +503,7 @@ async function doRotatePages() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = rotatePagesFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_rotated.pdf");
             showToast("Saved: " + base + "_rotated.pdf");
         }
@@ -515,8 +518,9 @@ async function doRotatePages() {
 /* ── Extract Images ── */
 setupDropZone("extractimages-drop", "extractimages-input", files => {
     const f = files[0];
-    if (!f || (!f.type.includes("pdf") && !f.name.endsWith(".pdf"))) return;
+    if (!f || (!f.type.includes("pdf") && !/\.pdf$/i.test(f.name))) return;
     extractImagesFile = f;
+    document.getElementById("extractimages-error").hidden = true;
     document.getElementById("extractimages-file-name").textContent = f.name;
     document.getElementById("extractimages-file-size").textContent = formatSize(f.size);
     document.getElementById("extractimages-file-info").hidden = false;
@@ -525,12 +529,14 @@ setupDropZone("extractimages-drop", "extractimages-input", files => {
 
 function clearExtractImagesFile() {
     extractImagesFile = null;
+    document.getElementById("extractimages-error").hidden = true;
     document.getElementById("extractimages-file-info").hidden = true;
     document.getElementById("extractimages-actions").hidden = true;
 }
 
 async function doExtractImages() {
-    if (!extractImagesFile) return;
+    const file = extractImagesFile;
+    if (!file) return;
     const btn = document.getElementById("extractimages-btn");
     const err = document.getElementById("extractimages-error");
     err.hidden = true;
@@ -538,7 +544,7 @@ async function doExtractImages() {
     btn.textContent = "Extracting...";
 
     const fd = new FormData();
-    fd.append("file", extractImagesFile);
+    fd.append("file", file);
     try {
         const res = await fetch("/api/pdf/extract-images", { method: "POST", body: fd });
         if (!res.ok) {
@@ -548,9 +554,10 @@ async function doExtractImages() {
         } else {
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = match ? match[1] : "images.zip";
             downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -563,8 +570,9 @@ async function doExtractImages() {
 /* ── Watermark ── */
 setupDropZone("watermark-drop", "watermark-input", files => {
     const f = files[0];
-    if (!f || (!f.type.includes("pdf") && !f.name.endsWith(".pdf"))) return;
+    if (!f || (!f.type.includes("pdf") && !/\.pdf$/i.test(f.name))) return;
     watermarkFile = f;
+    document.getElementById("watermark-error").hidden = true;
     document.getElementById("watermark-file-name").textContent = f.name;
     document.getElementById("watermark-file-size").textContent = formatSize(f.size);
     document.getElementById("watermark-file-info").hidden = false;
@@ -578,6 +586,7 @@ document.getElementById("watermark-opacity").addEventListener("input", function(
 
 function clearWatermarkFile() {
     watermarkFile = null;
+    document.getElementById("watermark-error").hidden = true;
     document.getElementById("watermark-file-info").hidden = true;
     document.getElementById("watermark-options").hidden = true;
     document.getElementById("watermark-actions").hidden = true;
@@ -585,7 +594,8 @@ function clearWatermarkFile() {
 }
 
 async function doWatermark() {
-    if (!watermarkFile) return;
+    const file = watermarkFile;
+    if (!file) return;
     const text = document.getElementById("watermark-text").value.trim();
     if (!text) { document.getElementById("watermark-error").textContent = "Enter watermark text"; document.getElementById("watermark-error").hidden = false; return; }
     const btn = document.getElementById("watermark-btn");
@@ -595,7 +605,7 @@ async function doWatermark() {
     btn.textContent = "Processing...";
 
     const form = new FormData();
-    form.append("file", watermarkFile);
+    form.append("file", file);
     form.append("text", text);
     form.append("font_size", document.getElementById("watermark-fontsize").value);
     form.append("opacity", document.getElementById("watermark-opacity").value);
@@ -609,7 +619,7 @@ async function doWatermark() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = watermarkFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_watermarked.pdf");
             showToast("Saved: " + base + "_watermarked.pdf");
         }
@@ -624,8 +634,9 @@ async function doWatermark() {
 /* ── Number Pages ── */
 setupDropZone("numberpages-drop", "numberpages-input", files => {
     const f = files[0];
-    if (!f || (!f.type.includes("pdf") && !f.name.endsWith(".pdf"))) return;
+    if (!f || (!f.type.includes("pdf") && !/\.pdf$/i.test(f.name))) return;
     numberPagesFile = f;
+    document.getElementById("numberpages-error").hidden = true;
     document.getElementById("numberpages-file-name").textContent = f.name;
     document.getElementById("numberpages-file-size").textContent = formatSize(f.size);
     document.getElementById("numberpages-file-info").hidden = false;
@@ -635,13 +646,15 @@ setupDropZone("numberpages-drop", "numberpages-input", files => {
 
 function clearNumberPagesFile() {
     numberPagesFile = null;
+    document.getElementById("numberpages-error").hidden = true;
     document.getElementById("numberpages-file-info").hidden = true;
     document.getElementById("numberpages-options").hidden = true;
     document.getElementById("numberpages-actions").hidden = true;
 }
 
 async function doNumberPages() {
-    if (!numberPagesFile) return;
+    const file = numberPagesFile;
+    if (!file) return;
     const btn = document.getElementById("numberpages-btn");
     const err = document.getElementById("numberpages-error");
     err.hidden = true;
@@ -649,7 +662,7 @@ async function doNumberPages() {
     btn.textContent = "Processing...";
 
     const fd = new FormData();
-    fd.append("file", numberPagesFile);
+    fd.append("file", file);
     fd.append("position", document.getElementById("numberpages-position").value);
     fd.append("start", document.getElementById("numberpages-start").value);
     try {
@@ -661,9 +674,10 @@ async function doNumberPages() {
         } else {
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = match ? match[1] : "numbered.pdf";
             downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -678,24 +692,18 @@ setupDropZone("reorder-drop", "reorder-input", async files => {
     const f = files[0];
     if (!f) return;
     reorderFile = f;
+    document.getElementById("reorder-error").hidden = true;
     document.getElementById("reorder-file-name").textContent = f.name;
     document.getElementById("reorder-file-info").hidden = false;
     document.getElementById("reorder-options").hidden = false;
     document.getElementById("reorder-actions").hidden = false;
 
-    const form = new FormData();
-    form.append("file", f);
-    try {
-        const res = await fetch("/api/pdf/page-count", { method: "POST", body: form });
-        const data = await res.json();
-        if (data.pages) {
-            document.getElementById("reorder-page-count").textContent = `${data.pages} pages`;
-        }
-    } catch {}
+    fetchPageCount(f, "reorder-page-count", () => reorderFile === f);
 });
 
 function clearReorderFile() {
     reorderFile = null;
+    document.getElementById("reorder-error").hidden = true;
     document.getElementById("reorder-file-info").hidden = true;
     document.getElementById("reorder-options").hidden = true;
     document.getElementById("reorder-actions").hidden = true;
@@ -704,7 +712,8 @@ function clearReorderFile() {
 }
 
 async function doReorder() {
-    if (!reorderFile) return;
+    const file = reorderFile;
+    if (!file) return;
     const order = document.getElementById("reorder-order").value.trim();
     if (!order) { document.getElementById("reorder-error").textContent = "Enter a page order"; document.getElementById("reorder-error").hidden = false; return; }
     const btn = document.getElementById("reorder-btn");
@@ -714,7 +723,7 @@ async function doReorder() {
     btn.textContent = "Reordering...";
 
     const form = new FormData();
-    form.append("file", reorderFile);
+    form.append("file", file);
     form.append("order", order);
 
     try {
@@ -725,7 +734,7 @@ async function doReorder() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = reorderFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_reordered.pdf");
             showToast("Saved: " + base + "_reordered.pdf");
         }
@@ -742,24 +751,18 @@ setupDropZone("deletepages-drop", "deletepages-input", async files => {
     const f = files[0];
     if (!f) return;
     deletePagesFile = f;
+    document.getElementById("deletepages-error").hidden = true;
     document.getElementById("deletepages-file-name").textContent = f.name;
     document.getElementById("deletepages-file-info").hidden = false;
     document.getElementById("deletepages-options").hidden = false;
     document.getElementById("deletepages-actions").hidden = false;
 
-    const form = new FormData();
-    form.append("file", f);
-    try {
-        const res = await fetch("/api/pdf/page-count", { method: "POST", body: form });
-        const data = await res.json();
-        if (data.pages) {
-            document.getElementById("deletepages-page-count").textContent = `${data.pages} pages`;
-        }
-    } catch {}
+    fetchPageCount(f, "deletepages-page-count", () => deletePagesFile === f);
 });
 
 function clearDeletePagesFile() {
     deletePagesFile = null;
+    document.getElementById("deletepages-error").hidden = true;
     document.getElementById("deletepages-file-info").hidden = true;
     document.getElementById("deletepages-options").hidden = true;
     document.getElementById("deletepages-actions").hidden = true;
@@ -768,7 +771,8 @@ function clearDeletePagesFile() {
 }
 
 async function doDeletePages() {
-    if (!deletePagesFile) return;
+    const file = deletePagesFile;
+    if (!file) return;
     const pages = document.getElementById("deletepages-pages").value.trim();
     if (!pages) { document.getElementById("deletepages-error").textContent = "Enter pages to delete"; document.getElementById("deletepages-error").hidden = false; return; }
     const btn = document.getElementById("deletepages-btn");
@@ -778,7 +782,7 @@ async function doDeletePages() {
     btn.textContent = "Deleting...";
 
     const form = new FormData();
-    form.append("file", deletePagesFile);
+    form.append("file", file);
     form.append("pages", pages);
 
     try {
@@ -789,7 +793,7 @@ async function doDeletePages() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = deletePagesFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_deleted.pdf");
             showToast("Saved: " + base + "_deleted.pdf");
         }
@@ -806,11 +810,16 @@ setupDropZone("metadata-drop", "metadata-input", async files => {
     const f = files[0];
     if (!f) return;
     metadataFile = f;
+    document.getElementById("metadata-error").hidden = true;
     document.getElementById("metadata-file-name").textContent = f.name;
     document.getElementById("metadata-file-size").textContent = formatSize(f.size);
     document.getElementById("metadata-file-info").hidden = false;
     document.getElementById("metadata-options").hidden = false;
     document.getElementById("metadata-actions").hidden = false;
+
+    // Start blank: a failed or slow lookup must not leave the previous file's
+    // values in the form, where Save would write them into this one.
+    ["title", "author", "subject", "creator"].forEach(k => document.getElementById("metadata-" + k).value = "");
 
     // Auto-fetch existing metadata
     const form = new FormData();
@@ -820,6 +829,7 @@ setupDropZone("metadata-drop", "metadata-input", async files => {
         const res = await fetch("/api/pdf/metadata", { method: "POST", body: form });
         if (res.ok) {
             const data = await res.json();
+            if (metadataFile !== f) return;
             document.getElementById("metadata-title").value = data.title || "";
             document.getElementById("metadata-author").value = data.author || "";
             document.getElementById("metadata-subject").value = data.subject || "";
@@ -830,6 +840,7 @@ setupDropZone("metadata-drop", "metadata-input", async files => {
 
 function clearMetadataFile() {
     metadataFile = null;
+    document.getElementById("metadata-error").hidden = true;
     document.getElementById("metadata-file-info").hidden = true;
     document.getElementById("metadata-options").hidden = true;
     document.getElementById("metadata-actions").hidden = true;
@@ -840,7 +851,8 @@ function clearMetadataFile() {
 }
 
 async function doSaveMetadata() {
-    if (!metadataFile) return;
+    const file = metadataFile;
+    if (!file) return;
     const btn = document.getElementById("metadata-btn");
     const err = document.getElementById("metadata-error");
     err.hidden = true;
@@ -848,7 +860,7 @@ async function doSaveMetadata() {
     btn.textContent = "Saving...";
 
     const form = new FormData();
-    form.append("file", metadataFile);
+    form.append("file", file);
     form.append("action", "set");
     form.append("title", document.getElementById("metadata-title").value);
     form.append("author", document.getElementById("metadata-author").value);
@@ -863,7 +875,7 @@ async function doSaveMetadata() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = metadataFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_metadata.pdf");
             showToast("Saved: " + base + "_metadata.pdf");
         }
@@ -882,16 +894,18 @@ setupDropZone("pdf2images-drop", "pdf2images-input", async files => {
     const f = files[0];
     if (!f || (!f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf"))) return;
     pdf2ImagesFile = f;
+    document.getElementById("pdf2images-error").hidden = true;
     document.getElementById("pdf2images-file-name").textContent = f.name;
     document.getElementById("pdf2images-file-size").textContent = formatSize(f.size);
     document.getElementById("pdf2images-file-info").hidden = false;
     document.getElementById("pdf2images-options").hidden = false;
     document.getElementById("pdf2images-actions").hidden = false;
-    fetchPageCount(f, "pdf2images-page-count");
+    fetchPageCount(f, "pdf2images-page-count", () => pdf2ImagesFile === f);
 });
 
 function clearPdf2ImagesFile() {
     pdf2ImagesFile = null;
+    document.getElementById("pdf2images-error").hidden = true;
     document.getElementById("pdf2images-file-info").hidden = true;
     document.getElementById("pdf2images-options").hidden = true;
     document.getElementById("pdf2images-actions").hidden = true;
@@ -900,7 +914,8 @@ function clearPdf2ImagesFile() {
 }
 
 async function doPdf2Images() {
-    if (!pdf2ImagesFile) return;
+    const file = pdf2ImagesFile;
+    if (!file) return;
     const btn = document.getElementById("pdf2images-btn");
     const err = document.getElementById("pdf2images-error");
     err.hidden = true;
@@ -909,7 +924,7 @@ async function doPdf2Images() {
 
     const fmt = document.getElementById("pdf2images-format").value;
     const form = new FormData();
-    form.append("file", pdf2ImagesFile);
+    form.append("file", file);
     form.append("format", fmt);
     form.append("dpi", document.getElementById("pdf2images-dpi").value);
     const pagesVal = document.getElementById("pdf2images-pages").value.trim();
@@ -923,7 +938,7 @@ async function doPdf2Images() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = pdf2ImagesFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             const name = blob.type === "application/zip" ? base + "_pages.zip" : filenameFromResponse(res, base + "." + fmt);
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -943,6 +958,7 @@ setupDropZone("ocr-drop", "ocr-input", files => {
     const f = files[0];
     if (!f) return;
     ocrFile = f;
+    document.getElementById("ocr-error").hidden = true;
     document.getElementById("ocr-file-name").textContent = f.name;
     document.getElementById("ocr-file-size").textContent = formatSize(f.size);
     document.getElementById("ocr-file-info").hidden = false;
@@ -954,6 +970,7 @@ setupDropZone("ocr-drop", "ocr-input", files => {
 
 function clearOcrFile() {
     ocrFile = null;
+    document.getElementById("ocr-error").hidden = true;
     document.getElementById("ocr-file-info").hidden = true;
     document.getElementById("ocr-options").hidden = true;
     document.getElementById("ocr-actions").hidden = true;
@@ -962,7 +979,8 @@ function clearOcrFile() {
 }
 
 async function doOcr() {
-    if (!ocrFile) return;
+    const file = ocrFile;
+    if (!file) return;
     const btn = document.getElementById("ocr-btn");
     const err = document.getElementById("ocr-error");
     err.hidden = true;
@@ -970,7 +988,7 @@ async function doOcr() {
     btn.textContent = "Recognising...";
 
     const form = new FormData();
-    form.append("file", ocrFile);
+    form.append("file", file);
     form.append("language", document.getElementById("ocr-language").value);
 
     try {
@@ -979,7 +997,7 @@ async function doOcr() {
         if (!res.ok) {
             err.textContent = data.error || "OCR failed";
             err.hidden = false;
-        } else {
+        } else if (ocrFile === file) {
             document.getElementById("ocr-output").value = data.text || "";
             document.getElementById("ocr-result-meta").textContent =
                 data.pages + (data.pages === 1 ? " page" : " pages") + " · " + (data.text || "").length + " chars";
@@ -1021,6 +1039,7 @@ setupDropZone("office2pdf-drop", "office2pdf-input", files => {
     const f = files[0];
     if (!f) return;
     office2PdfFile = f;
+    document.getElementById("office2pdf-error").hidden = true;
     document.getElementById("office2pdf-file-name").textContent = f.name;
     document.getElementById("office2pdf-file-size").textContent = formatSize(f.size);
     document.getElementById("office2pdf-file-info").hidden = false;
@@ -1029,12 +1048,14 @@ setupDropZone("office2pdf-drop", "office2pdf-input", files => {
 
 function clearOffice2PdfFile() {
     office2PdfFile = null;
+    document.getElementById("office2pdf-error").hidden = true;
     document.getElementById("office2pdf-file-info").hidden = true;
     document.getElementById("office2pdf-actions").hidden = true;
 }
 
 async function doOffice2Pdf() {
-    if (!office2PdfFile) return;
+    const file = office2PdfFile;
+    if (!file) return;
     const btn = document.getElementById("office2pdf-btn");
     const err = document.getElementById("office2pdf-error");
     err.hidden = true;
@@ -1042,7 +1063,7 @@ async function doOffice2Pdf() {
     btn.textContent = "Converting...";
 
     const form = new FormData();
-    form.append("file", office2PdfFile);
+    form.append("file", file);
 
     try {
         const res = await fetch("/api/pdf/from-office", { method: "POST", body: form });
@@ -1052,7 +1073,7 @@ async function doOffice2Pdf() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = office2PdfFile.name.replace(/\.[^.]+$/, "");
+            const base = file.name.replace(/\.[^.]+$/, "");
             downloadBlob(blob, base + ".pdf");
             showToast("Saved: " + base + ".pdf");
         }
@@ -1072,12 +1093,13 @@ setupDropZone("stamp-drop", "stamp-input", files => {
     const f = files[0];
     if (!f || (!f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf"))) return;
     stampFile = f;
+    document.getElementById("stamp-error").hidden = true;
     document.getElementById("stamp-file-name").textContent = f.name;
     document.getElementById("stamp-file-size").textContent = formatSize(f.size);
     document.getElementById("stamp-file-info").hidden = false;
     document.getElementById("stamp-options").hidden = false;
     document.getElementById("stamp-actions").hidden = false;
-    fetchPageCount(f, "stamp-page-count");
+    fetchPageCount(f, "stamp-page-count", () => stampFile === f);
 });
 
 setupDropZone("stamp-image-drop", "stamp-image-input", files => {
@@ -1102,6 +1124,7 @@ function clearStampImage() {
 
 function clearStampFile() {
     stampFile = null;
+    document.getElementById("stamp-error").hidden = true;
     clearStampImage();
     document.getElementById("stamp-file-info").hidden = true;
     document.getElementById("stamp-options").hidden = true;
@@ -1111,17 +1134,19 @@ function clearStampFile() {
 }
 
 async function doStamp() {
-    if (!stampFile) return;
+    const file = stampFile;
+    if (!file) return;
     const err = document.getElementById("stamp-error");
-    if (!stampImage) { err.textContent = "Choose an image to stamp"; err.hidden = false; return; }
+    const image = stampImage;
+    if (!image) { err.textContent = "Choose an image to stamp"; err.hidden = false; return; }
     const btn = document.getElementById("stamp-btn");
     err.hidden = true;
     btn.disabled = true;
     btn.textContent = "Stamping...";
 
     const form = new FormData();
-    form.append("file", stampFile);
-    form.append("image", stampImage);
+    form.append("file", file);
+    form.append("image", image);
     form.append("position", document.getElementById("stamp-position").value);
     form.append("scale", document.getElementById("stamp-scale").value || "25");
     form.append("opacity", document.getElementById("stamp-opacity").value);
@@ -1136,7 +1161,7 @@ async function doStamp() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = stampFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_stamped.pdf");
             showToast("Saved: " + base + "_stamped.pdf");
         }
@@ -1155,16 +1180,18 @@ setupDropZone("pagesize-drop", "pagesize-input", files => {
     const f = files[0];
     if (!f || (!f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf"))) return;
     pageSizeFile = f;
+    document.getElementById("pagesize-error").hidden = true;
     document.getElementById("pagesize-file-name").textContent = f.name;
     document.getElementById("pagesize-file-size").textContent = formatSize(f.size);
     document.getElementById("pagesize-file-info").hidden = false;
     document.getElementById("pagesize-options").hidden = false;
     document.getElementById("pagesize-actions").hidden = false;
-    fetchPageCount(f, "pagesize-page-count");
+    fetchPageCount(f, "pagesize-page-count", () => pageSizeFile === f);
 });
 
 function clearPageSizeFile() {
     pageSizeFile = null;
+    document.getElementById("pagesize-error").hidden = true;
     document.getElementById("pagesize-file-info").hidden = true;
     document.getElementById("pagesize-options").hidden = true;
     document.getElementById("pagesize-actions").hidden = true;
@@ -1172,7 +1199,8 @@ function clearPageSizeFile() {
 }
 
 async function doPageSize() {
-    if (!pageSizeFile) return;
+    const file = pageSizeFile;
+    if (!file) return;
     const btn = document.getElementById("pagesize-btn");
     const err = document.getElementById("pagesize-error");
     err.hidden = true;
@@ -1181,7 +1209,7 @@ async function doPageSize() {
 
     const size = document.getElementById("pagesize-size").value;
     const form = new FormData();
-    form.append("file", pageSizeFile);
+    form.append("file", file);
     form.append("size", size);
     form.append("fit", document.getElementById("pagesize-fit").value);
 
@@ -1193,7 +1221,7 @@ async function doPageSize() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = pageSizeFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_" + size + ".pdf");
             showToast("Saved: " + base + "_" + size + ".pdf");
         }
@@ -1212,22 +1240,25 @@ setupDropZone("flatten-drop", "flatten-input", files => {
     const f = files[0];
     if (!f || (!f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf"))) return;
     flattenFile = f;
+    document.getElementById("flatten-error").hidden = true;
     document.getElementById("flatten-file-name").textContent = f.name;
     document.getElementById("flatten-file-size").textContent = formatSize(f.size);
     document.getElementById("flatten-file-info").hidden = false;
     document.getElementById("flatten-actions").hidden = false;
-    fetchPageCount(f, "flatten-page-count");
+    fetchPageCount(f, "flatten-page-count", () => flattenFile === f);
 });
 
 function clearFlattenFile() {
     flattenFile = null;
+    document.getElementById("flatten-error").hidden = true;
     document.getElementById("flatten-file-info").hidden = true;
     document.getElementById("flatten-actions").hidden = true;
     document.getElementById("flatten-page-count").textContent = "";
 }
 
 async function doFlatten() {
-    if (!flattenFile) return;
+    const file = flattenFile;
+    if (!file) return;
     const btn = document.getElementById("flatten-btn");
     const err = document.getElementById("flatten-error");
     err.hidden = true;
@@ -1235,7 +1266,7 @@ async function doFlatten() {
     btn.textContent = "Flattening...";
 
     const form = new FormData();
-    form.append("file", flattenFile);
+    form.append("file", file);
 
     try {
         const res = await fetch("/api/pdf/flatten", { method: "POST", body: form });
@@ -1245,7 +1276,7 @@ async function doFlatten() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = flattenFile.name.replace(/\.pdf$/i, "");
+            const base = file.name.replace(/\.pdf$/i, "");
             downloadBlob(blob, base + "_flattened.pdf");
             showToast("Saved: " + base + "_flattened.pdf");
         }
@@ -1257,29 +1288,32 @@ async function doFlatten() {
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Flatten PDF`;
 }
 
-/* Fills a .count-badge with the page count of a PDF (best effort). */
-async function fetchPageCount(file, badgeId) {
+/* Fills a .count-badge with the page count of a PDF (best effort). The badge is
+   emptied first, so it never keeps the previous file's count, and a late answer
+   is dropped when isCurrent() says the file has since been changed or removed. */
+async function fetchPageCount(file, badgeId, isCurrent) {
+    const badge = document.getElementById(badgeId);
+    badge.textContent = "";
     const form = new FormData();
     form.append("file", file);
     try {
         const res = await fetch("/api/pdf/page-count", { method: "POST", body: form });
         const data = await res.json();
-        if (data.pages) document.getElementById(badgeId).textContent = data.pages + (data.pages === 1 ? " page" : " pages");
+        if (data.pages && (!isCurrent || isCurrent())) badge.textContent = data.pages + (data.pages === 1 ? " page" : " pages");
     } catch {}
 }
 
 /* Reads the filename from a Content-Disposition header, or returns fallback. */
 function filenameFromResponse(res, fallback) {
-    const cd = res.headers.get("Content-Disposition") || "";
-    const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
-    return m ? decodeURIComponent(m[1]) : fallback;
+    return sdexeFilename(res.headers.get("Content-Disposition")) || fallback;
 }
 
 /* ── Helpers ── */
 function esc(s) {
     const d = document.createElement("div");
     d.textContent = s;
-    return d.innerHTML;
+    // Also safe inside attribute values: value="${esc(v)}".
+    return d.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function formatSize(bytes) {

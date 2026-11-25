@@ -5,23 +5,26 @@ No Flask imports. Called by routes_convert2.py.
 
 import csv
 import hashlib
+import importlib.util
 import io
 import json
+import lzma
 import os
 import re
+import shlex
 import shutil
+import struct
 import subprocess
 import tarfile
 import tempfile
 import zipfile
+import zlib
 import xml.etree.ElementTree as ET
-from datetime import date
+from contextlib import contextmanager
+from datetime import date, datetime, time
 from pathlib import PurePosixPath, PureWindowsPath
 
-try:
-    import tomllib
-except ImportError:  # Python 3.10
-    import tomli as tomllib  # type: ignore
+import tomllib
 
 try:
     import tomli_w
@@ -29,29 +32,21 @@ try:
 except ImportError:
     _TOMLW_AVAILABLE = False
 
-try:
-    import openpyxl
-    _OPENPYXL_AVAILABLE = True
-except ImportError:
-    _OPENPYXL_AVAILABLE = False
 
-try:
-    import html2text
-    _HTML2TEXT_AVAILABLE = True
-except ImportError:
-    _HTML2TEXT_AVAILABLE = False
+def _installed(name: str) -> bool:
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
+        return False
 
-try:
-    import sqlparse
-    _SQLPARSE_AVAILABLE = True
-except ImportError:
-    _SQLPARSE_AVAILABLE = False
 
-try:
-    import py7zr
-    _PY7ZR_AVAILABLE = True
-except ImportError:
-    _PY7ZR_AVAILABLE = False
+# These four are imported inside the functions that use them: loading them
+# here added about 65 ms (openpyxl 31, py7zr 27) to every start of the app
+# and of each CLI command, whether or not a spreadsheet or 7z was involved.
+_OPENPYXL_AVAILABLE = _installed("openpyxl")
+_HTML2TEXT_AVAILABLE = _installed("html2text")
+_SQLPARSE_AVAILABLE = _installed("sqlparse")
+_PY7ZR_AVAILABLE = _installed("py7zr")
 
 
 # ── Shared helpers ──
@@ -83,14 +78,18 @@ def _dedupe(name: str, used: set) -> str:
 
 # ── JSON → XML ──
 
-_XML_NAME_RE = re.compile(r"[^A-Za-z0-9_.\-]")
+# \w, not A-Za-z: element names may be in any script, and replacing every
+# Hebrew or Chinese key with "____" made them all the same element.
+_XML_NAME_RE = re.compile(r"[^\w.\-]")
+# Characters XML 1.0 cannot carry at all, even escaped.
+_XML_ILLEGAL_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
 
 
 def _xml_name(key) -> str:
     name = _XML_NAME_RE.sub("_", str(key)).strip()
     if not name:
         name = "item"
-    if not re.match(r"[A-Za-z_]", name):
+    if not re.match(r"[^\W\d]", name):
         name = "_" + name
     if name.lower().startswith("xml"):
         name = "_" + name
@@ -104,7 +103,7 @@ def _json_scalar(value) -> str:
         return "true"
     if value is False:
         return "false"
-    return str(value)
+    return _XML_ILLEGAL_RE.sub("", str(value))
 
 
 def _build_xml(parent: ET.Element, key: str, value) -> None:
@@ -148,6 +147,8 @@ def _cell_str(v) -> str:
         return "TRUE" if v else "FALSE"
     if isinstance(v, float) and v.is_integer():
         return str(int(v))
+    if isinstance(v, datetime) and v.time() == time.min:
+        return v.date().isoformat()  # a plain date cell, not "2024-01-01T00:00:00"
     if hasattr(v, "isoformat"):
         return v.isoformat()
     return str(v)
@@ -182,24 +183,26 @@ def xlsx_to_csv(data: bytes, sheet: str = "") -> list[tuple[str, str]]:
     """Return list of (sheet_name, csv_text). `sheet` = "" or "all" for every sheet."""
     if not _OPENPYXL_AVAILABLE:
         raise RuntimeError("openpyxl not installed. Run: pip install openpyxl")
+    import openpyxl
     try:
         wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     except Exception as e:
         raise ValueError(f"Could not open workbook: {e}")
     sheet = (sheet or "").strip()
-    if sheet and sheet.lower() != "all":
-        if sheet not in wb.sheetnames:
-            raise ValueError(f"Sheet '{sheet}' not found. Available: {', '.join(wb.sheetnames)}")
-        names = [sheet]
-    else:
-        names = wb.sheetnames
-    if not names:
-        raise ValueError("Workbook has no sheets")
-    results = []
-    for name in names:
-        results.append((_safe_name(name), _sheet_to_csv(wb[name])))
-    wb.close()
-    return results
+    # A chart-only sheet has no cells; asking it for rows used to crash.
+    tables = [n for n in wb.sheetnames if hasattr(wb[n], "iter_rows")]
+    try:
+        if sheet and sheet.lower() != "all":
+            if sheet not in tables:
+                raise ValueError(f"Sheet '{sheet}' not found. Available: {', '.join(tables)}")
+            names = [sheet]
+        else:
+            names = tables
+        if not names:
+            raise ValueError("Workbook has no sheets")
+        return [(_safe_name(name), _sheet_to_csv(wb[name])) for name in names]
+    finally:
+        wb.close()
 
 
 # ── CSV → Excel ──
@@ -212,10 +215,14 @@ def _coerce_cell(s: str):
     if s == "":
         return None
     t = s.strip()
+    if t[:1] == "+":
+        return s  # "+14155552671" is a phone number; as a number it loses the +
     if _INT_RE.match(t):
         digits = t.lstrip("+-")
-        # Keep leading-zero codes ("007", "00123") as text.
-        if len(digits) > 1 and digits[0] == "0":
+        # Keep leading-zero codes ("007", "00123") as text, and long IDs too:
+        # a spreadsheet number holds 15 digits, so 1234567890123456789 would
+        # come back as 1234567890123456800.
+        if (len(digits) > 1 and digits[0] == "0") or len(digits) > 15:
             return s
         try:
             return int(t)
@@ -249,12 +256,17 @@ def csv_to_xlsx(files: list[tuple[str, str]], header: bool = True) -> bytes:
     """files: list of (filename, csv_text). Each becomes a sheet."""
     if not _OPENPYXL_AVAILABLE:
         raise RuntimeError("openpyxl not installed. Run: pip install openpyxl")
+    import openpyxl
+    from openpyxl.cell import WriteOnlyCell
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
     from openpyxl.styles import Font
     from openpyxl.utils import get_column_letter
 
-    wb = openpyxl.Workbook()
-    wb.remove(wb.active)
+    # Write-only mode streams rows out instead of building every cell as an
+    # object first: about 20% faster and under half the memory on a big CSV.
+    wb = openpyxl.Workbook(write_only=True)
     used = set()
+    bold = Font(bold=True)
     for filename, text in files:
         ws = wb.create_sheet(_sheet_title(filename or "data", used))
         text = text.lstrip("﻿")
@@ -262,18 +274,39 @@ def csv_to_xlsx(files: list[tuple[str, str]], header: bool = True) -> bytes:
             dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
         except csv.Error:
             dialect = csv.excel
-        widths = {}
-        for r_idx, row in enumerate(csv.reader(io.StringIO(text), dialect), 1):
-            for c_idx, raw in enumerate(row, 1):
-                val = _coerce_cell(raw)
-                ws.cell(row=r_idx, column=c_idx, value=val)
-                widths[c_idx] = max(widths.get(c_idx, 0), len(raw))
-        if header and ws.max_row >= 1:
-            for cell in ws[1]:
-                cell.font = Font(bold=True)
+        rows = list(csv.reader(io.StringIO(text), dialect))
+        if header:
+            # Sheet settings have to be in place before the first row is written.
+            widths = {}
+            for row in rows:
+                for c_idx, raw in enumerate(row, 1):
+                    if len(raw) > widths.get(c_idx, 0):
+                        widths[c_idx] = len(raw)
             ws.freeze_panes = "A2"
             for c_idx, w in widths.items():
                 ws.column_dimensions[get_column_letter(c_idx)].width = min(60, max(8, w + 2))
+        for r_idx, row in enumerate(rows):
+            cells = []
+            for raw in row:
+                val = _coerce_cell(raw)
+                is_text = isinstance(val, str)
+                if is_text:
+                    # Control characters cannot be stored in a sheet at all.
+                    val = ILLEGAL_CHARACTERS_RE.sub("", val)
+                if (header and r_idx == 0) or (is_text and val[:1] == "="):
+                    cell = WriteOnlyCell(ws, value=val)
+                    if is_text:
+                        # Text, even when it starts with "=": a CSV holds data,
+                        # and "=== Totals ===" as a formula is a broken file
+                        # (or, from an untrusted CSV, a command to run).
+                        cell.data_type = "s"
+                    if header and r_idx == 0:
+                        cell.font = bold
+                    val = cell
+                cells.append(val)
+            ws.append(cells)
+    if not wb.sheetnames:
+        wb.create_sheet("Sheet")
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -284,6 +317,7 @@ def csv_to_xlsx(files: list[tuple[str, str]], header: bool = True) -> bytes:
 def html_to_md_str(text: str) -> str:
     if not _HTML2TEXT_AVAILABLE:
         raise RuntimeError("html2text not installed. Run: pip install html2text")
+    import html2text
     h = html2text.HTML2Text()
     h.body_width = 0            # no hard wrapping
     h.ignore_links = False
@@ -347,20 +381,32 @@ def json_to_toml_str(text: str) -> str:
 
 # ── SQL Formatter ──
 
+_SQL_QUOTED_RE = re.compile(r"""'(?:[^']|'')*'|"(?:[^"]|"")*"|`[^`]*`""")
+
 def sql_format(text: str, reindent: bool = True, keyword_case: str = "upper",
                indent_width: int = 2, strip_comments: bool = False,
                minify: bool = False) -> str:
     if not _SQLPARSE_AVAILABLE:
         raise RuntimeError("sqlparse not installed. Run: pip install sqlparse")
+    import sqlparse
     kw = keyword_case if keyword_case in ("upper", "lower") else None
     if minify:
         out = sqlparse.format(text, keyword_case=kw, strip_comments=True,
                               strip_whitespace=True, reindent=False)
+        # Set quoted strings and names aside first: squeezing spaces inside
+        # 'a  ,  b' or "col  name" changes what the query means.
+        quoted = []
+
+        def hold(m):
+            quoted.append(m.group(0))
+            return f"\x00{len(quoted) - 1}\x00"
+
+        out = _SQL_QUOTED_RE.sub(hold, out)
         out = re.sub(r"\s+", " ", out).strip()
         out = re.sub(r"\s*([,;()])\s*", r"\1", out)
         out = re.sub(r"([,;])(?=\S)", r"\1 ", out)
         out = re.sub(r"\(\s+", "(", out)
-        return out
+        return re.sub(r"\x00(\d+)\x00", lambda m: quoted[int(m.group(1))], out)
     out = sqlparse.format(text, reindent=reindent, keyword_case=kw,
                           indent_width=max(1, min(8, int(indent_width))),
                           strip_comments=strip_comments, use_space_around_operators=True)
@@ -412,7 +458,7 @@ def archive_list(data: bytes, filename: str = "") -> list[dict]:
     kind = _detect_kind(filename, data[:512])
     entries = []
     if kind == "zip":
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        with _reading("ZIP"), zipfile.ZipFile(io.BytesIO(data)) as zf:
             for info in zf.infolist():
                 if info.is_dir():
                     continue
@@ -420,7 +466,7 @@ def archive_list(data: bytes, filename: str = "") -> list[dict]:
                 if name:
                     entries.append({"name": name, "size": info.file_size})
     elif kind == "tar":
-        with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tf:
+        with _reading("tar"), tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tf:
             for m in tf.getmembers():
                 if not m.isfile():
                     continue
@@ -430,7 +476,8 @@ def archive_list(data: bytes, filename: str = "") -> list[dict]:
     elif kind == "7z":
         if not _PY7ZR_AVAILABLE:
             raise RuntimeError("py7zr not installed. Run: pip install py7zr")
-        with py7zr.SevenZipFile(io.BytesIO(data), mode="r") as z:
+        import py7zr
+        with _reading("7z"), py7zr.SevenZipFile(io.BytesIO(data), mode="r") as z:
             for info in z.list():
                 if info.is_directory:
                     continue
@@ -444,7 +491,7 @@ def archive_list(data: bytes, filename: str = "") -> list[dict]:
             path = os.path.join(td, "archive.rar")
             with open(path, "wb") as fh:
                 fh.write(data)
-            proc = subprocess.run(["unrar", "lt", "-p-", "--", path], capture_output=True, text=True)
+            proc = subprocess.run(["unrar", "lt", "-p-", "--", path], stdin=subprocess.DEVNULL, capture_output=True, text=True)
             if proc.returncode not in (0, 1):
                 raise ValueError(proc.stderr.strip() or "unrar failed to read archive")
             cur = {}
@@ -482,6 +529,22 @@ def _collect_dir(out: str, add) -> None:
                 add(name, fh.read())
 
 
+@contextmanager
+def _reading(kind: str):
+    """Turn the libraries' own errors for a damaged or mislabelled archive
+    (several lines of internals) into one plain sentence."""
+    try:
+        yield
+    except (zipfile.BadZipFile, tarfile.TarError, EOFError, lzma.LZMAError, zlib.error, struct.error) as e:
+        raise ValueError(f"Could not read this {kind} archive. It may be damaged or not really a {kind} file.") from e
+    except Exception as e:
+        if type(e).__name__ == "PasswordRequired":
+            raise ValueError("This archive is password-protected, which is not supported.") from None
+        if type(e).__module__.startswith("py7zr"):
+            raise ValueError(f"Could not read this {kind} archive: {str(e)[:200]}") from e
+        raise
+
+
 def extract_archive(data: bytes, filename: str = "") -> list[tuple[str, bytes]]:
     """Extract any supported archive. Returns list of (relative_path, bytes)."""
     kind = _detect_kind(filename, data[:512])
@@ -497,26 +560,23 @@ def extract_archive(data: bytes, filename: str = "") -> list[tuple[str, bytes]]:
         results.append((_dedupe(name, used), blob))
 
     if kind == "zip":
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            for info in zf.infolist():
-                if info.is_dir():
-                    continue
-                name = _safe_member_path(info.filename)
-                if not name:
-                    continue
-                if info.file_size > ARCHIVE_CAP:
-                    raise ValueError("Archive contents exceed the 2 GB limit")
-                add(name, zf.read(info))
+        with _reading("ZIP"), zipfile.ZipFile(io.BytesIO(data)) as zf:
+            infos = [i for i in zf.infolist() if not i.is_dir() and _safe_member_path(i.filename)]
+            # Add up the sizes the archive declares before reading anything: a
+            # zip bomb used to be unpacked into memory until it crossed the cap.
+            if sum(i.file_size for i in infos) > ARCHIVE_CAP:
+                raise ValueError("Archive contents exceed the 2 GB limit")
+            for info in infos:
+                if info.flag_bits & 0x1:
+                    raise ValueError("This archive is password-protected, which is not supported.")
+                add(_safe_member_path(info.filename), zf.read(info))
     elif kind == "tar":
-        with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tf:
-            for m in tf.getmembers():
-                if not m.isfile():
-                    continue
+        with _reading("tar"), tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tf:
+            members = [m for m in tf.getmembers() if m.isfile() and _safe_member_path(m.name)]
+            if sum(m.size for m in members) > ARCHIVE_CAP:
+                raise ValueError("Archive contents exceed the 2 GB limit")
+            for m in members:
                 name = _safe_member_path(m.name)
-                if not name:
-                    continue
-                if m.size > ARCHIVE_CAP:
-                    raise ValueError("Archive contents exceed the 2 GB limit")
                 fh = tf.extractfile(m)
                 if fh is None:
                     continue
@@ -524,10 +584,13 @@ def extract_archive(data: bytes, filename: str = "") -> list[tuple[str, bytes]]:
     elif kind == "7z":
         if not _PY7ZR_AVAILABLE:
             raise RuntimeError("py7zr not installed. Run: pip install py7zr")
-        with tempfile.TemporaryDirectory() as td:
+        import py7zr
+        with _reading("7z"), tempfile.TemporaryDirectory() as td:
             out = os.path.join(td, "out")
             os.makedirs(out)
             with py7zr.SevenZipFile(io.BytesIO(data), mode="r") as z:
+                if z.needs_password():
+                    raise ValueError("This archive is password-protected, which is not supported.")
                 total_declared = sum((i.uncompressed or 0) for i in z.list() if not i.is_directory)
                 if total_declared > ARCHIVE_CAP:
                     raise ValueError("Archive contents exceed the 2 GB limit")
@@ -544,7 +607,7 @@ def extract_archive(data: bytes, filename: str = "") -> list[tuple[str, bytes]]:
             out = os.path.join(td, "out")
             os.makedirs(out)
             proc = subprocess.run(["unrar", "x", "-o+", "-p-", "-y", "--", path, out + os.sep],
-                                  capture_output=True, text=True)
+                                  stdin=subprocess.DEVNULL, capture_output=True, text=True)
             if proc.returncode not in (0, 1):
                 raise ValueError(proc.stderr.strip() or proc.stdout.strip() or "unrar failed")
             _collect_dir(out, add)
@@ -624,9 +687,10 @@ def rename_one(filename: str, index: int, pattern: str = "{name}.{ext}", find: s
     out = out.replace(".{ext}", ("." + ext) if ext else "")
     out = out.replace("{ext}", ext)
     out = out.replace("{date}", date_str or date.today().isoformat())
-    out = _N_TOKEN_RE.sub(lambda m: str(index).zfill(int(m.group(1))) if m.group(1) else str(index), out)
+    # min(): "{n:0999999999}" would otherwise build a gigabyte of zeros per file.
+    out = _N_TOKEN_RE.sub(lambda m: str(index).zfill(min(int(m.group(1)), 20)) if m.group(1) else str(index), out)
     out = out.replace("/", "_").replace("\\", "_").strip()
-    return out or base
+    return base if out in ("", ".", "..") else out
 
 
 def batch_rename_names(filenames: list[str], pattern: str = "{name}.{ext}", find: str = "",
@@ -658,15 +722,18 @@ def split_file(data: bytes, filename: str, chunk_mb: float = 100) -> list[tuple[
     for i in range(count):
         parts.append((f"{name}.{i + 1:03d}", data[i * chunk:(i + 1) * chunk]))
     part_names = [p[0] for p in parts]
+    # Quoted, so the commands still work when the name has spaces, quotes or $.
+    sh_parts = " ".join(shlex.quote(p) for p in part_names)
+    win_parts = "+".join(f'"{p}"' for p in part_names)
     join_txt = (
         f"Reassemble {name} ({len(data)} bytes, {count} parts of {chunk_mb:g} MB)\n"
         f"Put all parts in one folder, open a terminal there, and run:\n\n"
         f"macOS / Linux:\n"
-        f"  cat {' '.join(part_names)} > \"{name}\"\n\n"
+        f"  cat {sh_parts} > {shlex.quote(name)}\n\n"
         f"Windows (Command Prompt):\n"
-        f"  copy /b {'+'.join(part_names)} \"{name}\"\n\n"
+        f"  copy /b {win_parts} \"{name}\"\n\n"
         f"Windows (PowerShell):\n"
-        f"  cmd /c copy /b {'+'.join(part_names)} \"{name}\"\n\n"
+        f"  cmd /c copy /b {win_parts} \"{name}\"\n\n"
         f"Or use the Join Files option in the sdexe File Splitter tool.\n"
         f"SHA-256 of the original: {hashlib.sha256(data).hexdigest()}\n"
     )
@@ -682,7 +749,8 @@ def join_files(files: list[tuple[str, bytes]]) -> tuple[str, bytes]:
     parts = [(n, d) for n, d in files if n.upper() != "JOIN.TXT"]
     if not parts:
         raise ValueError("No part files provided")
-    parts.sort(key=lambda p: p[0])
+    # By part number where there is one: as text, "x.1000" sorts before "x.999".
+    parts.sort(key=lambda p: (0, int(m.group(2)), p[0]) if (m := _PART_RE.match(p[0])) else (1, 0, p[0]))
     first = parts[0][0]
     m = _PART_RE.match(first)
     base = m.group(1) if m else first

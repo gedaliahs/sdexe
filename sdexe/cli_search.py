@@ -8,17 +8,15 @@ key. Results come back as links for `sdexe download`, and
 import json
 import sys
 
-import yt_dlp
-
 from sdexe import media, ui
-from sdexe.cli import UsageError, fmt_time, _escape
+from sdexe.cli import UsageError, fail, fmt_time, _escape
 
 SOURCES = {"youtube": "ytsearch", "soundcloud": "scsearch"}
 
 HELP = """\
   [title]sdexe search[/title] [muted]· find videos and songs by name · no link, account or key needed[/muted]
 
-  [brand]sdexe search[/brand] [brand2]"<words>" \\\\[options][/brand2]
+  [brand]sdexe search[/brand] [brand2]"<words>" \\[options][/brand2]
 
   [brand]◆[/brand] [title]Options[/title]
     [brand2]-n, --limit N[/brand2]              how many results (default 10, up to 50)
@@ -34,6 +32,7 @@ HELP = """\
 
 def search(query: str, limit: int = 10, source: str = "youtube") -> list:
     """[{title, url, channel, duration, views, id}] for the top results."""
+    import yt_dlp  # here, not at the top: the terminal app imports this module at startup
     prefix = SOURCES[source]
     opts = {"quiet": True, "no_warnings": True, "extract_flat": "in_playlist", "noprogress": True,
             "js_runtimes": media.js_runtimes(), "logger": _Quiet()}
@@ -101,8 +100,7 @@ def search_main(argv) -> int:
         if not 1 <= args.limit <= 50:
             raise UsageError("--limit must be between 1 and 50.")
     except UsageError as e:
-        print(f"sdexe search: {e}", file=sys.stderr)
-        return 2
+        return fail("search", e, argv)
 
     c = ui.console()
     try:

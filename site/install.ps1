@@ -10,7 +10,7 @@
 # Later, `sdexe update` upgrades it in place.
 
 $ErrorActionPreference = "Stop"
-$MinMinor = 10
+$MinMinor = 11
 $script:Step = 0
 
 function Write-Step($msg) { $script:Step++; Write-Host ""; Write-Host "[$script:Step] $msg" -ForegroundColor Cyan }
@@ -38,7 +38,7 @@ function Test-PythonOk($exe) {
 
 function Find-Python {
     # The py launcher is the most reliable way to reach a specific version.
-    foreach ($v in "3.14", "3.13", "3.12", "3.11", "3.10") {
+    foreach ($v in "3.14", "3.13", "3.12", "3.11") {
         if (Get-Command py -ErrorAction SilentlyContinue) {
             $out = & py "-$v" -c "print(1)" 2>$null
             if ($out -eq "1") { return @("py", "-$v") }

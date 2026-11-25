@@ -43,7 +43,7 @@
                 <div id="transcribe-options" hidden style="max-width: 520px; margin: 20px auto 0;">
                     <div class="field-row">
                         <div class="select-wrap">
-                            <label>Model</label>
+                            <label for="transcribe-model">Model</label>
                             <select id="transcribe-model">
                                 <option value="tiny">Tiny (fastest, least accurate)</option>
                                 <option value="base" selected>Base (fast, good accuracy)</option>
@@ -53,7 +53,7 @@
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Language</label>
+                            <label for="transcribe-language">Language</label>
                             <select id="transcribe-language">
                                 <option value="">Auto-detect</option>
                                 <option value="en">English</option>
@@ -98,12 +98,12 @@
                     <div id="transcribe-diarize-options" hidden style="margin-top: 12px;">
                         <div class="field-row">
                             <div class="field" style="flex: 2;">
-                                <label>HuggingFace Token</label>
+                                <label for="transcribe-hf-token">HuggingFace Token</label>
                                 <input type="password" id="transcribe-hf-token" placeholder="hf_...">
                                 <p class="drop-hint" style="margin-top: 4px; text-align: left;">Required for speaker diarization model. <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">Get token</a></p>
                             </div>
                             <div class="field" style="flex: 1;">
-                                <label>Number of speakers (optional)</label>
+                                <label for="transcribe-num-speakers">Number of speakers (optional)</label>
                                 <input type="number" id="transcribe-num-speakers" min="1" max="20" placeholder="Auto">
                             </div>
                         </div>

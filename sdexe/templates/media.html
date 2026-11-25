@@ -16,7 +16,7 @@
                     <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
                 </svg>
             </div>
-            <textarea id="url" rows="1" placeholder="Paste any video or audio URL (one per line for batch)..." autofocus></textarea>
+            <textarea id="url" rows="1" placeholder="Paste any video or audio URL (one per line for batch)..." aria-label="Video or audio links, one per line" autofocus></textarea>
             <button id="fetch-btn" onclick="fetchInfo()">
                 <span class="btn-text">Fetch</span>
                 <span class="btn-arrow">&rarr;</span>
@@ -29,9 +29,9 @@
             <button class="folder-change" onclick="promptSetFolder()">Change</button>
         </div>
 
-        <div id="error" class="error" hidden>
+        <div id="error" class="error" role="alert" hidden>
             <span id="error-text"></span>
-            <button class="error-dismiss" onclick="hideError()">&times;</button>
+            <button class="error-dismiss" onclick="hideError()" aria-label="Dismiss">&times;</button>
         </div>
 
         <div id="empty-state" class="empty-state">
@@ -85,15 +85,15 @@
             <div class="card-body">
                 <div id="v-details" class="meta-fields" hidden>
                     <div class="field">
-                        <label>Title</label>
+                        <label for="v-title">Title</label>
                         <input type="text" id="v-title" placeholder="Title">
                     </div>
                     <div class="field-row">
-                        <div class="field"><label>Artist</label><input type="text" id="v-artist" placeholder="Artist"></div>
-                        <div class="field"><label>Album</label><input type="text" id="v-album" placeholder="Album"></div>
+                        <div class="field"><label for="v-artist">Artist</label><input type="text" id="v-artist" placeholder="Artist"></div>
+                        <div class="field"><label for="v-album">Album</label><input type="text" id="v-album" placeholder="Album"></div>
                     </div>
                     <div id="v-description-wrap" class="field" style="margin-top:12px" hidden>
-                        <label>Description <span id="v-upload-date" class="meta-date"></span></label>
+                        <label for="v-description">Description <span id="v-upload-date" class="meta-date"></span></label>
                         <textarea id="v-description" rows="2" placeholder="Description"></textarea>
                     </div>
                 </div>
@@ -124,7 +124,7 @@
                     </div>
                     <div class="control-row" hidden>
                         <div class="select-wrap">
-                            <label>Format</label>
+                            <label for="v-format">Format</label>
                             <select id="v-format" onchange="updateQuality('v')">
                                 <option value="mp3">MP3 (Audio)</option>
                                 <option value="mp4">MP4 (Video)</option>
@@ -133,7 +133,7 @@
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Quality</label>
+                            <label for="v-quality">Quality</label>
                             <select id="v-quality">
                                 <option value="best">Best</option>
                             </select>
@@ -201,7 +201,7 @@
                     </div>
                     <div class="control-row" hidden>
                         <div class="select-wrap">
-                            <label>Format</label>
+                            <label for="p-format">Format</label>
                             <select id="p-format" onchange="updateQuality('p')">
                                 <option value="mp3">MP3 (Audio)</option>
                                 <option value="mp4">MP4 (Video)</option>
@@ -210,15 +210,15 @@
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Quality</label>
+                            <label for="p-quality">Quality</label>
                             <select id="p-quality">
                                 <option value="best">Best</option>
                             </select>
                         </div>
                     </div>
                     <div class="field-row">
-                        <div class="field"><label>Artist (all)</label><input type="text" id="p-artist" placeholder="Apply to all"></div>
-                        <div class="field"><label>Album (all)</label><input type="text" id="p-album" placeholder="Apply to all"></div>
+                        <div class="field"><label for="p-artist">Artist (all)</label><input type="text" id="p-artist" placeholder="Apply to all"></div>
+                        <div class="field"><label for="p-album">Album (all)</label><input type="text" id="p-album" placeholder="Apply to all"></div>
                     </div>
                     <button id="p-dl-btn" class="btn-download" onclick="startPlaylistDownload()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
@@ -244,7 +244,7 @@
         </div>
         <!-- Download History -->
         <div id="history-panel" class="history-panel" hidden>
-            <div class="history-header" onclick="toggleHistory()">
+            <div class="history-header" onclick="toggleHistory()" role="button" tabindex="0" aria-expanded="true" aria-controls="history-list">
                 <span id="history-toggle" class="history-header-title">Recent downloads</span>
                 <span id="history-chevron" class="history-chevron">&#x25BC;</span>
             </div>

@@ -29,10 +29,11 @@ def needs_setup() -> bool:
 
 
 def _mark_setup_done():
-    from sdexe.app import load_config, save_config
-    cfg = load_config()
-    cfg["setup_done"] = __version__
-    save_config(cfg)
+    from sdexe import app
+    with app._state_lock:  # as settings.put: the web app saves this file too
+        cfg = app.load_config()
+        cfg["setup_done"] = __version__
+        app.save_config(cfg)
 
 
 # ── Prompts ──
@@ -364,6 +365,14 @@ def run_setup(c: Console, first_run: bool = False):
 
 def _run(argv, cwd):
     """Run an sdexe command visibly, as the user would type it."""
+    if argv and argv[0] == "download":
+        # Later steps use these files by name, so keep them here and as MP4
+        # whatever download folder or format the user has set.
+        from sdexe.cli import classify_tag
+        extra = ["--output=."]
+        if not any((classify_tag(t.lstrip("-")) or ("",))[0] == "format" for t in argv[1:]):
+            extra.append("--format=mp4")
+        argv = [*argv, *extra]
     p = subprocess.Popen([sys.executable, "-m", "sdexe", *argv], cwd=cwd)
     while True:
         try:

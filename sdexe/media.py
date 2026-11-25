@@ -61,19 +61,25 @@ def build_ydl_opts(
     opts: dict = {}
 
     if fmt in VIDEO_FORMATS:
-        filt = f"[height<={height}]" if height else ""
         if fmt == "webm":
             # Prefer native VP9/AV1 + Opus streams, which mux into WebM with no
             # re-encode. Anything else falls back to MKV rather than failing.
-            format_str = (f"bestvideo[ext=webm]{filt}+bestaudio[ext=webm]/"
-                          f"bestvideo{filt}+bestaudio/best{filt}/best")
+            # Here the ceiling has to be a filter too, or a WebM stream above
+            # it would beat another codec under it: on the height of a
+            # landscape stream, on the width of a vertical one.
+            if height:
+                native = (f"bestvideo[ext=webm][height<={height}][aspect_ratio>=?1]+bestaudio[ext=webm]/"
+                          f"bestvideo[ext=webm][width<={height}][aspect_ratio<1]+bestaudio[ext=webm]/")
+            else:
+                native = "bestvideo[ext=webm]+bestaudio[ext=webm]/"
+            format_str = native + "bestvideo+bestaudio/best"
             merge = "webm/mkv"
         else:
             # Codec-agnostic: take the highest-bitrate stream at/under the chosen
             # resolution (H.264 / VP9 / AV1). An [ext=mp4] filter makes yt-dlp
             # fall back to a low-bitrate stream (or a 360p progressive file)
             # when an mp4-codec 1080p isn't offered.
-            format_str = f"bestvideo{filt}+bestaudio/best{filt}/best" if filt else "bestvideo+bestaudio/best"
+            format_str = "bestvideo+bestaudio/best"
             merge = fmt
 
         if force_container and fmt != "webm":
@@ -87,12 +93,21 @@ def build_ydl_opts(
             postprocessors.append({"key": "EmbedThumbnail"})
 
         fps_key = f"fps:{fps}" if fps else "fps"
+        # The ceiling is a sort limit, not a [height<=N] filter: "res" is the
+        # shorter side, so a 1080x1920 vertical video counts as 1080p (the
+        # filter gave 576x1024 for it), and a video with nothing at or under
+        # the ceiling gets its smallest stream instead of failing.
+        res_key = f"res:{height}" if height else "res"
         opts.update({
             "format": format_str,
             # Prefer resolution, then raw bitrate, over yt-dlp's default codec-
             # efficiency ranking, so we get the best-looking stream, not the
-            # smallest one.
-            "format_sort": ["res", fps_key, "br"] if prefer_fps or fps else ["res", "br"],
+            # smallest one. "lang" stays first and "quality" ahead of bitrate,
+            # as in yt-dlp's own order: without them a dubbed, audio-described
+            # or volume-levelled (DRC) track wins whenever its bitrate is a
+            # hair higher than the original's.
+            "format_sort": (["lang", res_key, fps_key, "quality", "br"] if prefer_fps or fps
+                            else ["lang", res_key, "quality", "br"]),
             "merge_output_format": merge,
         })
 

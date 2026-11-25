@@ -10,12 +10,10 @@ any failed, 2 on bad usage.
 import json
 import sys
 
-import yt_dlp
-
 from sdexe import media, ui
 from sdexe.app import _friendly_download_error
-from sdexe.cli import (UsageError, collect_urls, fmt_size, fmt_time, parse_args, quiet_sdexe_logger,
-                       resolve_spec, youtube_warnings, ydl_base_opts, _escape)
+from sdexe.cli import (UsageError, check_browser, collect_urls, fail, fmt_size, fmt_time, parse_args,
+                       quiet_sdexe_logger, resolve_spec, youtube_warnings, ydl_base_opts, _escape)
 
 HELP = """\
   [title]sdexe info[/title] [muted]· what a link holds, and what sdexe download would fetch · nothing is downloaded[/muted]
@@ -277,9 +275,9 @@ def info_main(argv) -> int:
             return 0
         urls = collect_urls(args, "info")
         spec = resolve_spec(tags)  # the user's defaults when no tag is given
+        check_browser(args.cookies_from_browser)
     except UsageError as e:
-        print(f"sdexe info: {e}", file=sys.stderr)
-        return 2
+        return fail("info", e, argv)
 
     log = (lambda m: print(m, file=sys.stderr)) if args.verbose else None
     opts = {
@@ -297,6 +295,7 @@ def info_main(argv) -> int:
             ui.console(stderr=True).print(f"  [warn]![/warn] [muted]{_escape(w)}[/muted]")
         console.print()
 
+    import yt_dlp  # here, not at the top: `sdexe info --help` and usage errors don't need it
     results = []
     with yt_dlp.YoutubeDL(opts) as ydl:
         for url in urls:

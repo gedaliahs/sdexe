@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Callable
 
 from sdexe import tools
-from sdexe.cli import UsageError, fmt_size, parse_time, _escape
+from sdexe.cli import UsageError, fail, fmt_size, parse_time, _drop_stdout, _escape
 
 # ── Table types ──
 
@@ -36,10 +36,20 @@ class Arg:
     choices: tuple | None = None
     help: str = ""
     short: str | None = None       # "-f"
+    min: float | None = None       # smallest and largest value accepted, for int and float
+    max: float | None = None
 
     @property
     def dest(self):
         return self.flag.lstrip("-").replace("-", "_")
+
+    @property
+    def range_text(self) -> str:
+        if self.min is not None and self.max is not None:
+            return f"{self.min:g} to {self.max:g}"
+        if self.min is not None:
+            return f"{self.min:g} or more"
+        return f"{self.max:g} or less" if self.max is not None else ""
 
 
 @dataclass
@@ -86,11 +96,8 @@ def _ext(p: Path) -> str:
 
 
 def _img(p: Path):
-    from PIL import Image
     from sdexe import tools_images2  # noqa: F401  registers the HEIC opener
-    img = Image.open(p)
-    img.load()
-    return img
+    return tools.open_image(p)
 
 
 def _img_ext(p: Path) -> str:
@@ -123,8 +130,7 @@ def _pdf_pages(p, a):
     from sdexe import tools_pdf2
     reader = PdfReader(str(p))
     writer = PdfWriter()
-    for i in tools_pdf2.parse_pages(a.pages, len(reader.pages)):
-        writer.add_page(reader.pages[i])
+    tools._append_pages(writer, reader, tools_pdf2.parse_pages(a.pages, len(reader.pages)), outline=False)
     buf = io.BytesIO()
     writer.write(buf)
     return Result(buf.getvalue(), "pdf")
@@ -143,6 +149,8 @@ def _pdf_reorder(p, a):
     try:
         order = [int(x) for x in a.order.replace(" ", "").split(",") if x]
     except ValueError:
+        order = []
+    if not order:  # "--order ," used to save a PDF with no pages
         raise ValueError("--order takes page numbers like 3,1,2")
     return Result(tools.reorder_pdf(_pdf_stream(p), order), "pdf")
 
@@ -170,7 +178,24 @@ def _image_compress(p, a):
 
 
 def _image_crop(p, a):
-    return _img_result(tools.crop_image(_img(p), a.x, a.y, a.x + a.width, a.y + a.height), p)
+    img = _img(p)
+    # Pillow pads whatever lies outside the picture with black instead of
+    # complaining, so a box that misses or overshoots saved a bogus image.
+    if a.width < 1 or a.height < 1:
+        raise ValueError("--width and --height must be at least 1")
+    if a.x < 0 or a.y < 0 or a.x + a.width > img.width or a.y + a.height > img.height:
+        raise ValueError(f"That box goes outside the image, which is {img.width} x {img.height}")
+    return _img_result(tools.crop_image(img, a.x, a.y, a.x + a.width, a.y + a.height), p)
+
+
+def _ico_sizes(text: str) -> list:
+    try:
+        sizes = [int(s) for s in text.replace(" ", "").split(",") if s]
+    except ValueError:
+        sizes = []
+    if not sizes or min(sizes) < 1:
+        raise ValueError("--sizes takes pixel sizes like 16,32,48")
+    return sizes
 
 
 def _image_info(p, a):
@@ -213,13 +238,13 @@ def _video_frames(p, a):
     from sdexe import tools_av2
     if a.at is not None:
         mode = "single"
-    elif a.count:
+    elif a.count is not None:  # "--count 0" is an error to report, not "every second"
         mode = "count"
     else:
         mode = "interval"
     data, name, mime = tools_av2.extract_frames(
         _read(p), _ext(p), mode, p.stem, time=parse_time(a.at) if a.at else 0,
-        interval=parse_time(a.every) if a.every else 1, count=a.count or 10, fmt=a.format)
+        interval=parse_time(a.every) if a.every else 1, count=10 if a.count is None else a.count, fmt=a.format)
     if mime == "application/zip":
         return Result(files=_unzip(data))
     return Result(data, Path(name).suffix.lstrip("."), name=Path(name).stem)
@@ -369,7 +394,8 @@ COMMANDS: list[Cmd] = [
     Cmd("pdf", "from-office", "convert Word, Excel, PowerPoint or ODF to PDF (needs LibreOffice)",
         run=lambda p, a: Result(pdf2("office_to_pdf")(_pdf_stream(p), p.name), "pdf")),
     Cmd("pdf", "flatten", "bake forms and annotations into the page", suffix="flat",
-        args=[Arg("--dpi", int, 150)], run=lambda p, a: Result(pdf2("flatten_pdf")(_pdf_stream(p), a.dpi), "pdf")),
+        args=[Arg("--dpi", int, 150, min=36, max=600)],
+        run=lambda p, a: Result(pdf2("flatten_pdf")(_pdf_stream(p), a.dpi), "pdf")),
     Cmd("pdf", "resize", "fit every page to a paper size", suffix="resized",
         args=[Arg("--size", default="a4", choices=("a3", "a4", "a5", "letter", "legal")),
               Arg("--fit", default="fit", choices=("fit", "fill", "stretch"))],
@@ -427,18 +453,20 @@ COMMANDS: list[Cmd] = [
         run=lambda p, a: _img_result(img2("upscale_image")(_img(p), a.factor), p)),
     Cmd("image", "info", "size, format and EXIF", run=_image_info),
     Cmd("image", "ico", "make a Windows .ico", args=[Arg("--sizes", default="16,32,48,64,128,256")],
-        run=lambda p, a: Result(tools.image_to_ico(_img(p), [int(s) for s in a.sizes.split(",")]), "ico")),
+        run=lambda p, a: Result(tools.image_to_ico(_img(p), _ico_sizes(a.sizes)), "ico")),
     Cmd("image", "favicon", "a full favicon set for a website", suffix="favicon",
         run=lambda p, a: Result(files=_unzip(img2("favicon_set")(_img(p))))),
     Cmd("image", "collage", "arrange images in a grid", inputs="many",
-        args=[Arg("--columns", int, 0, help="0 picks automatically"), Arg("--cell", int, 256, help="cell size, pixels"),
-              Arg("--gap", int, 0), Arg("--background", default="#ffffff")],
+        args=[Arg("--columns", int, 0, help="0 picks automatically", min=0),
+              Arg("--cell", int, 256, help="cell size, pixels", min=1), Arg("--gap", int, 0, min=0),
+              Arg("--background", default="#ffffff")],
         run=_image_collage),
     Cmd("image", "ascii", "turn an image into ASCII art",
-        args=[Arg("--width", int, 100, help="characters per line"), Arg("--invert", bool)],
+        args=[Arg("--width", int, 100, help="characters per line", min=1), Arg("--invert", bool)],
         run=lambda p, a: Result(text=img2("image_to_ascii")(_img(p), a.width, "standard", a.invert))),
     Cmd("image", "qr", "make a QR code PNG", inputs="none", text_arg="text", inputs_help="TEXT",
-        args=[Arg("--box-size", int, 10), Arg("--border", int, 4)],
+        args=[Arg("--box-size", int, 10, help="pixels per square", min=1, max=100),
+              Arg("--border", int, 4, help="squares of margin", min=0, max=100)],
         run=lambda _, a: Result(tools.generate_qr(a.text, a.box_size, a.border), "png", name="qr"),
         example='sdexe image qr "https://example.com" -o qr.png'),
 
@@ -501,7 +529,7 @@ COMMANDS: list[Cmd] = [
         args=[Arg("--format", default="mp3", choices=_AUDIO_FMTS, short="-f")],
         run=lambda p, a: Result(tools.extract_audio(_read(p), _ext(p), a.format), a.format)),
     Cmd("video", "gif", "animated GIF",
-        args=[Arg("--fps", int, 10), Arg("--width", int, 480)],
+        args=[Arg("--fps", int, 10, min=1, max=60), Arg("--width", int, 480)],
         run=lambda p, a: Result(tools.video_to_gif(_read(p), _ext(p), a.fps, a.width), "gif")),
     Cmd("video", "resize", "change resolution", suffix="resized",
         args=[Arg("--width", int, required=True), Arg("--height", int, -1, help="-1 keeps the aspect ratio")],
@@ -584,6 +612,30 @@ class _Parser(argparse.ArgumentParser):
         raise UsageError(message[0].upper() + message[1:] + ".")
 
 
+def number(text: str) -> float:
+    """float() also reads "nan" and "inf", which no option here can use."""
+    n = float(text)
+    if n != n or abs(n) == float("inf"):
+        raise ValueError(text)
+    return n
+
+
+def _converter(arg: Arg):
+    """argparse type for an Arg: finite floats, and the Arg's range if it has one."""
+    conv = number if arg.type is float else arg.type
+    if arg.min is None and arg.max is None:
+        return conv
+
+    def ranged(text):
+        value = conv(text)
+        if (arg.min is not None and value < arg.min) or (arg.max is not None and value > arg.max):
+            raise argparse.ArgumentTypeError(f"must be {arg.range_text}")
+        return value
+
+    ranged.__name__ = conv.__name__  # argparse names the type in "invalid int value"
+    return ranged
+
+
 def build_parser(cmd: Cmd) -> argparse.ArgumentParser:
     p = _Parser(prog=f"sdexe {cmd.full}", add_help=False)
     if cmd.inputs == "none":
@@ -595,8 +647,8 @@ def build_parser(cmd: Cmd) -> argparse.ArgumentParser:
         if arg.type is bool:
             p.add_argument(*flags, dest=arg.dest, action="store_true")
         else:
-            p.add_argument(*flags, dest=arg.dest, type=arg.type, default=arg.default,
-                           required=arg.required, choices=arg.choices)
+            p.add_argument(*flags, dest=arg.dest, type=_converter(arg),
+                           default=arg.default, required=arg.required, choices=arg.choices)
     p.add_argument("-o", "--output")
     p.add_argument("--json", action="store_true")
     p.add_argument("--quiet", action="store_true")
@@ -610,6 +662,8 @@ def _arg_line(arg: Arg) -> tuple[str, str]:
         left += " " + ("|".join(map(str, arg.choices)) if arg.choices and len(arg.choices) <= 5
                        else arg.dest.upper())
     bits = [_escape(arg.help)] if arg.help else []
+    if arg.range_text:
+        bits.append(arg.range_text)
     if arg.choices and len(arg.choices) > 5:
         bits.append("one of " + ", ".join(map(str, arg.choices)))
     if arg.required:
@@ -674,7 +728,7 @@ class Runner:
         self.cmd = cmd
         self.args = args
         self.results = []
-        self.claimed = set()
+        self.claims = set()  # empty files _claim created, still to be filled
         self.stdout_tty = sys.stdout.isatty()
         self.console = None
         if sys.stderr.isatty() and not args.quiet:
@@ -688,30 +742,76 @@ class Runner:
             if o.suffix and not o.is_dir():
                 if n_outputs > 1:
                     raise UsageError(f"-o {o.name} names one file, but there are {n_outputs} inputs. Pass a folder.")
+                if ext and not _same_ext(o.suffix.lstrip("."), ext):
+                    o = o.with_suffix("." + ext)  # JPEG bytes don't belong in "out.png"
+                self._not_an_input(o, sources)
                 o.parent.mkdir(parents=True, exist_ok=True)
                 return o.resolve()
             folder = o
         else:
             folder = Path.cwd()
         folder.mkdir(parents=True, exist_ok=True)
-        dest = folder / f"{stem}.{ext}"
-        n = 2
-        inputs = {Path(s).resolve() for s in sources}
-        while dest.exists() or dest in self.claimed or dest.resolve() in inputs:
-            dest = folder / f"{stem} ({n}).{ext}"
-            n += 1
-        self.claimed.add(dest)
-        return dest.resolve()
+        return self._claim(folder / f"{stem}.{ext}").resolve()
 
-    def _folder(self, stem: str) -> Path:
-        base = Path(self.args.output).expanduser() if self.args.output else Path.cwd() / stem
+    @staticmethod
+    def _not_an_input(dest: Path, sources: list):
+        # The same file, not the same spelling: on macOS and Windows PHOTO.png is
+        # photo.png, and comparing paths let it replace the input.
+        if any(dest.exists() and os.path.exists(s) and os.path.samefile(dest, s) for s in sources):
+            raise UsageError(f"-o {dest.name} is the input file, and inputs are never overwritten. "
+                             "Give another name, or a folder.")
+
+    def _folder(self, stem: str, n_outputs: int) -> Path:
+        if self.args.output:
+            base = Path(self.args.output).expanduser()
+            # Several inputs into one -o folder: one subfolder each, or their
+            # page_1.pdf, frame_001.png… would overwrite each other.
+            if n_outputs > 1:
+                base = base / stem
+        else:
+            base = Path.cwd() / stem
+        # A folder sdexe names itself is always a new one, and creating it is
+        # what takes the name: two runs at once can't both get "doc-split".
+        fresh = not self.args.output or n_outputs > 1
         folder, n = base, 2
-        if not self.args.output:
-            while folder.exists():
+        while True:
+            try:
+                folder.mkdir(parents=True, exist_ok=not fresh)
+                break
+            except FileExistsError:
+                if not fresh:
+                    raise ValueError(f"-o {base.name} is a file. Give a folder for these outputs.")
                 folder = base.with_name(f"{base.name} ({n})")
                 n += 1
-        folder.mkdir(parents=True, exist_ok=True)
         return folder.resolve()
+
+    def _claim(self, path: Path) -> Path:
+        """Create path empty, or "name (2).ext" … if that name is taken, and
+        return it. Creating it is the check: with exists()-then-write, twelve
+        resizes of one photo started together (an agent does that) saved nine
+        files, the rest written over each other."""
+        candidate, n = path, 2
+        while True:
+            try:
+                os.close(os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666))
+                self.claims.add(candidate.resolve())
+                return candidate
+            except FileExistsError:
+                candidate = path.with_name(f"{path.stem} ({n}){path.suffix}")
+                n += 1
+
+    def _write(self, dest: Path, data: bytes):
+        """All of data at dest, or nothing: no half-written file, no leftover
+        temp file, and no empty placeholder from _claim."""
+        tmp = dest.with_name(f".{dest.name}.sdexe-tmp")
+        try:
+            tmp.write_bytes(data)
+            os.replace(tmp, dest)
+        except BaseException:  # a full disk, Ctrl+C
+            tmp.unlink(missing_ok=True)
+            if dest in self.claims:
+                dest.unlink(missing_ok=True)
+            raise
 
     def _save(self, res: Result, sources: list, n_outputs: int) -> dict:
         src = Path(sources[0]) if sources else None
@@ -719,29 +819,32 @@ class Runner:
         if res.files is not None:
             if not res.files:
                 raise ValueError("Nothing to save: the result was empty.")
-            folder = self._folder(stem)
+            folder = self._folder(stem, n_outputs)
             paths = []
             for name, data in res.files:
                 safe = Path(name.replace("\\", "/")).parts
                 target = folder.joinpath(*[p for p in safe if p not in ("..", "/")])
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(data)
+                target = self._claim(target)
+                self._write(target, data)
                 paths.append(str(target))
             return {"folder": str(folder), "outputs": [{"path": p, "size_bytes": Path(p).stat().st_size}
                                                         for p in paths]}
         if res.data is not None:
             dest = self._dest(stem, res.ext or (src.suffix.lstrip(".") if src else "bin"), sources, n_outputs)
-            tmp = dest.with_name(f".{dest.name}.sdexe-tmp")
-            tmp.write_bytes(res.data)
-            os.replace(tmp, dest)
+            self._write(dest, res.data)
             return {"outputs": [{"path": str(dest), "size_bytes": len(res.data)}]}
         if res.text is not None:
             if self.args.output:
                 dest = Path(self.args.output).expanduser()
-                if dest.is_dir():
-                    dest = dest / f"{stem}.txt"
+                if dest.is_dir() or not dest.suffix:
+                    dest.mkdir(parents=True, exist_ok=True)
+                    dest = self._claim(dest / f"{stem}.txt")
+                elif n_outputs > 1:
+                    raise UsageError(f"-o {dest.name} names one file, but there are {n_outputs} inputs. Pass a folder.")
+                self._not_an_input(dest, sources)
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(res.text, encoding="utf-8")
+                self._write(dest.resolve(), res.text.encode("utf-8"))
                 return {"outputs": [{"path": str(dest.resolve()), "size_bytes": dest.stat().st_size}]}
             return {"text": res.text}
         return {"data": res.obj}
@@ -777,15 +880,14 @@ class Runner:
         if self.args.json:
             return
         if "text" in entry:
-            sys.stdout.write(entry["text"] if entry["text"].endswith("\n") else entry["text"] + "\n")
+            _emit(entry["text"] if entry["text"].endswith("\n") else entry["text"] + "\n")
             return
         if "data" in entry:
             self._print_data(entry["data"], label)
             return
         outs = entry["outputs"]
         if not self.stdout_tty:
-            for o in outs:
-                print(o["path"], flush=True)
+            _emit("".join(o["path"] + "\n" for o in outs))
         if self.console:
             before = sum(Path(s).stat().st_size for s in sources) if sources else 0
             if "folder" in entry:
@@ -795,13 +897,15 @@ class Runner:
             else:
                 o = outs[0]
                 sizes = f"{fmt_size(before)} → {fmt_size(o['size_bytes'])}" if before else fmt_size(o["size_bytes"])
-                self.console.print(f"  [ok]✓[/ok] {_escape(label)} [faint]→[/faint] "
-                                   f"[brand][link=file://{o['path']}]{_escape(_short(o['path']))}[/link][/brand]  "
-                                   f"[muted]{sizes}[/muted]")
+                from rich.text import Text
+                from sdexe import ui
+                self.console.print(Text.assemble(("  ✓ ", "ok"), label, (" → ", "faint"),
+                                                 ui.file_link(o["path"], _short(o["path"])), ("  " + sizes, "muted")))
 
     def _print_data(self, data, label):
         if not self.stdout_tty:
-            print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+            # One compact document per line, so info on several files is valid JSON Lines.
+            _emit(json.dumps(data, ensure_ascii=False, default=str) + "\n")
             return
         from sdexe import ui
         c = ui.console()
@@ -815,18 +919,63 @@ class Runner:
 
     def run(self, files: list) -> int:
         cmd, a = self.cmd, self.args
-        if cmd.inputs == "none":
-            self._one([], lambda: cmd.run(None, a), 1)
-        elif cmd.inputs == "each":
-            for f in files:
-                self._one([f], lambda f=f: cmd.run(Path(f), a), len(files))
-        else:
-            self._one(files, lambda: cmd.run([Path(f) for f in files], a), 1)
+        stopped = False
+        try:
+            if cmd.inputs == "none":
+                self._one([], lambda: cmd.run(None, a), 1)
+            elif cmd.inputs == "each":
+                for f in files:
+                    self._one([f], lambda f=f: cmd.run(Path(f), a), len(files))
+            else:
+                self._one(files, lambda: cmd.run([Path(f) for f in files], a), 1)
+        except KeyboardInterrupt:
+            # Ctrl+C (or `kill`): no traceback, and --json still gets its
+            # document, with whatever finished before the stop.
+            stopped = True
+            print(f"sdexe {cmd.full}: stopped.", file=sys.stderr)
 
+        ok = not stopped and all(r["ok"] for r in self.results)
         if a.json:
-            print(json.dumps({"ok": all(r["ok"] for r in self.results), "command": cmd.full,
-                              "results": self.results}, indent=2, ensure_ascii=False, default=str))
-        return 0 if all(r["ok"] for r in self.results) else 1
+            doc = {"ok": ok, "command": cmd.full, "results": self.results}
+            if stopped:
+                doc["error"] = "Stopped before finishing."
+            _emit(json.dumps(doc, indent=2, ensure_ascii=False, default=str) + "\n")
+        return 130 if stopped else 0 if ok else 1
+
+
+def _emit(text: str):
+    """Write results to stdout. A reader that left early (`| head -1`) is not
+    an error: it used to end the run with a BrokenPipeError traceback."""
+    try:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        _drop_stdout()
+
+
+_SAME_EXT = [{"jpg", "jpeg"}, {"tif", "tiff"}, {"yaml", "yml"}, {"htm", "html"}, {"md", "markdown"}]
+
+
+def _same_ext(a: str, b: str) -> bool:
+    a, b = a.lower(), b.lower()
+    return a == b or any(a in group and b in group for group in _SAME_EXT)
+
+
+def _expand(files: list) -> list:
+    """Patterns the shell passed through untouched: the zsh alias `sdexe setup`
+    offers runs sdexe under noglob, and cmd.exe never expands them. Without
+    this, `sdexe image resize *.jpg` answered "Not found: *.jpg" there."""
+    import glob
+    out = []
+    for f in files:
+        path = os.path.expanduser(f)
+        if not os.path.exists(path) and any(ch in path for ch in "*?["):
+            found = sorted(m for m in glob.glob(path) if os.path.isfile(m))
+            if found:
+                out += found
+                continue
+        out.append(path)
+    return out
 
 
 def _short(path: str) -> str:
@@ -869,28 +1018,41 @@ def tools_main(argv) -> int:
             names = [c.name for c in COMMANDS if c.group == group]
             guess = difflib.get_close_matches(rest[0], names, n=1)
             hint = f" Did you mean `sdexe {group} {guess[0]}`?" if guess else f" Run `sdexe {group} --help`."
-            print(f"sdexe {group}: unknown command '{rest[0]}'.{hint}", file=sys.stderr)
-            return 2
+            return fail(group, f"unknown command '{rest[0]}'.{hint}", argv)
         rest = rest[1:]
 
+    # Options end at "--": `sdexe image qr -- -h` is a QR code of "-h".
+    options = rest[:rest.index("--")] if "--" in rest else rest
+    if any(tok in ("-h", "--help") for tok in options):
+        _print(command_help(cmd))  # before parsing: required options mustn't block help
+        return 0
+    from sdexe.cli import _interrupt_on_sigterm, quiet_sdexe_logger
+    quiet_sdexe_logger()  # the tools log ffmpeg's whole output; the error line below says it better
+    _interrupt_on_sigterm()
     try:
         args = build_parser(cmd).parse_args(rest)
-        if args.help:
-            _print(command_help(cmd))
-            return 0
         files = [] if cmd.inputs == "none" else args.files
         if cmd.inputs != "none":
             if not files:
                 raise UsageError(f"No input files. Usage: sdexe {cmd.full} {cmd.inputs_help}")
-            missing = [f for f in files if not Path(f).expanduser().is_file()]
+            files = _expand(files)
+            missing = [f for f in files if not Path(f).is_file()]
             if missing:
-                raise UsageError(f"Not found: {missing[0]}")
-            files = [str(Path(f).expanduser()) for f in files]
+                raise UsageError(f"{missing[0]} is a folder, not a file." if Path(missing[0]).is_dir()
+                                 else f"Not found: {missing[0]}")
             if cmd.inputs == "pair" and len(files) != 2:
                 raise UsageError(f"Needs exactly two files: {cmd.inputs_help}.")
             if cmd.inputs == "many" and len(files) < (1 if cmd.name in ("from-images", "zip", "collage") else 2):
                 raise UsageError(f"Needs at least two files to {cmd.name}.")
         return Runner(cmd, args).run(files)
     except UsageError as e:
-        print(f"sdexe {cmd.full}: {e}", file=sys.stderr)
-        return 2
+        return fail(cmd.full, e, rest)
+
+
+if __name__ == "__main__":
+    # `python -m sdexe.cli_tools image resize …`: the same commands without
+    # loading the web app first. The MCP server starts its tool calls this way.
+    # The one thing the web app's import does that the tools rely on: reading
+    # HEIC, for the commands that open an image themselves (pdf stamp, pdf ocr).
+    from sdexe import tools_images2  # noqa: F401
+    sys.exit(tools_main(sys.argv[1:]))

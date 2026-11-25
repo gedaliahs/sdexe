@@ -25,17 +25,18 @@ setupDropZone("resize-drop", "resize-input", files => {
 });
 
 function renderResizeList() {
+    document.getElementById("resize-error").hidden = true;
     const list = document.getElementById("resize-file-list");
     list.innerHTML = "";
     resizeFiles.forEach((f, i) => {
         const div = document.createElement("div");
         div.className = "file-item";
-        const thumb = URL.createObjectURL(f);
+        const thumb = sdexeFileURL(f);
         div.innerHTML = `
             <img class="img-thumb" src="${thumb}" alt="">
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeResizeFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeResizeFile(${i})">&times;</button>
         `;
         list.appendChild(div);
     });
@@ -43,6 +44,7 @@ function renderResizeList() {
     document.getElementById("resize-file-info").hidden = !hasFiles;
     document.getElementById("resize-options").hidden = !hasFiles;
     document.getElementById("resize-actions").hidden = !hasFiles;
+    if (hasFiles) document.getElementById("resize-thumb").src = sdexeFileURL(resizeFiles[0]);
     if (resizeFiles.length === 1) {
         document.getElementById("resize-file-name").textContent = resizeFiles[0].name;
         document.getElementById("resize-file-size").textContent = formatSize(resizeFiles[0].size);
@@ -50,7 +52,7 @@ function renderResizeList() {
         img.onload = () => {
             document.getElementById("resize-dimensions").textContent = `${img.width} × ${img.height}`;
         };
-        img.src = URL.createObjectURL(resizeFiles[0]);
+        img.src = sdexeFileURL(resizeFiles[0]);
     } else if (resizeFiles.length > 1) {
         document.getElementById("resize-file-name").textContent = `${resizeFiles.length} images`;
         document.getElementById("resize-file-size").textContent = formatSize(resizeFiles.reduce((s, f) => s + f.size, 0));
@@ -100,7 +102,7 @@ async function doResize() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = ct.includes("zip") ? "resized_images.zip" : (match ? match[1] : "resized.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -110,7 +112,7 @@ async function doResize() {
         err.hidden = false;
     }
     btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Resize Images`;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Resize Image`;
 }
 
 /* ── Compress ── */
@@ -124,6 +126,7 @@ setupDropZone("compress-drop", "compress-input", files => {
 });
 
 function renderCompressList() {
+    document.getElementById("compress-error").hidden = true;
     const list = document.getElementById("compress-list");
     list.innerHTML = "";
     compressFiles.forEach((f, i) => {
@@ -132,13 +135,13 @@ function renderCompressList() {
         div.draggable = true;
         div.dataset.index = i;
 
-        const thumb = URL.createObjectURL(f);
+        const thumb = sdexeFileURL(f);
         div.innerHTML = `
             <span class="drag-handle">&#9776;</span>
             <img class="img-thumb" src="${thumb}" alt="">
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeCompressFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeCompressFile(${i})">&times;</button>
         `;
         setupDragItem(div, compressFiles, renderCompressList);
         list.appendChild(div);
@@ -172,7 +175,8 @@ async function doCompress() {
         } else {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
-            const name = ct.includes("zip") ? "compressed_images.zip" : "compressed.jpg";
+            const name = ct.includes("zip") ? "compressed_images.zip"
+                : (sdexeFilename(res.headers.get("content-disposition")) || "compressed.jpg");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
         }
@@ -196,6 +200,7 @@ setupDropZone("iconvert-drop", "iconvert-input", files => {
 });
 
 function renderIconvertList() {
+    document.getElementById("iconvert-error").hidden = true;
     const list = document.getElementById("iconvert-list");
     list.innerHTML = "";
     iconvertFiles.forEach((f, i) => {
@@ -204,13 +209,13 @@ function renderIconvertList() {
         div.draggable = true;
         div.dataset.index = i;
 
-        const thumb = URL.createObjectURL(f);
+        const thumb = sdexeFileURL(f);
         div.innerHTML = `
             <span class="drag-handle">&#9776;</span>
             <img class="img-thumb" src="${thumb}" alt="">
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeIconvertFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeIconvertFile(${i})">&times;</button>
         `;
         setupDragItem(div, iconvertFiles, renderIconvertList);
         list.appendChild(div);
@@ -245,7 +250,8 @@ async function doImageConvert() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const fmt = document.getElementById("iconvert-format").value;
-            const name = ct.includes("zip") ? `converted_${fmt}.zip` : `converted.${fmt}`;
+            const name = ct.includes("zip") ? `converted_${fmt}.zip`
+                : (sdexeFilename(res.headers.get("content-disposition")) || `converted.${fmt}`);
             downloadBlob(blob, name);
             showToast("Saved: " + name);
         }
@@ -262,7 +268,8 @@ setupDropZone("crop-drop", "crop-input", files => {
     const f = files[0];
     if (!f || !f.type.startsWith("image/")) return;
     cropFile = f;
-    const thumb = URL.createObjectURL(f);
+    document.getElementById("crop-error").hidden = true;
+    const thumb = sdexeFileURL(f);
     document.getElementById("crop-thumb").src = thumb;
     document.getElementById("crop-file-name").textContent = f.name;
     document.getElementById("crop-file-info").hidden = false;
@@ -279,6 +286,7 @@ setupDropZone("crop-drop", "crop-input", files => {
 
 function clearCropFile() {
     cropFile = null;
+    document.getElementById("crop-error").hidden = true;
     document.getElementById("crop-file-info").hidden = true;
     document.getElementById("crop-options").hidden = true;
     document.getElementById("crop-actions").hidden = true;
@@ -286,7 +294,8 @@ function clearCropFile() {
 }
 
 async function doCrop() {
-    if (!cropFile) return;
+    const file = cropFile;
+    if (!file) return;
     const btn = document.getElementById("crop-btn");
     const err = document.getElementById("crop-error");
     err.hidden = true;
@@ -294,7 +303,7 @@ async function doCrop() {
     btn.textContent = "Cropping...";
 
     const form = new FormData();
-    form.append("file", cropFile);
+    form.append("file", file);
     form.append("left", document.getElementById("crop-left").value || "0");
     form.append("top", document.getElementById("crop-top").value || "0");
     form.append("right", document.getElementById("crop-right").value || "0");
@@ -308,10 +317,11 @@ async function doCrop() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = cropFile.name.replace(/\.[^.]+$/, "");
-            const ext = cropFile.name.split(".").pop();
-            downloadBlob(blob, `${base}_cropped.${ext}`);
-            showToast("Saved: " + base + "_cropped." + ext);
+            const base = file.name.replace(/\.[^.]+$/, "");
+            const ext = file.name.split(".").pop();
+            const name = filenameFromResponse(res, `${base}_cropped.${ext}`);
+            downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -330,17 +340,18 @@ setupDropZone("rotate-drop", "rotate-input", files => {
 });
 
 function renderRotateList() {
+    document.getElementById("rotate-error").hidden = true;
     const list = document.getElementById("rotate-file-list");
     list.innerHTML = "";
     rotateFiles.forEach((f, i) => {
         const div = document.createElement("div");
         div.className = "file-item";
-        const thumb = URL.createObjectURL(f);
+        const thumb = sdexeFileURL(f);
         div.innerHTML = `
             <img class="img-thumb" src="${thumb}" alt="">
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeRotateFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeRotateFile(${i})">&times;</button>
         `;
         list.appendChild(div);
     });
@@ -373,7 +384,7 @@ async function doRotate() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = ct.includes("zip") ? "rotated_images.zip" : (match ? match[1] : "rotated.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -383,7 +394,7 @@ async function doRotate() {
         err.hidden = false;
     }
     btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Rotate Images`;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Rotate Image`;
 }
 
 /* ── Strip EXIF ── */
@@ -391,7 +402,8 @@ setupDropZone("stripexif-drop", "stripexif-input", files => {
     const f = files[0];
     if (!f || !f.type.startsWith("image/")) return;
     stripExifFile = f;
-    document.getElementById("stripexif-thumb").src = URL.createObjectURL(f);
+    document.getElementById("stripexif-error").hidden = true;
+    document.getElementById("stripexif-thumb").src = sdexeFileURL(f);
     document.getElementById("stripexif-file-name").textContent = f.name;
     document.getElementById("stripexif-file-size").textContent = formatSize(f.size);
     document.getElementById("stripexif-file-info").hidden = false;
@@ -400,12 +412,14 @@ setupDropZone("stripexif-drop", "stripexif-input", files => {
 
 function clearStripExifFile() {
     stripExifFile = null;
+    document.getElementById("stripexif-error").hidden = true;
     document.getElementById("stripexif-file-info").hidden = true;
     document.getElementById("stripexif-actions").hidden = true;
 }
 
 async function doStripExif() {
-    if (!stripExifFile) return;
+    const file = stripExifFile;
+    if (!file) return;
     const btn = document.getElementById("stripexif-btn");
     const err = document.getElementById("stripexif-error");
     err.hidden = true;
@@ -413,7 +427,7 @@ async function doStripExif() {
     btn.textContent = "Stripping...";
 
     const form = new FormData();
-    form.append("file", stripExifFile);
+    form.append("file", file);
 
     try {
         const res = await fetch("/api/images/strip-exif", { method: "POST", body: form });
@@ -423,10 +437,11 @@ async function doStripExif() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = stripExifFile.name.replace(/\.[^.]+$/, "");
-            const ext = stripExifFile.name.split(".").pop();
-            downloadBlob(blob, `${base}_clean.${ext}`);
-            showToast("Saved: " + base + "_clean." + ext);
+            const base = file.name.replace(/\.[^.]+$/, "");
+            const ext = file.name.split(".").pop();
+            const name = filenameFromResponse(res, `${base}_clean.${ext}`);
+            downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -441,7 +456,8 @@ setupDropZone("toico-drop", "toico-input", files => {
     const f = files[0];
     if (!f || !f.type.startsWith("image/")) return;
     toIcoFile = f;
-    document.getElementById("toico-thumb").src = URL.createObjectURL(f);
+    document.getElementById("toico-error").hidden = true;
+    document.getElementById("toico-thumb").src = sdexeFileURL(f);
     document.getElementById("toico-file-name").textContent = f.name;
     document.getElementById("toico-file-info").hidden = false;
     document.getElementById("toico-options").hidden = false;
@@ -450,13 +466,15 @@ setupDropZone("toico-drop", "toico-input", files => {
 
 function clearToIcoFile() {
     toIcoFile = null;
+    document.getElementById("toico-error").hidden = true;
     document.getElementById("toico-file-info").hidden = true;
     document.getElementById("toico-options").hidden = true;
     document.getElementById("toico-actions").hidden = true;
 }
 
 async function doToIco() {
-    if (!toIcoFile) return;
+    const file = toIcoFile;
+    if (!file) return;
     const btn = document.getElementById("toico-btn");
     const err = document.getElementById("toico-error");
     err.hidden = true;
@@ -473,7 +491,7 @@ async function doToIco() {
     }
 
     const form = new FormData();
-    form.append("file", toIcoFile);
+    form.append("file", file);
     form.append("sizes", checked.join(","));
 
     try {
@@ -484,7 +502,7 @@ async function doToIco() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = toIcoFile.name.replace(/\.[^.]+$/, "");
+            const base = file.name.replace(/\.[^.]+$/, "");
             downloadBlob(blob, `${base}.ico`);
             showToast("Saved: " + base + ".ico");
         }
@@ -532,7 +550,8 @@ function setupDragItem(el, arr, renderFn) {
 function esc(s) {
     const d = document.createElement("div");
     d.textContent = s;
-    return d.innerHTML;
+    // Also safe inside attribute values: value="${esc(v)}".
+    return d.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function formatSize(bytes) {
@@ -561,17 +580,18 @@ setupDropZone("flip-drop", "flip-input", files => {
 });
 
 function renderFlipList() {
+    document.getElementById("flip-error").hidden = true;
     const list = document.getElementById("flip-file-list");
     list.innerHTML = "";
     flipFiles.forEach((f, i) => {
         const div = document.createElement("div");
         div.className = "file-item";
-        const thumb = URL.createObjectURL(f);
+        const thumb = sdexeFileURL(f);
         div.innerHTML = `
             <img class="img-thumb" src="${thumb}" alt="">
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeFlipFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeFlipFile(${i})">&times;</button>
         `;
         list.appendChild(div);
     });
@@ -604,7 +624,7 @@ async function doFlip() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = ct.includes("zip") ? "flipped_images.zip" : (match ? match[1] : "flipped.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -614,7 +634,7 @@ async function doFlip() {
         err.hidden = false;
     }
     btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Flip Images`;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Flip Image`;
 }
 
 /* ── Grayscale ── */
@@ -626,17 +646,18 @@ setupDropZone("grayscale-drop", "grayscale-input", files => {
 });
 
 function renderGrayscaleList() {
+    document.getElementById("grayscale-error").hidden = true;
     const list = document.getElementById("grayscale-file-list");
     list.innerHTML = "";
     grayscaleFiles.forEach((f, i) => {
         const div = document.createElement("div");
         div.className = "file-item";
-        const thumb = URL.createObjectURL(f);
+        const thumb = sdexeFileURL(f);
         div.innerHTML = `
             <img class="img-thumb" src="${thumb}" alt="">
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeGrayscaleFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeGrayscaleFile(${i})">&times;</button>
         `;
         list.appendChild(div);
     });
@@ -667,7 +688,7 @@ async function doGrayscale() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = ct.includes("zip") ? "grayscale_images.zip" : (match ? match[1] : "grayscale.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -750,17 +771,18 @@ setupDropZone("blur-drop", "blur-input", files => {
 });
 
 function renderBlurList() {
+    document.getElementById("blur-error").hidden = true;
     const list = document.getElementById("blur-file-list");
     list.innerHTML = "";
     blurFiles.forEach((f, i) => {
         const div = document.createElement("div");
         div.className = "file-item";
-        const thumb = URL.createObjectURL(f);
+        const thumb = sdexeFileURL(f);
         div.innerHTML = `
             <img class="img-thumb" src="${thumb}" alt="">
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeBlurFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeBlurFile(${i})">&times;</button>
         `;
         list.appendChild(div);
     });
@@ -793,7 +815,7 @@ async function doBlur() {
             const ct = res.headers.get("content-type") || "";
             const blob = await res.blob();
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const name = ct.includes("zip") ? "blurred_images.zip" : (match ? match[1] : "blurred.png");
             downloadBlob(blob, name);
             showToast("Saved: " + name);
@@ -813,7 +835,8 @@ setupDropZone("imgwm-drop", "imgwm-input", files => {
     const f = files[0];
     if (!f || !f.type.startsWith("image/")) return;
     imgWmFile = f;
-    document.getElementById("imgwm-thumb").src = URL.createObjectURL(f);
+    document.getElementById("imgwm-error").hidden = true;
+    document.getElementById("imgwm-thumb").src = sdexeFileURL(f);
     document.getElementById("imgwm-file-name").textContent = f.name;
     document.getElementById("imgwm-file-info").hidden = false;
     document.getElementById("imgwm-options").hidden = false;
@@ -822,13 +845,15 @@ setupDropZone("imgwm-drop", "imgwm-input", files => {
 
 function clearImgWmFile() {
     imgWmFile = null;
+    document.getElementById("imgwm-error").hidden = true;
     document.getElementById("imgwm-file-info").hidden = true;
     document.getElementById("imgwm-options").hidden = true;
     document.getElementById("imgwm-actions").hidden = true;
 }
 
 async function doImgWatermark() {
-    if (!imgWmFile) return;
+    const file = imgWmFile;
+    if (!file) return;
     const text = document.getElementById("imgwm-text").value.trim();
     if (!text) {
         const err = document.getElementById("imgwm-error");
@@ -843,7 +868,7 @@ async function doImgWatermark() {
     btn.textContent = "Watermarking...";
 
     const form = new FormData();
-    form.append("file", imgWmFile);
+    form.append("file", file);
     form.append("text", text);
     form.append("position", document.getElementById("imgwm-position").value);
     form.append("font_size", document.getElementById("imgwm-fontsize").value);
@@ -857,10 +882,11 @@ async function doImgWatermark() {
             err.hidden = false;
         } else {
             const blob = await res.blob();
-            const base = imgWmFile.name.replace(/\.[^.]+$/, "");
-            const ext = imgWmFile.name.split(".").pop();
-            downloadBlob(blob, `${base}_watermarked.${ext}`);
-            showToast("Saved: " + base + "_watermarked." + ext);
+            const base = file.name.replace(/\.[^.]+$/, "");
+            const ext = file.name.split(".").pop();
+            const name = filenameFromResponse(res, `${base}_watermarked.${ext}`);
+            downloadBlob(blob, name);
+            showToast("Saved: " + name);
         }
     } catch {
         err.textContent = "Network error";
@@ -929,9 +955,7 @@ function isImageFile(f) {
 function fileBase(name) { return name.replace(/\.[^.]+$/, ""); }
 function fileExt(name) { const m = name.match(/\.([^.]+)$/); return m ? m[1].toLowerCase() : "png"; }
 function filenameFromResponse(res, fallback) {
-    const cd = res.headers.get("content-disposition") || "";
-    const m = cd.match(/filename\*?="?(?:UTF-8'')?([^";]+)"?/i);
-    return m ? decodeURIComponent(m[1]) : fallback;
+    return sdexeFilename(res.headers.get("Content-Disposition")) || fallback;
 }
 function setBtnWorking(btn, label) { btn.disabled = true; btn.textContent = label; }
 function setBtnIdle(btn, label) { btn.disabled = false; btn.innerHTML = `${DL_ICON} ${label}`; }
@@ -972,7 +996,7 @@ function setupSingleImageTool(prefix, opts = {}) {
         hideErr(`${prefix}-error`);
         state.file = f;
         const thumb = document.getElementById(`${prefix}-thumb`);
-        if (thumb) thumb.src = URL.createObjectURL(f);
+        if (thumb) thumb.src = sdexeFileURL(f);
         document.getElementById(`${prefix}-file-name`).textContent = f.name;
         const sizeEl = document.getElementById(`${prefix}-file-size`);
         if (sizeEl) sizeEl.textContent = formatSize(f.size);
@@ -1047,7 +1071,7 @@ function renderHeicList() {
             <span class="img-thumb" style="display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:600;color:var(--text-muted);">HEIC</span>
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeHeicFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeHeicFile(${i})">&times;</button>
         `;
         list.appendChild(div);
     });
@@ -1169,6 +1193,7 @@ async function loadExif(file) {
     try {
         const res = await fetch("/api/images/exif", { method: "POST", body: form });
         const data = await res.json();
+        if (exifState.file !== file) return;   // changed or removed while reading
         if (!res.ok) { showErr("exif-error", data.error || "Could not read metadata"); return; }
         exifJson = data;
 
@@ -1201,7 +1226,7 @@ async function loadExif(file) {
             : "No EXIF metadata found in this file";
         result.hidden = false;
     } catch {
-        showErr("exif-error", "Network error");
+        if (exifState.file === file) showErr("exif-error", "Network error");
     }
 }
 
@@ -1211,7 +1236,7 @@ function copyExifJson(btn) {
 }
 
 /* ── Border / Padding ── */
-const borderState = setupSingleImageTool("border");
+const borderState = setupSingleImageTool("border", { onFile: () => toggleBorderMode() });
 function clearBorderFile() { borderState.clear(); }
 
 function toggleBorderMode() {
@@ -1222,7 +1247,8 @@ function toggleBorderMode() {
         ? "Border: a solid colored frame around the image."
         : (isPng ? "Padding: transparent space around the image (PNG / WebP)."
                  : "Padding: colored space around the image (JPG has no transparency).");
-    document.getElementById("border-btn").innerHTML = `${DL_ICON} ${mode === "border" ? "Add Border" : "Add Padding"}`;
+    const btn = document.getElementById("border-btn");
+    if (!btn.disabled) btn.innerHTML = `${DL_ICON} ${mode === "border" ? "Add Border" : "Add Padding"}`;
 }
 
 async function doBorder() {
@@ -1303,10 +1329,10 @@ function renderCollageList() {
         div.dataset.index = i;
         div.innerHTML = `
             <span class="drag-handle">&#9776;</span>
-            <img class="img-thumb" src="${URL.createObjectURL(f)}" alt="">
+            <img class="img-thumb" src="${sdexeFileURL(f)}" alt="">
             <span class="file-name">${esc(f.name)}</span>
             <span class="file-size">${formatSize(f.size)}</span>
-            <button class="file-remove" onclick="removeCollageFile(${i})">&times;</button>
+            <button class="file-remove" aria-label="Remove file" onclick="removeCollageFile(${i})">&times;</button>
         `;
         setupDragItem(div, collageFiles, renderCollageList);
         list.appendChild(div);
@@ -1355,18 +1381,18 @@ async function doCollage() {
 
 /* ── Image → ASCII ── */
 let asciiText = "";
-const asciiState = setupSingleImageTool("ascii", {
-    onClear: () => { document.getElementById("ascii-result").hidden = true; asciiText = ""; },
-});
+function resetAsciiResult() { document.getElementById("ascii-result").hidden = true; asciiText = ""; }
+const asciiState = setupSingleImageTool("ascii", { onFile: resetAsciiResult, onClear: resetAsciiResult });
 function clearAsciiFile() { asciiState.clear(); }
 
 async function doAscii() {
-    if (!asciiState.file) return;
+    const file = asciiState.file;
+    if (!file) return;
     const btn = document.getElementById("ascii-btn");
     hideErr("ascii-error");
     setBtnWorking(btn, "Converting...");
     const form = new FormData();
-    form.append("file", asciiState.file);
+    form.append("file", file);
     form.append("width", document.getElementById("ascii-width").value || "100");
     form.append("charset", document.getElementById("ascii-charset").value);
     form.append("invert", document.getElementById("ascii-invert").checked ? "true" : "false");
@@ -1375,7 +1401,7 @@ async function doAscii() {
         const data = await res.json();
         if (!res.ok) {
             showErr("ascii-error", data.error || "Conversion failed");
-        } else {
+        } else if (asciiState.file === file) {
             asciiText = data.text || "";
             document.getElementById("ascii-output").textContent = asciiText;
             document.getElementById("ascii-meta").textContent = `${data.width} × ${data.lines} characters`;
@@ -1517,7 +1543,7 @@ function renderPalette() {
             <td class="kv-val">${fmtHsl(p.c)}</td>
             <td style="white-space:nowrap;text-align:right;">
                 <button class="btn-copy" onclick="copyString('${p.hex}', this)">Copy</button>
-                <button class="split-remove" title="Remove" onclick="removePaletteColor(${i})">&times;</button>
+                <button class="split-remove" title="Remove" aria-label="Remove color" onclick="removePaletteColor(${i})">&times;</button>
             </td>
         `;
         body.appendChild(tr);

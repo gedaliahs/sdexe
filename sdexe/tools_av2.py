@@ -17,12 +17,13 @@ import subprocess
 from pathlib import Path
 from contextlib import contextmanager
 
-from PIL import Image
 
 from sdexe import tools
 from sdexe.tools import (
-    FFmpegMissingError, AUDIO_CODEC_MAP, VIDEO_CODEC_MAP, _ffmpeg_exe, logger,
+    FFmpegMissingError, AUDIO_CODEC_MAP, VIDEO_CODEC_MAP, EVEN_SCALE, _ffmpeg_exe, logger,
 )
+
+_FIRST_AUDIO = list(tools._FIRST_AUDIO)
 
 
 # ── Low-level helpers ──
@@ -36,10 +37,10 @@ def _workdir():
         shutil.rmtree(d, ignore_errors=True)
 
 
-def _run(cmd: list[str], timeout: int = 300) -> subprocess.CompletedProcess:
+def _run(cmd: list[str], timeout: int | None = None) -> subprocess.CompletedProcess:
     """Run an ffmpeg command line; raise a readable RuntimeError on failure."""
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+        result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=timeout or tools.MEDIA_TIMEOUT)
     except FileNotFoundError:
         raise FFmpegMissingError("ffmpeg is not installed")
     except subprocess.TimeoutExpired:
@@ -51,9 +52,20 @@ def _run(cmd: list[str], timeout: int = 300) -> subprocess.CompletedProcess:
     return result
 
 
+_ffprobe_cache: dict = {}
+
+
 def ffprobe_path() -> str | None:
-    """ffprobe next to the resolved ffmpeg, else one on PATH, else None."""
+    """ffprobe next to the resolved ffmpeg, else one on PATH, else None.
+    Remembered per ffmpeg: checking that it runs costs about 20 ms, which
+    doubled the time of every probe."""
     exe = tools.ffmpeg_path()
+    if exe not in _ffprobe_cache:
+        _ffprobe_cache[exe] = _find_ffprobe(exe)
+    return _ffprobe_cache[exe]
+
+
+def _find_ffprobe(exe: str | None) -> str | None:
     candidates = []
     if exe:
         sibling = Path(exe).with_name("ffprobe" + Path(exe).suffix)
@@ -63,7 +75,7 @@ def ffprobe_path() -> str | None:
         candidates.append(system)
     for c in candidates:
         try:
-            if Path(c).is_file() and subprocess.run([c, "-version"], capture_output=True, timeout=10).returncode == 0:
+            if Path(c).is_file() and subprocess.run([c, "-version"], stdin=subprocess.DEVNULL, capture_output=True, timeout=10).returncode == 0:
                 return c
         except Exception:
             continue
@@ -136,7 +148,7 @@ def _parse_ffmpeg_i(stderr: str) -> dict:
         idx, kind, rest = int(sm.group(1)), sm.group(2).lower(), sm.group(3)
         parts = [p.strip() for p in rest.split(",")]
         codec_full = parts[0]
-        codec = re.split(r"[\s(]", codec_full, 1)[0]
+        codec = re.split(r"[\s(]", codec_full, maxsplit=1)[0]
         st = {"index": idx, "type": kind, "codec": codec, "codec_long": codec_full}
         br = re.search(r"(\d+)\s*kb/s", rest)
         if br:
@@ -153,7 +165,7 @@ def _parse_ffmpeg_i(stderr: str) -> dict:
                 if tbr:
                     st["fps"] = float(tbr.group(1).replace("k", "e3"))
             if len(parts) > 1:
-                st["pix_fmt"] = re.split(r"[\s(]", parts[1], 1)[0]
+                st["pix_fmt"] = re.split(r"[\s(]", parts[1], maxsplit=1)[0]
             st["attached_pic"] = "attached pic" in rest
         elif kind == "audio":
             sr = re.search(r"(\d+)\s*Hz", rest)
@@ -165,7 +177,42 @@ def _parse_ffmpeg_i(stderr: str) -> dict:
                 st["channel_layout"] = layout
                 st["channels"] = _channels_from_layout(layout)
         info["streams"].append(st)
+
+    # What follows each stream line: its rotation, and (Ogg/Opus keep their
+    # tags on the audio stream, not the file) its tags.
+    for chunk in re.split(r"(?=Stream #0:\d+)", stderr)[1:]:
+        idx = int(re.match(r"Stream #0:(\d+)", chunk).group(1))
+        st = next((x for x in info["streams"] if x["index"] == idx), None)
+        if not st:
+            continue
+        rot = re.search(r"rotation of (-?\d+(?:\.\d+)?) degrees", chunk)
+        if rot and st["type"] == "video":
+            st["rotation"] = round(float(rot.group(1)))
+        if st["type"] == "audio":
+            found = {}
+            for line in chunk.splitlines()[1:]:
+                km = re.match(r"^\s{6}([A-Za-z0-9_\-/ ]+?)\s*:\s?(.*)$", line)
+                if km:
+                    found[km.group(1).strip()] = km.group(2).strip()
+            _add_stream_tags(info["tags"], found)
     return info
+
+
+_STREAM_TAGS = ("title", "artist", "album", "album_artist", "author", "date", "year", "genre",
+                "track", "tracknumber", "comment", "description")
+
+
+def _add_stream_tags(tags: dict, stream_tags: dict) -> None:
+    for k, v in (stream_tags or {}).items():
+        if k.lower() in _STREAM_TAGS and k.lower() not in tags:
+            tags[k.lower()] = v
+
+
+def _display_size(video: dict) -> tuple[int, int]:
+    """Width and height as shown. A phone's portrait clip is stored as
+    1920x1080 plus "rotate 90", and ffmpeg turns it before any filter runs."""
+    w, h = video["width"], video["height"]
+    return (h, w) if abs(int(video.get("rotation") or 0)) % 180 == 90 else (w, h)
 
 
 def _channels_from_layout(layout: str) -> int | None:
@@ -206,23 +253,33 @@ def _parse_ffprobe(js: dict) -> dict:
                 st["fps"] = None
             st["pix_fmt"] = s.get("pix_fmt")
             st["attached_pic"] = bool((s.get("disposition") or {}).get("attached_pic"))
+            try:
+                rot = next((d["rotation"] for d in s.get("side_data_list") or [] if "rotation" in d),
+                           (s.get("tags") or {}).get("rotate"))
+                if rot:
+                    st["rotation"] = round(float(rot))
+            except (TypeError, ValueError):
+                pass
         elif kind == "audio":
             st["sample_rate"] = int(s["sample_rate"]) if s.get("sample_rate") else None
             st["channels"] = s.get("channels")
             st["channel_layout"] = s.get("channel_layout")
+            _add_stream_tags(info["tags"], s.get("tags"))
         info["streams"].append(st)
     return info
 
 
 def media_info_path(path: str) -> dict:
     """Probe a file on disk. Uses ffprobe when present, else `ffmpeg -i`."""
+    if path.startswith("-"):
+        path = "./" + path  # "-clip.mp4" would be read as an option
     probe = ffprobe_path()
     info = None
     if probe:
         try:
             r = subprocess.run([probe, "-v", "quiet", "-print_format", "json",
                                 "-show_format", "-show_streams", path],
-                               capture_output=True, text=True, timeout=60)
+                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
             if r.returncode == 0 and r.stdout.strip():
                 info = _parse_ffprobe(json.loads(r.stdout))
         except Exception:
@@ -230,7 +287,7 @@ def media_info_path(path: str) -> dict:
     if info is None:
         exe = _ffmpeg_exe()
         r = subprocess.run([exe, "-hide_banner", "-i", path],
-                           capture_output=True, text=True, timeout=60)
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
         stderr = r.stderr or ""
         if "Input #0" not in stderr:
             raise RuntimeError("Could not read this file. Is it a valid media file?")
@@ -261,7 +318,7 @@ def remove_silence(data: bytes, ext: str, threshold_db: float = -40,
     filt = (f"silenceremove=start_periods=1:start_duration=0:start_threshold={threshold_db}dB:"
             f"stop_periods=-1:stop_duration={min_silence}:stop_threshold={threshold_db}dB")
     out = tools.run_ffmpeg(data, f".{ext}", f".{out_ext}",
-                           ["-map", "0:a", "-af", filt] + codec)
+                           _FIRST_AUDIO + ["-af", filt] + codec)
     return out, out_ext
 
 
@@ -286,15 +343,15 @@ def split_audio(data: bytes, ext: str, mode: str, value: float, base: str) -> by
         if n > 500:
             raise ValueError("Too many parts (limit 500). Use a longer part length.")
         out_ext, codec = _audio_out(ext)
-        exe = _ffmpeg_exe()
+        exe = tools.ffmpeg_for_output(out_ext, codec)
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for i in range(n):
                 start = i * seg
                 out = wd / f"part_{i:03d}.{out_ext}"
-                cmd = [exe, "-y", "-ss", f"{start:.3f}", "-t", f"{seg:.3f}", "-i", str(src),
-                       "-map", "0:a"] + codec + [str(out)]
-                _run(cmd, timeout=300)
+                cmd = [exe, "-y", "-ss", f"{start:.3f}", "-t", f"{seg:.3f}", "-i", str(src)] \
+                    + _FIRST_AUDIO + codec + [str(out)]
+                _run(cmd, timeout=tools.MEDIA_TIMEOUT)
                 zf.write(out, f"{base}_{i + 1:02d}.{out_ext}")
         return buf.getvalue()
 
@@ -313,7 +370,7 @@ def audio_channels(data: bytes, ext: str, mode: str) -> tuple[bytes, str]:
         args = ["-af", "pan=stereo|c0=c1|c1=c1"]
     else:
         raise ValueError("Unknown channel mode")
-    out = tools.run_ffmpeg(data, f".{ext}", f".{out_ext}", ["-map", "0:a"] + args + codec)
+    out = tools.run_ffmpeg(data, f".{ext}", f".{out_ext}", _FIRST_AUDIO + args + codec)
     return out, out_ext
 
 
@@ -333,7 +390,7 @@ def audio_bitrate(data: bytes, ext: str, bitrate: int, fmt: str = "keep") -> tup
     if fmt not in codecs:
         raise ValueError("Unsupported output format")
     out = tools.run_ffmpeg(data, f".{ext}", f".{fmt}",
-                           ["-map", "0:a"] + codecs[fmt] + ["-b:a", f"{bitrate}k"])
+                           _FIRST_AUDIO + codecs[fmt] + ["-b:a", f"{bitrate}k"])
     return out, fmt
 
 
@@ -369,6 +426,10 @@ def write_tags(data: bytes, ext: str, fields: dict, cover: bytes | None = None) 
             continue
         key = "date" if field == "year" else field
         meta_args += ["-metadata", f"{key}={fields[field]}"]
+        if out_ext in ("ogg", "oga", "opus"):
+            # Ogg keeps tags on the audio stream, and those win over the
+            # file-level ones: without this an existing title never changed.
+            meta_args += ["-metadata:s:a:0", f"{key}={fields[field]}"]
     with _workdir() as wd:
         src = wd / f"in.{ext}"
         src.write_bytes(data)
@@ -377,7 +438,7 @@ def write_tags(data: bytes, ext: str, fields: dict, cover: bytes | None = None) 
         cmd = [exe, "-y", "-i", str(src)]
         if cover and out_ext in ("mp3", "m4a", "mp4"):
             # Normalise to a baseline JPEG so every player shows it.
-            img = Image.open(io.BytesIO(cover))
+            img = tools.read_image(io.BytesIO(cover))
             img = img.convert("RGB")
             img.thumbnail((1200, 1200))
             cov = wd / "cover.jpg"
@@ -392,7 +453,7 @@ def write_tags(data: bytes, ext: str, fields: dict, cover: bytes | None = None) 
             if out_ext == "mp3":
                 cmd += ["-id3v2_version", "3"]
         cmd += meta_args + [str(out)]
-        _run(cmd, timeout=120)
+        _run(cmd)  # a stream copy, but of a possibly huge file
         return out.read_bytes(), out_ext
 
 
@@ -415,11 +476,19 @@ def audio_to_video(data: bytes, ext: str, style: str = "waveform",
                 raise ValueError("An image is required for the image style")
             img = wd / f"img.{image_ext}"
             img.write_bytes(image)
+            # Read (and scale) the picture once a second and repeat it up to 25
+            # fps afterwards. At 25 reads a second a 12 MP photo under a
+            # one-minute track took 103 s; this gives the same frames in 4 s.
             vf = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
-                  f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color={bg},setsar=1,format=yuv420p")
-            cmd = [exe, "-y", "-loop", "1", "-framerate", "25", "-i", str(img),
+                  f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color={bg},setsar=1,format=yuv420p,fps=25")
+            cmd = [exe, "-y", "-loop", "1", "-framerate", "1", "-i", str(img),
                    "-i", str(src), "-map", "0:v", "-map", "1:a", "-vf", vf,
-                   "-tune", "stillimage"] + common + [str(out)]
+                   "-tune", "stillimage"]
+            # -shortest lets a looped picture run about 2 s past the audio.
+            length = media_info_path(str(src))["duration"]
+            if length > 0:
+                cmd += ["-t", f"{length:.3f}"]
+            cmd += common + [str(out)]
         else:
             if style == "spectrum":
                 vis = (f"[0:a]showfreqs=s={w}x{h}:mode=bar:ascale=log:fscale=log:"
@@ -430,7 +499,7 @@ def audio_to_video(data: bytes, ext: str, style: str = "waveform",
                   f"[bg][vis]overlay=format=auto:shortest=1,format=yuv420p[v]")
             cmd = [exe, "-y", "-i", str(src), "-filter_complex", fc,
                    "-map", "[v]", "-map", "0:a"] + common + [str(out)]
-        _run(cmd, timeout=600)
+        _run(cmd, timeout=tools.MEDIA_TIMEOUT)
         return out.read_bytes()
 
 
@@ -451,10 +520,10 @@ def merge_videos(files: list[tuple[str, bytes]], resolution: str = "auto") -> by
             paths.append(p)
             infos.append(info)
         if resolution == "match-first":
-            w, h = infos[0]["video"]["width"], infos[0]["video"]["height"]
+            w, h = _display_size(infos[0]["video"])
         elif resolution == "auto":
-            w = max(i["video"]["width"] for i in infos)
-            h = max(i["video"]["height"] for i in infos)
+            w = max(_display_size(i["video"])[0] for i in infos)
+            h = max(_display_size(i["video"])[1] for i in infos)
         else:
             w, h = _parse_resolution(resolution)
         w, h = _even(w), _even(h)
@@ -484,7 +553,7 @@ def merge_videos(files: list[tuple[str, bytes]], resolution: str = "auto") -> by
         cmd += ["-filter_complex", ";".join(fc), "-map", "[v]", "-map", "[a]",
                 "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out)]
-        _run(cmd, timeout=900)
+        _run(cmd, timeout=tools.MEDIA_TIMEOUT)
         return out.read_bytes()
 
 
@@ -495,6 +564,12 @@ POSITIONS = {
     "bottom-right": "main_w-overlay_w-{m}:main_h-overlay_h-{m}",
     "center": "(main_w-overlay_w)/2:(main_h-overlay_h)/2",
 }
+
+
+def _h264_safe(out_ext: str) -> str:
+    """A filter step that trims an odd width/height by one pixel for H.264
+    outputs, which refuse odd sizes (a 321x241 clip failed outright)."""
+    return EVEN_SCALE + "," if out_ext in ("mp4", "mov") else ""
 
 
 def _overlay_xy(position: str, margin: int) -> str:
@@ -518,16 +593,16 @@ def video_watermark(video: bytes, video_ext: str, image: bytes, image_ext: str,
         info = media_info_path(str(src))
         if not info["video"]:
             raise ValueError("The file has no video stream")
-        tw = max(2, _even(round(info["video"]["width"] * scale / 100)))
+        tw = max(2, _even(round(_display_size(info["video"])[0] * scale / 100)))
         fc = (f"[1:v]scale={tw}:-1,format=rgba,colorchannelmixer=aa={opacity:.3f}[wm];"
-              f"[0:v][wm]overlay={_overlay_xy(position, margin)}:format=auto,format=yuv420p[v]")
+              f"[0:v][wm]overlay={_overlay_xy(position, margin)}:format=auto,{_h264_safe(out_ext)}format=yuv420p[v]")
         out = wd / f"out.{out_ext}"
         cmd = [_ffmpeg_exe(), "-y", "-i", str(src), "-i", str(logo),
                "-filter_complex", fc, "-map", "[v]", "-map", "0:a?"] + vcodec
         if out_ext in ("mp4", "mov"):
             cmd += ["-preset", "fast", "-crf", "20", "-movflags", "+faststart"]
         cmd.append(str(out))
-        _run(cmd, timeout=900)
+        _run(cmd, timeout=tools.MEDIA_TIMEOUT)
         return out.read_bytes(), out_ext
 
 
@@ -558,8 +633,10 @@ def extract_frames(data: bytes, ext: str, mode: str, base: str, time: float = 0,
             if duration and duration / interval > 1000:
                 raise ValueError("That would produce more than 1000 frames; use a longer interval.")
             pattern = wd / f"f_%04d.{fmt}"
-            _run([exe, "-y", "-i", str(src), "-vf", f"fps=1/{interval}", "-fps_mode", "vfr"] + enc + [str(pattern)],
-                 timeout=900)
+            # round=up takes the frame at 0, N, 2N… seconds, matching the file
+            # names. The default (nearest) took each one half an interval late.
+            _run([exe, "-y", "-i", str(src), "-vf", f"fps=1/{interval}:round=up", "-fps_mode", "vfr"] + enc + [str(pattern)],
+                 timeout=tools.MEDIA_TIMEOUT)
             frames = sorted(wd.glob(f"f_*.{fmt}"))
             names = [f"{base}_{i * interval:g}s.{fmt}" for i in range(len(frames))]
         elif mode == "count":
@@ -611,7 +688,7 @@ def video_speed(data: bytes, ext: str, speed: float, keep_pitch: bool = True) ->
         info = media_info_path(str(src))
         if not info["video"]:
             raise ValueError("The file has no video stream")
-        fc = [f"[0:v]setpts=PTS/{speed:.4f}[v]"]
+        fc = [f"[0:v]setpts=PTS/{speed:.4f}{',' + EVEN_SCALE if out_ext in ('mp4', 'mov') else ''}[v]"]
         maps = ["-map", "[v]"]
         if info["audio"]:
             if keep_pitch:
@@ -625,7 +702,7 @@ def video_speed(data: bytes, ext: str, speed: float, keep_pitch: bool = True) ->
         if out_ext in ("mp4", "mov"):
             cmd += ["-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
         cmd.append(str(out))
-        _run(cmd, timeout=900)
+        _run(cmd, timeout=tools.MEDIA_TIMEOUT)
         return out.read_bytes(), out_ext
 
 
@@ -634,11 +711,12 @@ def stabilize_video(data: bytes, ext: str, strength: str = "medium") -> tuple[by
     if r is None:
         raise ValueError("Unknown strength")
     out_ext, vcodec = _video_out(ext)
-    args = ["-vf", f"deshake=rx={r}:ry={r}:edge=mirror:blocksize=8:contrast=125", "-map", "0:v",
+    even = "," + EVEN_SCALE if out_ext in ("mp4", "mov") else ""
+    args = ["-vf", f"deshake=rx={r}:ry={r}:edge=mirror:blocksize=8:contrast=125{even}", "-map", "0:v",
             "-map", "0:a?"] + vcodec
     if out_ext in ("mp4", "mov"):
         args += ["-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
-    return tools.run_ffmpeg(data, f".{ext}", f".{out_ext}", args, timeout=900), out_ext
+    return tools.run_ffmpeg(data, f".{ext}", f".{out_ext}", args, timeout=tools.MEDIA_TIMEOUT), out_ext
 
 
 def gif_to_video(data: bytes, fmt: str = "mp4", loop_count: int = 1) -> bytes:
@@ -652,7 +730,7 @@ def gif_to_video(data: bytes, fmt: str = "mp4", loop_count: int = 1) -> bytes:
     else:
         args = ["-vf", vf, "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30", "-pix_fmt", "yuv420p"]
     pre = ["-stream_loop", str(loop_count - 1)]
-    return tools.run_ffmpeg(data, ".gif", f".{fmt}", args, timeout=600, pre_input_args=pre)
+    return tools.run_ffmpeg(data, ".gif", f".{fmt}", args, timeout=tools.MEDIA_TIMEOUT, pre_input_args=pre)
 
 
 def picture_in_picture(main: bytes, main_ext: str, overlay: bytes, overlay_ext: str,
@@ -670,14 +748,14 @@ def picture_in_picture(main: bytes, main_ext: str, overlay: bytes, overlay_ext: 
         info = media_info_path(str(src))
         if not info["video"]:
             raise ValueError("The main file has no video stream")
-        tw = max(2, _even(round(info["video"]["width"] * scale / 100)))
+        tw = max(2, _even(round(_display_size(info["video"])[0] * scale / 100)))
         fc = (f"[1:v]scale={tw}:-2,setsar=1[pip];"
               f"[0:v][pip]overlay={_overlay_xy(position, margin)}:shortest=0:eof_action=pass,"
-              f"format=yuv420p[v]")
+              f"{EVEN_SCALE},format=yuv420p[v]")
         out = wd / "out.mp4"
         cmd = [_ffmpeg_exe(), "-y", "-i", str(src), "-i", str(ov),
                "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
                "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac",
                "-movflags", "+faststart", str(out)]
-        _run(cmd, timeout=900)
+        _run(cmd, timeout=tools.MEDIA_TIMEOUT)
         return out.read_bytes()

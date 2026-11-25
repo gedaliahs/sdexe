@@ -55,7 +55,7 @@
                 </div>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Or paste markdown here</label>
+                    <label for="md-text">Or paste markdown here</label>
                     <textarea id="md-text" class="convert-textarea" placeholder="# Hello&#10;&#10;Write your **markdown** here..." rows="8"></textarea>
                 </div>
 
@@ -373,13 +373,13 @@
                 </div>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Or paste JSON here</label>
+                    <label for="json2xml-text">Or paste JSON here</label>
                     <textarea id="json2xml-text" class="convert-textarea" rows="6" placeholder='{"name": "ann", "tags": ["a", "b"]}'></textarea>
                 </div>
 
                 <div class="field-row" style="margin-top: 12px;">
                     <div class="field" style="max-width: 240px;">
-                        <label>Root element name</label>
+                        <label for="json2xml-root">Root element name</label>
                         <input type="text" id="json2xml-root" value="root" placeholder="root">
                     </div>
                 </div>
@@ -430,7 +430,7 @@
 
                 <div class="field-row" style="margin-top: 12px;">
                     <div class="field" style="max-width: 280px;">
-                        <label>Sheet (optional)</label>
+                        <label for="xlsx2csv-sheet">Sheet (optional)</label>
                         <input type="text" id="xlsx2csv-sheet" placeholder="all sheets">
                     </div>
                 </div>
@@ -502,7 +502,7 @@
                 </div>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>Or paste HTML here</label>
+                    <label for="html2md-text">Or paste HTML here</label>
                     <textarea id="html2md-text" class="convert-textarea" rows="6" placeholder="&lt;h1&gt;Hello&lt;/h1&gt;&lt;p&gt;Some &lt;b&gt;bold&lt;/b&gt; text&lt;/p&gt;"></textarea>
                 </div>
 
@@ -553,7 +553,7 @@
                         <button class="split-remove" onclick="clearTextTool('toml2json')">&times;</button>
                     </div>
                     <div class="field" style="margin-top: 16px;">
-                        <label>Or paste TOML here</label>
+                        <label for="toml2json-text">Or paste TOML here</label>
                         <textarea id="toml2json-text" class="convert-textarea" rows="6" placeholder='title = "Example"&#10;&#10;[owner]&#10;name = "Tom"'></textarea>
                     </div>
                     <div class="pdf-actions" style="margin-top: 16px;">
@@ -590,7 +590,7 @@
                         <button class="split-remove" onclick="clearTextTool('json2toml')">&times;</button>
                     </div>
                     <div class="field" style="margin-top: 16px;">
-                        <label>Or paste JSON here</label>
+                        <label for="json2toml-text">Or paste JSON here</label>
                         <textarea id="json2toml-text" class="convert-textarea" rows="6" placeholder='{"title": "Example", "owner": {"name": "Tom"}}'></textarea>
                     </div>
                     <div class="pdf-actions" style="margin-top: 16px;">
@@ -621,13 +621,13 @@
                 <p class="meta">Paste SQL to reindent it with consistent keyword casing, or minify it onto a single line.</p>
 
                 <div class="field" style="margin-top: 16px;">
-                    <label>SQL</label>
+                    <label for="sql-text">SQL</label>
                     <textarea id="sql-text" class="convert-textarea c2-mono" rows="8" placeholder="select a.id, b.name from users a join orders b on a.id=b.user_id where a.active=1"></textarea>
                 </div>
 
                 <div class="field-row" style="margin-top: 12px; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
                     <div class="field" style="flex: 1; min-width: 140px;">
-                        <label>Keyword case</label>
+                        <label for="sql-case">Keyword case</label>
                         <select id="sql-case">
                             <option value="upper" selected>UPPER</option>
                             <option value="lower">lower</option>
@@ -635,7 +635,7 @@
                         </select>
                     </div>
                     <div class="field" style="flex: 1; min-width: 120px;">
-                        <label>Indent width</label>
+                        <label for="sql-indent">Indent width</label>
                         <input type="number" id="sql-indent" value="2" min="1" max="8">
                     </div>
                 </div>
@@ -737,7 +737,7 @@
 
                 <div class="field-row" style="margin-top: 12px;">
                     <div class="field">
-                        <label>Expected hash (optional)</label>
+                        <label for="checksum-expected">Expected hash (optional)</label>
                         <input type="text" id="checksum-expected" class="c2-mono" placeholder="Paste a hash to verify against" oninput="renderChecksumResults()">
                     </div>
                 </div>
@@ -775,11 +775,11 @@
 
                 <div class="field-row" style="margin-top: 16px; gap: 8px; flex-wrap: wrap;">
                     <div class="field" style="flex: 2; min-width: 200px;">
-                        <label>Pattern</label>
+                        <label for="rename-pattern">Pattern</label>
                         <input type="text" id="rename-pattern" class="c2-mono" value="{name}.{ext}" placeholder="{name}.{ext}" oninput="renderRenamePreview()">
                     </div>
                     <div class="field" style="flex: 1; min-width: 120px;">
-                        <label>Case</label>
+                        <label for="rename-case">Case</label>
                         <select id="rename-case" onchange="renderRenamePreview()">
                             <option value="keep" selected>Keep</option>
                             <option value="lower">lowercase</option>
@@ -788,17 +788,17 @@
                         </select>
                     </div>
                     <div class="field" style="flex: 0 0 110px; min-width: 100px;">
-                        <label>Start #</label>
+                        <label for="rename-start">Start #</label>
                         <input type="number" id="rename-start" value="1" min="0" oninput="renderRenamePreview()">
                     </div>
                 </div>
                 <div class="field-row" style="margin-top: 12px; gap: 8px; flex-wrap: wrap;">
                     <div class="field" style="flex: 1; min-width: 160px;">
-                        <label>Find</label>
+                        <label for="rename-find">Find</label>
                         <input type="text" id="rename-find" placeholder="text in name" oninput="renderRenamePreview()">
                     </div>
                     <div class="field" style="flex: 1; min-width: 160px;">
-                        <label>Replace with</label>
+                        <label for="rename-replace">Replace with</label>
                         <input type="text" id="rename-replace" placeholder="replacement" oninput="renderRenamePreview()">
                     </div>
                 </div>
@@ -854,7 +854,7 @@
                     </div>
                     <div class="field-row" style="margin-top: 12px; align-items: flex-end; gap: 12px;">
                         <div class="field" style="max-width: 180px;">
-                            <label>Chunk size (MB)</label>
+                            <label for="splitfile-chunk">Chunk size (MB)</label>
                             <input type="number" id="splitfile-chunk" value="100" min="0.1" step="any" oninput="updateSplitEstimate()">
                         </div>
                         <span id="splitfile-estimate" class="file-size" style="padding-bottom: 12px;"></span>

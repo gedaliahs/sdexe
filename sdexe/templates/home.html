@@ -14,7 +14,7 @@
             <svg class="tool-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
-            <input type="text" id="tool-search" class="tool-search" placeholder="Search tools..." autocomplete="off">
+            <input type="text" id="tool-search" class="tool-search" placeholder="Search tools..." aria-label="Search tools" autocomplete="off">
         </div>
 
         <div id="tool-sections">
@@ -24,6 +24,10 @@
                     <a href="/media" class="tool-link" data-name="media downloader download video audio youtube">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
                         Media Downloader
+                    </a>
+                    <a href="/transcribe" class="tool-link" data-name="transcribe transcription speech to text subtitles captions srt whisper">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                        Transcribe
                     </a>
                 </div>
             </div>
@@ -301,9 +305,9 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
                         Trim Audio
                     </a>
-                    <a href="/av#av-speed" class="tool-link" data-name="change speed audio video tempo playback rate">
+                    <a href="/av#av-speed" class="tool-link" data-name="change speed audio tempo playback rate">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-                        Change Speed
+                        Change Audio Speed
                     </a>
                     <a href="/av#av-extract-audio" class="tool-link" data-name="extract audio from video strip soundtrack">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
@@ -425,9 +429,9 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
                         Extract Frames
                     </a>
-                    <a href="/av#video-speed" class="tool-link" data-name="speed slow fast video">
+                    <a href="/av#video-speed" class="tool-link" data-name="change speed slow fast video playback rate">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
-                        Change Speed
+                        Change Video Speed
                     </a>
                     <a href="/av#stabilize" class="tool-link" data-name="stabilize shaky deshake">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>

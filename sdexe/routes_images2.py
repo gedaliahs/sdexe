@@ -25,7 +25,10 @@ def _form_int(name: str, default: int) -> int:
     raw = request.form.get(name, "")
     if raw is None or str(raw).strip() == "":
         return default
-    return int(float(raw))
+    try:
+        return int(float(raw))
+    except OverflowError:  # "inf": callers answer ValueError with a 400
+        raise ValueError(f"Invalid value for {name}")
 
 
 def _form_bool(name: str, default: bool = False) -> bool:
@@ -108,7 +111,7 @@ def image_adjust():
     except ValueError:
         return jsonify({"error": "Adjustment values must be numbers"}), 400
     try:
-        img = Image.open(f.stream)
+        img = tools.open_image(f.stream)
         out = t2.adjust_image_full(img, brightness, contrast, saturation, sharpness)
         return _send_image(out, f.filename, "adjusted")
     except Exception as e:
@@ -147,7 +150,7 @@ def image_border():
     if mode not in ("border", "padding"):
         return jsonify({"error": "Mode must be border or padding"}), 400
     try:
-        img = Image.open(f.stream)
+        img = tools.open_image(f.stream)
         fmt = tools._ext_from_filename(f.filename)
         if fmt not in tools._PIL_FMT_MAP:
             fmt = "png"
@@ -167,7 +170,7 @@ def image_favicon_set():
     if not f:
         return jsonify({"error": "No image provided"}), 400
     try:
-        img = Image.open(f.stream)
+        img = tools.open_image(f.stream)
         zip_data = t2.favicon_set(img)
         base = tools._base_from_filename(f.filename, "favicon")
         return send_file(io.BytesIO(zip_data), as_attachment=True,
@@ -188,7 +191,7 @@ def image_upscale():
     except ValueError:
         return jsonify({"error": "Invalid factor"}), 400
     try:
-        img = Image.open(f.stream)
+        img = tools.open_image(f.stream)
         out = t2.upscale_image(img, factor)
         return _send_image(out, f.filename, f"{factor}x")
     except Exception as e:
@@ -218,7 +221,7 @@ def image_collage():
     images = []
     for f in files:
         try:
-            img = Image.open(f.stream)
+            img = tools.open_image(f.stream)
             img.load()
         except Exception as e:
             return jsonify({"error": f"Invalid image {f.filename}: {e}"}), 400
@@ -253,7 +256,7 @@ def image_ascii():
     charset = request.form.get("charset", "standard")
     invert = _form_bool("invert", False)
     try:
-        img = Image.open(f.stream)
+        img = tools.open_image(f.stream)
         text = t2.image_to_ascii(img, width=width, charset=charset, invert=invert)
         return jsonify({"text": text, "width": width, "lines": text.count("\n") + 1})
     except Exception as e:

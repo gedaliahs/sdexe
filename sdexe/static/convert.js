@@ -29,7 +29,8 @@ setupDropZone("md-drop", "md-input", files => {
     // Read file content into textarea
     const reader = new FileReader();
     reader.onload = e => {
-        document.getElementById("md-text").value = e.target.result;
+        // A big file can finish loading after a smaller one picked later.
+        if (mdFile === f) document.getElementById("md-text").value = e.target.result;
     };
     reader.readAsText(f);
 });
@@ -38,6 +39,10 @@ function clearMdFile() {
     mdFile = null;
     document.getElementById("md-file-info").hidden = true;
 }
+
+// Once the text is edited, convert the edited text, not the file it came from.
+// (Loading a file sets .value, which doesn't fire "input".)
+document.getElementById("md-text")?.addEventListener("input", () => { if (mdFile) clearMdFile(); });
 
 async function doMdToHtml() {
     const btn = document.getElementById("md-btn");
@@ -57,7 +62,7 @@ async function doMdToHtml() {
         err.textContent = "Upload a file or paste markdown text";
         err.hidden = false;
         btn.disabled = false;
-        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Convert to HTML`;
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Download HTML`;
         return;
     }
 
@@ -77,7 +82,7 @@ async function doMdToHtml() {
         err.hidden = false;
     }
     btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Convert to HTML`;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg> Download HTML`;
 }
 
 /* ── CSV to JSON ── */
@@ -199,26 +204,60 @@ async function doMdPreview() {
 
     btn.disabled = true;
     btn.textContent = "Previewing...";
+    const errEl = document.getElementById("md-error");
+    errEl.hidden = true;
     const form = new FormData();
     form.append("text", text);
     try {
         const res = await fetch("/api/convert/md-preview", { method: "POST", body: form });
         const data = await res.json();
-        if (data.html) {
-            const tmp = document.createElement("div");
-            tmp.innerHTML = data.html;
-            tmp.querySelectorAll("script,iframe,object,embed,link[rel=import]").forEach(el => el.remove());
-            tmp.querySelectorAll("*").forEach(el => {
+        if (!res.ok || !data.html) {
+            // Used to fail without a word: the button just did nothing.
+            errEl.textContent = data.error || "Preview failed";
+            errEl.hidden = false;
+        } else {
+            // Parse in an inert document: a detached <div> would still load
+            // images and fire their onerror handlers.
+            const doc = new DOMParser().parseFromString(data.html, "text/html");
+            // noscript and template: their contents are parsed differently
+            // (or not at all) here than in the live page.
+            doc.querySelectorAll("script,iframe,frame,object,embed,link,meta,base,form,style,svg,math,noscript,template")
+                .forEach(el => el.remove());
+            doc.body.querySelectorAll("*").forEach(el => {
                 for (const attr of [...el.attributes]) {
-                    if (attr.name.startsWith("on") || (attr.name === "href" && attr.value.trim().toLowerCase().startsWith("javascript:"))) {
+                    const name = attr.name.toLowerCase();
+                    // Browsers ignore tabs and newlines inside URLs ("java\tscript:"), so strip them first.
+                    const value = attr.value.replace(/[\u0000-\u0020]+/g, "").toLowerCase();
+                    const isUrl = ["href", "src", "xlink:href", "action", "formaction", "srcset", "poster"].includes(name);
+                    // name and id: <img name="getElementById"> replaces
+                    // document.getElementById and every tool on the page stops
+                    // working; an id can stand in for one of the page's own.
+                    if (name.startsWith("on") || name === "style" || name === "name" || name === "id" ||
+                        (isUrl && /^(javascript|vbscript|data):/.test(value) && !/^data:image\//.test(value))) {
                         el.removeAttribute(attr.name);
                     }
                 }
             });
-            previewEl.innerHTML = tmp.innerHTML;
+            // A link clicked in the preview must not replace this page (and the
+            // text typed into it).
+            doc.body.querySelectorAll("a[href]").forEach(a => {
+                // "#section" links would only flip this page's own tabs.
+                if (a.getAttribute("href").trim().startsWith("#")) { a.removeAttribute("href"); return; }
+                a.setAttribute("target", "_blank");
+                a.setAttribute("rel", "noopener noreferrer");
+            });
+            // Move the cleaned nodes over as they are. Writing them out as HTML
+            // and parsing that again is where a second parse can turn safe
+            // text back into markup.
+            const cleaned = document.createDocumentFragment();
+            while (doc.body.firstChild) cleaned.appendChild(doc.body.firstChild);
+            previewEl.replaceChildren(cleaned);
             previewEl.hidden = false;
         }
-    } catch {}
+    } catch {
+        errEl.textContent = "Network error";
+        errEl.hidden = false;
+    }
     btn.disabled = false;
     btn.textContent = "Preview";
 }
@@ -363,7 +402,8 @@ function removeCreateZipFile(i) {
 function esc(s) {
     const d = document.createElement("div");
     d.textContent = s;
-    return d.innerHTML;
+    // Also safe inside attribute values: value="${esc(v)}".
+    return d.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 async function doCreateZip() {
@@ -434,7 +474,7 @@ async function doExtractZip() {
             const blob = await res.blob();
             const ct = res.headers.get("content-type") || "";
             const cd = res.headers.get("content-disposition") || "";
-            const match = cd.match(/filename="?(.+?)"?(?:;|$)/);
+            const match = sdexeFilenameMatch(cd);
             const base = extractZipFile.name.replace(/\.zip$/i, "");
             const name = match ? match[1] : (ct.includes("zip") ? `${base}_extracted.zip` : base);
             downloadBlob(blob, name);
@@ -511,7 +551,17 @@ function copyText(id, btn) {
             setTimeout(() => { btn.classList.remove("copied"); btn.innerHTML = orig; }, 1500);
         }
     }).catch(() => {
-        el.select && el.select();
+        // Clipboard API refused: select the text and copy that. A table cell
+        // (the checksum rows) has no select(), so nothing used to be copied.
+        if (el.select) {
+            el.select();
+        } else {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
         document.execCommand("copy");
     });
 }
@@ -530,9 +580,7 @@ function showErr(errId, msg) {
 }
 
 function filenameFromResponse(res, fallback) {
-    const cd = res.headers.get("content-disposition") || "";
-    const m = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
-    return m ? decodeURIComponent(m[1]) : fallback;
+    return sdexeFilename(res.headers.get("Content-Disposition")) || fallback;
 }
 
 /* Generic file-or-text tool whose route returns JSON {result, filename}.
@@ -549,8 +597,15 @@ function setupTextTool(key, opts) {
         document.getElementById(key + "-file-size").textContent = formatSize(f.size);
         document.getElementById(key + "-file-info").hidden = false;
         const reader = new FileReader();
-        reader.onload = e => { document.getElementById(key + "-text").value = e.target.result; };
+        reader.onload = e => {
+            // A big file can finish loading after a smaller one picked later.
+            if (textToolFile[key] === f) document.getElementById(key + "-text").value = e.target.result;
+        };
         reader.readAsText(f);
+    });
+    // Edits win over the originally loaded file.
+    document.getElementById(key + "-text")?.addEventListener("input", () => {
+        if (textToolFile[key]) clearTextTool(key);
     });
 }
 
@@ -565,14 +620,15 @@ async function runTextTool(key, endpoint, label, extraForm, defaultName) {
     const wrap = document.getElementById(key + "-result-wrap");
     err.hidden = true;
     const text = document.getElementById(key + "-text").value;
-    if (!text.trim()) {
+    const f = textToolFile[key];
+    // A picked file counts even while it is still being read into the box.
+    if (!f && !text.trim()) {
         showErr(key + "-error", "Upload a file or paste text first");
         return;
     }
     btn.disabled = true;
     btn.textContent = "Converting...";
     const form = new FormData();
-    const f = textToolFile[key];
     if (f) form.append("file", f); else form.append("text", text);
     if (extraForm) extraForm(form);
     try {

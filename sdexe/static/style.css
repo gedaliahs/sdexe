@@ -1,3 +1,35 @@
+/* Bundled so the app makes no outside requests. Licence: fonts/OFL-rubik.txt */
+@font-face {
+    font-family: "Rubik"; font-style: normal; font-weight: 300 700; font-display: swap;
+    src: url("fonts/rubik-arabic.woff2") format("woff2");
+    unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+    font-family: "Rubik"; font-style: normal; font-weight: 300 700; font-display: swap;
+    src: url("fonts/rubik-cyrillic-ext.woff2") format("woff2");
+    unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+    font-family: "Rubik"; font-style: normal; font-weight: 300 700; font-display: swap;
+    src: url("fonts/rubik-cyrillic.woff2") format("woff2");
+    unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+    font-family: "Rubik"; font-style: normal; font-weight: 300 700; font-display: swap;
+    src: url("fonts/rubik-hebrew.woff2") format("woff2");
+    unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F;
+}
+@font-face {
+    font-family: "Rubik"; font-style: normal; font-weight: 300 700; font-display: swap;
+    src: url("fonts/rubik-latin-ext.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+    font-family: "Rubik"; font-style: normal; font-weight: 300 700; font-display: swap;
+    src: url("fonts/rubik-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* ── Reset ── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -25,7 +57,6 @@ label input[type="file"] { display: none !important; }
     --green-bg: rgba(16,185,129,.08);
     --nav-bg: #101114;
     --nav-text: #d9dce3;
-    --nav-hover: #1c1d20;
     --radius-sm: 5px;
     --radius-md: 8px;
     --radius-lg: 10px;
@@ -91,10 +122,12 @@ nav {
     transition: color .15s, background .15s;
 }
 .nav-group-trigger:hover,
-.nav-group:hover .nav-group-trigger { color: #ffffff; background: rgba(255,255,255,.06); }
+.nav-group:hover .nav-group-trigger,
+.nav-group.open .nav-group-trigger { color: #ffffff; background: rgba(255,255,255,.06); }
 .nav-group.active .nav-group-trigger { color: #ffffff; }
 .nav-group-trigger svg { transition: transform .2s; flex-shrink: 0; }
-.nav-group:hover .nav-group-trigger svg { transform: rotate(180deg); }
+.nav-group:hover .nav-group-trigger svg,
+.nav-group.open .nav-group-trigger svg { transform: rotate(180deg); }
 
 /* Dropdown panel */
 .nav-group-menu {
@@ -116,7 +149,8 @@ nav {
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
 }
-.nav-group:hover .nav-group-menu { display: flex; flex-direction: column; }
+.nav-group:hover .nav-group-menu,
+.nav-group.open .nav-group-menu { display: flex; flex-direction: column; }   /* .open: opened from the keyboard */
 
 /* Multi-column dropdown */
 .nav-group-cols { flex-direction: row !important; gap: 0; padding: 12px 8px; }
@@ -236,6 +270,7 @@ main {
     border-radius: var(--radius-md);
     color: #991b1b; font-size: .85rem; line-height: 1.6;
     position: relative;
+    overflow-wrap: anywhere;   /* a long path or filename used to run out of the box */
 }
 .error::before {
     content: '';
@@ -608,32 +643,6 @@ select:disabled { opacity: .35; cursor: not-allowed; }
    PDF Page
    ══════════════════════════════════════════ */
 
-/* ── Tool Dropdown ── */
-.tool-dropdown-wrap {
-    position: relative; display: inline-flex; align-items: center;
-}
-.tool-dropdown {
-    appearance: none; -webkit-appearance: none;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    color: var(--text);
-    font-size: .9rem; font-weight: 500; font-family: inherit;
-    padding: 10px 40px 10px 16px;
-    cursor: pointer;
-    transition: border-color .15s, box-shadow .15s;
-    background-image: none;
-}
-.tool-dropdown:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-glow);
-}
-.tool-dropdown-chevron {
-    position: absolute; right: 12px; pointer-events: none;
-    color: var(--text-muted);
-}
-
 /* ── PDF Tabs ── */
 .pdf-tabs {
     display: flex; gap: 0;
@@ -669,6 +678,7 @@ select:disabled { opacity: .35; cursor: not-allowed; }
 /* ── PDF Sections ── */
 .pdf-section { display: none; }
 .pdf-section.active { display: block; }
+.pdf-section:focus { outline: none; }   /* focused by script after a nav pick */
 .pdf-section.card {
     background: transparent;
     border: none;
@@ -922,6 +932,7 @@ footer a:hover { color: var(--text); }
 .toast-visible { opacity: 1; transform: translateX(0); }
 .toast-error { border-left-color: var(--danger); }
 .toast { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.toast span { min-width: 0; overflow-wrap: anywhere; }   /* "Saved: long_file_name_without_spaces.pdf" */
 .toast-action {
     background: none; border: none; cursor: pointer; color: var(--accent);
     font-size: .75rem; font-weight: 600; padding: 0; font-family: inherit;
@@ -1083,14 +1094,6 @@ main { animation: fadeIn .4s ease-out; }
 /* ── Empty State ── */
 .empty-state { text-align: center; margin-top: 56px; animation: fadeIn .5s ease-out; }
 .empty-state p { font-size: .82rem; color: var(--text-muted); margin-bottom: 10px; }
-.empty-examples { display: flex; gap: 8px; align-items: center; justify-content: center; }
-.empty-examples code {
-    font-size: .75rem; color: var(--text-muted);
-    background: none; padding: 0;
-    border-radius: 0; border: none;
-    font-family: inherit;
-}
-.empty-examples code + code::before { content: "\b7\a0"; color: var(--surface-3); }
 .empty-hint { margin-top: 12px; font-size: .72rem; color: var(--text-muted); }
 .empty-hint kbd {
     background: var(--surface-2); border: 1px solid var(--surface-3);
@@ -1208,18 +1211,6 @@ main { animation: fadeIn .4s ease-out; }
     transition: width .3s, background .3s;
 }
 
-/* ── Size Comparison ── */
-.size-compare {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: .82rem;
-    color: var(--text-secondary);
-    margin-top: 8px;
-}
-.size-compare .size-arrow { color: var(--text-muted); }
-.size-compare .size-saved { color: var(--green); font-weight: 600; }
-
 /* ── Error Appear ── */
 @keyframes errorSlideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .error:not([hidden]) { animation: errorSlideIn .25s ease-out; }
@@ -1289,11 +1280,6 @@ select:hover { border-color: var(--border-hover); }
 
 /* ── Drop browse focus ── */
 .drop-browse:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-
-/* ── Nav active group indicator ── */
-.nav-group.active .nav-group-trigger {
-    color: #ffffff;
-}
 
 /* ── History empty state ── */
 .history-empty {
@@ -1366,6 +1352,20 @@ select:hover { border-color: var(--border-hover); }
 .recorder-btn-start {
     font-size: 1rem;
 }
+/* Pause and Turn Off Camera sit beside the red Stop button and take its shape
+   (on their own, .btn-secondary only sets colours, which left raw browser buttons). */
+.recorder-controls > .btn-secondary {
+    padding: 10px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: .9rem; font-weight: 600; font-family: inherit;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+/* Sliders: .field input removes the outline and the Images page removes the
+   focus glow too, which left no sign of keyboard focus at all. */
+.field input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Colour inputs: the text-field padding squeezed the swatch down to a line. */
+.field input[type="color"] { padding: 2px; width: 60px; height: 36px; cursor: pointer; }
 
 /* ── Text-page card layout ── */
 .text-page .pdf-section.card {
@@ -1753,6 +1753,47 @@ main.has-result .search-bar { margin-bottom: 8px; }
 .pdf-section > .card-body > [id$="-actions"] { order: -8; margin-top: 0; margin-bottom: 18px; }
 .pdf-section > .card-body > [id$="-result"],
 .pdf-section > .card-body > [id$="-result-wrap"],
-.pdf-section > .card-body > [id$="-results"],
-.pdf-section > .card-body > .result-panel { order: -7; }
+.pdf-section > .card-body > [id$="-results"] { order: -7; }
 .pdf-section > .card-body > .error { order: -6; margin-top: 0; margin-bottom: 16px; }
+
+/* ── Narrow screens: the nav scrolls sideways instead of widening the page ──
+   Seven links don't fit under about 710px; before this the whole page was laid
+   out at the nav's width and shown zoomed out. Menus drop full-width below the
+   bar (fixed, so the scrolling strip doesn't clip them). */
+@media (max-width: 760px) {
+    nav { padding: 0 12px; }
+    .logo { margin-right: 10px; }
+    .nav-links { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+    .nav-links::-webkit-scrollbar { display: none; }
+    .nav-link, .nav-group-trigger { padding: 0 10px; }
+    .nav-group { position: static; }
+    .nav-group-menu {
+        position: fixed; top: 52px; left: 0; right: 0;
+        max-height: calc(100vh - 52px); overflow: auto;
+        border-left: none; border-right: none; border-radius: 0;
+    }
+    .nav-group-cols { flex-wrap: wrap; }
+    .nav-settings { margin-left: 6px; flex-shrink: 0; }
+}
+
+/* ── Mid widths: the two right-most menus are wider than the room to their
+   right (the Text menu ran about 56px off a 1024px window, the AV menu off
+   anything under 925px). Pin them to the window's right edge there; each still
+   sits under its own trigger. */
+@media (min-width: 761px) and (max-width: 1085px) {
+    .nav-group:last-of-type { position: static; }
+    .nav-group:last-of-type .nav-group-menu { left: auto; right: 0; }
+}
+@media (min-width: 761px) and (max-width: 935px) {
+    .nav-group:nth-last-of-type(2) { position: static; }
+    .nav-group:nth-last-of-type(2) .nav-group-menu { left: auto; right: 0; }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}

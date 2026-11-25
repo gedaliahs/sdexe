@@ -3,6 +3,7 @@ page resizing and flattening. Pure functions, no Flask imports.
 """
 
 import io
+import math
 import os
 import shutil
 import subprocess
@@ -14,6 +15,8 @@ from typing import BinaryIO
 from PIL import Image
 from pypdf import PdfReader, PdfWriter, Transformation
 from pypdf.generic import RectangleObject
+
+from sdexe.tools import _view_box, _whole_writer, _flatten_alpha, open_image
 
 
 # ── Shared helpers ──
@@ -62,27 +65,47 @@ def parse_pages(pages_str: str, total: int) -> list[int]:
     return sorted(indices)
 
 
-def _render_pages(pdf_bytes: bytes, dpi: int, indices: list[int] | None = None) -> list[Image.Image]:
-    """Render selected pages (all by default) of a PDF to RGB PIL images."""
+# One page is never rendered larger than this. A 200 x 200 inch page (a 1 KB
+# file) at 150 dpi is 900 megapixels and took 8.5 GB of memory; it now comes
+# out at a lower resolution instead.
+MAX_RENDER_PIXELS = 150_000_000
+
+
+def _iter_pages(pdf_bytes: bytes, dpi: int, indices: list[int] | None = None):
+    """Render selected pages (all by default) of a PDF to RGB PIL images, one
+    at a time, so a long document never has every page in memory at once."""
     import pypdfium2 as pdfium
 
     doc = pdfium.PdfDocument(pdf_bytes)
     try:
+        try:
+            # Without this pdfium leaves fillable form fields blank, so a
+            # filled-in form flattened or exported to images lost its answers.
+            doc.init_forms()
+        except Exception:
+            pass
         if indices is None:
-            indices = list(range(len(doc)))
-        scale = dpi / 72.0
-        out = []
+            indices = range(len(doc))
         for i in indices:
             page = doc[i]
-            bitmap = page.render(scale=scale)
-            img = bitmap.to_pil()
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-            out.append(img)
-            page.close()
-        return out
+            try:
+                scale = dpi / 72.0
+                w, h = page.get_size()
+                if w * h * scale * scale > MAX_RENDER_PIXELS:
+                    scale = math.sqrt(MAX_RENDER_PIXELS / (w * h))
+                img = page.render(scale=scale).to_pil()
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+            finally:
+                page.close()
+            yield img
     finally:
         doc.close()
+
+
+def _render_pages(pdf_bytes: bytes, dpi: int, indices: list[int] | None = None) -> list[Image.Image]:
+    """All of _iter_pages at once, as a list."""
+    return list(_iter_pages(pdf_bytes, dpi, indices))
 
 
 def _find_binary(name: str, extra_paths: list[str]) -> str | None:
@@ -139,10 +162,11 @@ def pdf_to_images(stream: BinaryIO, fmt: str = "png", dpi: int = 150,
         raise ValueError("DPI must be 72, 150 or 300")
     data = stream.read()
     total = len(PdfReader(io.BytesIO(data)).pages)
+    if not total:
+        raise ValueError("PDF has no pages")
     indices = parse_pages(pages_str, total)
-    images = _render_pages(data, dpi, indices)
     results = []
-    for idx, img in zip(indices, images):
+    for idx, img in zip(indices, _iter_pages(data, dpi, indices)):
         buf = io.BytesIO()
         if fmt == "jpg":
             img.save(buf, "JPEG", quality=90, optimize=True)
@@ -170,17 +194,17 @@ def ocr_document(stream: BinaryIO, filename: str, language: str = "eng") -> tupl
     data = stream.read()
     is_pdf = filename.lower().endswith(".pdf") or data[:5] == b"%PDF-"
     if is_pdf:
-        images = _render_pages(data, 300)
+        if not len(PdfReader(io.BytesIO(data)).pages):
+            raise ValueError("Document has no pages")
+        images = _iter_pages(data, 300)
     else:
-        img = Image.open(io.BytesIO(data))
-        img.load()
-        images = [img.convert("RGB") if img.mode not in ("RGB", "L") else img]
+        # Upright (phone photos are stored sideways with an EXIF note) and
+        # on white: a transparent screenshot would otherwise turn solid black.
+        img = open_image(io.BytesIO(data))
+        images = [img if img.mode in ("RGB", "L") else _flatten_alpha(img)]
 
-    if not images:
-        raise ValueError("Document has no pages")
-
-    chunks = []
-    for i, img in enumerate(images, 1):
+    texts = []
+    for img in images:
         try:
             text = pytesseract.image_to_string(img, lang=language)
         except pytesseract.TesseractError as e:
@@ -188,12 +212,10 @@ def ocr_document(stream: BinaryIO, filename: str, language: str = "eng") -> tupl
             if "Failed loading language" in msg or "tessdata" in msg:
                 raise ValueError(f"Tesseract language '{language}' is not installed.")
             raise ValueError(f"OCR failed: {msg}")
-        text = text.strip()
-        if len(images) > 1:
-            chunks.append(f"--- Page {i} ---\n{text}")
-        else:
-            chunks.append(text)
-    return "\n\n".join(chunks), len(images)
+        texts.append(text.strip())
+    if len(texts) > 1:
+        texts = [f"--- Page {i} ---\n{text}" for i, text in enumerate(texts, 1)]
+    return "\n\n".join(texts), len(texts)
 
 
 # ── 3. Office → PDF ──
@@ -227,7 +249,7 @@ def office_to_pdf(stream: BinaryIO, filename: str, timeout: int = 120) -> bytes:
             "--convert-to", "pdf", "--outdir", str(outdir), str(src),
         ]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+            proc = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout, env=env)
         except subprocess.TimeoutExpired:
             raise ValueError(f"Conversion timed out after {timeout}s")
         out_pdf = outdir / "input.pdf"
@@ -302,23 +324,22 @@ def stamp_pdf(stream: BinaryIO, image_stream: BinaryIO, position: str = "bottom-
     if position not in ("top-left", "top-right", "bottom-left", "bottom-right", "center"):
         raise ValueError("Invalid position")
 
-    img = Image.open(image_stream)
-    img.load()
+    img = open_image(image_stream)  # upright, even for a phone photo of a signature
     stamp_pdf_bytes, iw, ih = _image_to_pdf_page(img, opacity)
     stamp_reader = PdfReader(io.BytesIO(stamp_pdf_bytes))
     stamp_page = stamp_reader.pages[0]
 
     reader = PdfReader(stream)
-    writer = PdfWriter()
     total = len(reader.pages)
     targets = set(parse_pages(pages_str, total))
     margin = 24.0
+    writer = _whole_writer(reader)  # pages must belong to a writer before pypdf 7 edits them
 
-    for i, page in enumerate(reader.pages):
+    for i, page in enumerate(writer.pages):
         if i in targets:
-            box = page.mediabox
-            pw, ph = float(box.width), float(box.height)
-            x0, y0 = float(box.left), float(box.bottom)
+            # Place it on the page as the reader sees it (cropbox, /Rotate).
+            pw, ph, to_page = _view_box(page)
+            x0 = y0 = 0.0
             target_w = pw * scale / 100.0
             factor = target_w / iw
             target_h = ih * factor
@@ -332,9 +353,8 @@ def stamp_pdf(stream: BinaryIO, image_stream: BinaryIO, position: str = "bottom-
                 x, y = x0 + pw - margin - target_w, y0 + margin
             else:
                 x, y = x0 + (pw - target_w) / 2, y0 + (ph - target_h) / 2
-            t = Transformation().scale(factor, factor).translate(x, y)
+            t = Transformation().scale(factor, factor).translate(x, y).transform(to_page)
             page.merge_transformed_page(stamp_page, t, over=True)
-        writer.add_page(page)
 
     buf = io.BytesIO()
     writer.write(buf)
@@ -355,12 +375,18 @@ def resize_pdf_pages(stream: BinaryIO, size: str = "a4", fit: str = "fit") -> by
 
     reader = PdfReader(stream)
     writer = PdfWriter()
+    # pypdf 7 only edits pages that belong to a writer, so turn rotated pages
+    # upright in a scratch one.
+    scratch = PdfWriter()
     for src in reader.pages:
         # Honour /Rotate so a landscape-rotated page lands on a landscape sheet.
         rot = (src.rotation or 0) % 360
         if rot:
+            src = scratch.add_page(src)
             src.transfer_rotation_to_content()
-        box = src.mediabox
+        # The cropbox is the part of the page a reader shows; scaling by the
+        # mediabox brought cropped-away content back and misplaced the rest.
+        box = src.cropbox
         sw, sh = float(box.width), float(box.height)
         landscape = sw > sh
         w, h = (th, tw) if landscape else (tw, th)
@@ -383,17 +409,17 @@ def flatten_pdf(stream: BinaryIO, dpi: int = 150) -> bytes:
     annotations and layers. Page dimensions in points are preserved."""
     data = stream.read()
     reader = PdfReader(io.BytesIO(data))
+    if not len(reader.pages):
+        raise ValueError("PDF has no pages")
     sizes = []
     for p in reader.pages:
         rot = (p.rotation or 0) % 360
-        w, h = float(p.mediabox.width), float(p.mediabox.height)
+        # pdfium renders the cropbox (the visible area), so size the new page
+        # by it too; the mediabox made cropped pages come out stretched.
+        w, h = float(p.cropbox.width), float(p.cropbox.height)
         sizes.append((h, w) if rot in (90, 270) else (w, h))
-    images = _render_pages(data, dpi)
-    if not images:
-        raise ValueError("PDF has no pages")
-
     writer = PdfWriter()
-    for img, (w, h) in zip(images, sizes):
+    for img, (w, h) in zip(_iter_pages(data, dpi), sizes):
         # Pillow embeds the image as JPEG; scale the resulting page back to
         # the original page dimensions so the flattened file has the same size.
         page_pdf = io.BytesIO()

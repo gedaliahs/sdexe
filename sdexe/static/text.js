@@ -5,13 +5,32 @@ if (typeof document !== "undefined") {
 }
 
 /* ── Word Counter ── */
+/* Characters as a person counts them. .length counts UTF-16 units, so one
+   emoji came out as 2 to 7 characters. */
+function countChars(text) {
+    if (!/[^\x00-\u02ff]/.test(text)) return text.length;
+    if (typeof Intl !== "undefined" && Intl.Segmenter) {
+        let n = 0;
+        for (const _ of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)) n++;
+        return n;
+    }
+    return [...text].length;
+}
+
+/* A sentence ends at . ! ? followed by a space or the end of the text, so
+   "3.50", "v1.2.3" and "example.com" don't each count as several. */
+function countSentences(text) {
+    if (!text.trim()) return 0;
+    return text.split(/[.!?\u2026]+["'\u201d\u2019)\]]*(?:\s+|$)|[\u3002\uff01\uff1f]+/).filter(s => s.trim()).length;
+}
+
 function updateWordCount() {
     const text = document.getElementById("wc-input").value;
-    const chars = text.length;
-    const charsNoSpaces = text.replace(/\s/g, "").length;
+    const chars = countChars(text);
+    const charsNoSpaces = countChars(text.replace(/\s/g, ""));
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
     const lines = text ? text.split(/\n/).length : 0;
-    const sentences = text.trim() ? text.split(/[.!?]+/).filter(s => s.trim()).length : 0;
+    const sentences = countSentences(text);
     const readTime = Math.ceil(words / 238);
 
     document.getElementById("wc-chars").textContent = chars.toLocaleString();
@@ -22,8 +41,75 @@ function updateWordCount() {
     document.getElementById("wc-read-time").textContent = readTime < 1 ? "< 1 min" : readTime + " min";
 }
 
+/* ── Regex engine for Find & Replace and the Regex Tester ──
+   Runs in a worker: a pattern like (a+)+$ can backtrack for minutes, and on
+   the main thread that froze the tab on a keystroke. A worker can be stopped. */
+const RX_TIMEOUT_MS = 2000;
+const RX_MAX_MATCHES = 5000;
+
+// Self-contained on purpose: its source is also the worker's body.
+function rxJob(job) {
+    const rx = new RegExp(job.pattern, job.flags);
+    if (job.op === "replace") {
+        let count = 0;
+        // Regex mode keeps $1, $& and $<name> working in the replacement;
+        // plain mode inserts the replacement exactly as typed.
+        if (job.literal) return { result: job.input.replace(rx, () => { count++; return job.replacement; }), count };
+        rx.lastIndex = 0;
+        const hits = job.input.match(rx);
+        return { result: job.input.replace(rx, job.replacement), count: hits ? hits.length : 0 };
+    }
+    const matches = [];
+    let total = 0;
+    for (const m of job.input.matchAll(rx)) {
+        if (total < job.max) matches.push([m.index, m[0].length]);
+        total++;
+    }
+    return { matches, total };
+}
+
+let rxWorker = null;
+let rxWorkerUrl = null;
+let rxCancel = null;
+
+/* Resolves with rxJob's result, or null when a newer run replaced this one.
+   Rejects with the regex's own error, or { timeout: true }. */
+function rxRun(job) {
+    if (rxCancel) rxCancel();
+    return new Promise((resolve, reject) => {
+        let worker;
+        try {
+            if (!rxWorker) {
+                if (!rxWorkerUrl) {
+                    const src = "onmessage = function (e) { try { postMessage({ ok: true, value: (" + rxJob.toString() +
+                        ")(e.data) }); } catch (err) { postMessage({ ok: false, error: err.message }); } };";
+                    rxWorkerUrl = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+                }
+                rxWorker = new Worker(rxWorkerUrl);
+            }
+            worker = rxWorker;
+        } catch (e) {
+            // No workers here: run it directly, as before.
+            try { resolve(rxJob(job)); } catch (err) { reject(err); }
+            return;
+        }
+        const stop = () => { clearTimeout(timer); worker.terminate(); if (rxWorker === worker) rxWorker = null; rxCancel = null; };
+        const timer = setTimeout(() => { stop(); reject({ timeout: true }); }, RX_TIMEOUT_MS);
+        rxCancel = () => { stop(); resolve(null); };
+        worker.onmessage = ev => {
+            clearTimeout(timer);
+            rxCancel = null;
+            if (ev.data.ok) resolve(ev.data.value); else reject(new Error(ev.data.error));
+        };
+        worker.onerror = ev => { stop(); reject(new Error(ev.message || "The regex could not be run")); };
+        worker.postMessage(job);
+    });
+}
+
+const RX_TIMEOUT_MSG = "This pattern takes too long on this text. It probably backtracks heavily, like (a+)+. Simplify it or try a shorter text.";
+
 /* ── Find & Replace ── */
-function doFindReplace() {
+async function doFindReplace() {
     const find = document.getElementById("fr-find").value;
     const replace = document.getElementById("fr-replace").value;
     const input = document.getElementById("fr-input").value;
@@ -40,28 +126,20 @@ function doFindReplace() {
     }
 
     try {
-        let count = 0;
-        let result;
-        if (useRegex) {
-            const flags = "g" + (caseSensitive ? "" : "i");
-            const rx = new RegExp(find, flags);
-            result = input.replace(rx, m => { count++; return replace; });
-        } else {
-            const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            const flags = "g" + (caseSensitive ? "" : "i");
-            const rx = new RegExp(escaped, flags);
-            result = input.replace(rx, m => { count++; return replace; });
-        }
-        document.getElementById("fr-output").value = result;
-        countEl.textContent = count === 0 ? "No matches found" : `${count} replacement${count === 1 ? "" : "s"} made`;
+        const pattern = useRegex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const out = await rxRun({ op: "replace", pattern, flags: "g" + (caseSensitive ? "" : "i"),
+                                  input, replacement: replace, literal: !useRegex });
+        if (!out) return;
+        document.getElementById("fr-output").value = out.result;
+        countEl.textContent = out.count === 0 ? "No matches found" : `${out.count} replacement${out.count === 1 ? "" : "s"} made`;
     } catch (e) {
-        err.textContent = "Invalid regex: " + e.message;
+        err.textContent = e && e.timeout ? RX_TIMEOUT_MSG : "Invalid regex: " + e.message;
         err.hidden = false;
     }
 }
 
 /* ── Regex Tester ── */
-function doRegex() {
+async function doRegex() {
     const pattern = document.getElementById("rx-pattern").value;
     const flags = document.getElementById("rx-flags").value;
     const input = document.getElementById("rx-input").value;
@@ -69,56 +147,66 @@ function doRegex() {
     const matchesEl = document.getElementById("rx-matches");
     const err = document.getElementById("rx-error");
     err.hidden = true;
-    matchesEl.innerHTML = "";
-    highlightEl.style.display = "none";
 
-    if (!pattern || !input) return;
+    if (!pattern || !input) {
+        if (rxCancel) rxCancel();
+        matchesEl.innerHTML = "";
+        highlightEl.style.display = "none";
+        return;
+    }
 
+    let out;
     try {
         const cleanFlags = flags.replace(/[^gimsuy]/g, "");
-        const rx = new RegExp(pattern, cleanFlags.includes("g") ? cleanFlags : cleanFlags + "g");
-        const matches = [...input.matchAll(rx)];
-
-        if (matches.length === 0) {
-            matchesEl.innerHTML = `<p style="color: var(--text-secondary); font-size: 0.875rem;">No matches found</p>`;
-            return;
-        }
-
-        // Build highlighted version
-        let highlighted = "";
-        let lastIndex = 0;
-        for (const m of matches) {
-            const start = m.index;
-            const end = start + m[0].length;
-            highlighted += esc(input.slice(lastIndex, start));
-            highlighted += `<mark style="background: #fbbf24; border-radius: 3px;">${esc(m[0])}</mark>`;
-            lastIndex = end;
-        }
-        highlighted += esc(input.slice(lastIndex));
-        highlightEl.innerHTML = highlighted;
-        highlightEl.style.display = "block";
-
-        // Show match list
-        const header = document.createElement("p");
-        header.style.cssText = "font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;";
-        header.textContent = `${matches.length} match${matches.length === 1 ? "" : "es"}`;
-        matchesEl.appendChild(header);
-
-        matches.slice(0, 50).forEach((m, i) => {
-            const div = document.createElement("div");
-            div.style.cssText = "font-family: monospace; font-size: 0.8rem; padding: 4px 8px; background: var(--surface-2); border-radius: 4px; margin-bottom: 4px;";
-            div.textContent = `[${i + 1}] "${m[0]}" at index ${m.index}`;
-            matchesEl.appendChild(div);
-        });
-        if (matches.length > 50) {
-            const more = document.createElement("p");
-            more.style.cssText = "font-size: 0.8rem; color: var(--text-secondary);";
-            more.textContent = `... and ${matches.length - 50} more`;
-            matchesEl.appendChild(more);
-        }
+        out = await rxRun({ op: "test", pattern, flags: cleanFlags.includes("g") ? cleanFlags : cleanFlags + "g",
+                            input, max: RX_MAX_MATCHES });
+        if (!out) return;
     } catch (e) {
-        err.textContent = "Invalid regex: " + e.message;
+        matchesEl.innerHTML = "";
+        highlightEl.style.display = "none";
+        err.textContent = e && e.timeout ? RX_TIMEOUT_MSG : "Invalid regex: " + e.message;
         err.hidden = false;
+        return;
+    }
+
+    matchesEl.innerHTML = "";
+    highlightEl.style.display = "none";
+    const { matches, total } = out;
+    if (total === 0) {
+        matchesEl.innerHTML = `<p style="color: var(--text-secondary); font-size: 0.875rem;">No matches found</p>`;
+        return;
+    }
+
+    // Build highlighted version
+    const parts = [];
+    let lastIndex = 0;
+    for (const [start, len] of matches) {
+        parts.push(esc(input.slice(lastIndex, start)),
+                   `<mark style="background: #fbbf24; border-radius: 3px;">`, esc(input.substr(start, len)), "</mark>");
+        lastIndex = start + len;
+    }
+    parts.push(esc(input.slice(lastIndex)));
+    highlightEl.innerHTML = parts.join("");
+    highlightEl.style.display = "block";
+
+    // Show match list
+    const header = document.createElement("p");
+    header.style.cssText = "font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;";
+    header.textContent = `${total} match${total === 1 ? "" : "es"}` +
+        (total > matches.length ? ` (first ${matches.length} highlighted)` : "");
+    matchesEl.appendChild(header);
+
+    matches.slice(0, 50).forEach(([start, len], i) => {
+        const div = document.createElement("div");
+        div.style.cssText = "font-family: monospace; font-size: 0.8rem; padding: 4px 8px; background: var(--surface-2); border-radius: 4px; margin-bottom: 4px;";
+        div.textContent = `[${i + 1}] "${input.substr(start, len)}" at index ${start}`;
+        matchesEl.appendChild(div);
+    });
+    if (total > 50) {
+        const more = document.createElement("p");
+        more.style.cssText = "font-size: 0.8rem; color: var(--text-secondary);";
+        more.textContent = `... and ${total - 50} more`;
+        matchesEl.appendChild(more);
     }
 }
 
@@ -135,21 +223,42 @@ function doB64Encode() {
     }
 }
 
+/* Accepts the URL-safe alphabet (- and _) and wrapped lines too. Throws an
+   Error whose message is ready to show. */
+function b64DecodeText(input) {
+    const clean = input.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+    let bin;
+    try {
+        bin = atob(clean);
+    } catch (e) {
+        throw new Error("Invalid Base64: it has characters or a length Base64 can't have.");
+    }
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch (e) {
+        throw new Error("This Base64 is valid, but it holds binary data, not text.");
+    }
+}
+
 function doB64Decode() {
-    const input = document.getElementById("b64-input").value.trim();
+    const input = document.getElementById("b64-input").value;
     const err = document.getElementById("b64-error");
     err.hidden = true;
     try {
-        document.getElementById("b64-output").value = decodeURIComponent(escape(atob(input)));
+        document.getElementById("b64-output").value = b64DecodeText(input);
     } catch (e) {
-        err.textContent = "Invalid Base64: " + e.message;
+        err.textContent = e.message;
         err.hidden = false;
     }
 }
 
 function doB64File() {
-    const file = document.getElementById("b64-file-input").files[0];
+    const fileInput = document.getElementById("b64-file-input");
+    const file = fileInput.files[0];
     if (!file) return;
+    fileInput.value = "";  // so picking the same file again fires "change"
     const reader = new FileReader();
     reader.onload = e => {
         const data = e.target.result;
@@ -226,7 +335,15 @@ async function doHashFile() {
         return;
     }
 
-    const buffer = await file.arrayBuffer();
+    let buffer;
+    try {
+        buffer = await file.arrayBuffer();
+    } catch (e) {
+        results.innerHTML = "";
+        err.textContent = `Could not read ${file.name}. It may be too large to hash in the browser.`;
+        err.hidden = false;
+        return;
+    }
     results.innerHTML = "";
 
     for (const algo of algos) {
@@ -257,7 +374,14 @@ function doDiff() {
     const output = document.getElementById("diff-output");
     const summary = document.getElementById("diff-summary");
 
-    const diff = computeDiff(original, modified);
+    let diff;
+    try {
+        diff = computeDiff(original, modified);
+    } catch (e) {
+        output.style.display = "none";
+        summary.textContent = "These texts are too long to compare line by line here.";
+        return;
+    }
     let added = 0, removed = 0;
     let html = "";
 
@@ -275,30 +399,63 @@ function doDiff() {
 
     output.innerHTML = html;
     output.style.display = "block";
-    summary.textContent = diff.length === 0 ? "Files are identical" : `${added} addition${added === 1 ? "" : "s"}, ${removed} deletion${removed === 1 ? "" : "s"}`;
+    summary.textContent = added + removed === 0 ? "Files are identical" : `${added} addition${added === 1 ? "" : "s"}, ${removed} deletion${removed === 1 ? "" : "s"}`;
 }
 
+/* LCS line diff. Same result as a full (m+1) x (n+1) table of LCS lengths,
+   but that table was an array of arrays: 6,000 lines took 1.8 s and 160 MB,
+   20,000 ran the tab out of memory. Here lines become integer ids, the
+   lengths live in two rolling rows, and the only thing kept per cell is the
+   one bit the walk back needs. */
+const DIFF_MAX_CELLS = 2 ** 31 - 8;  // bit indexes stay 32-bit; about 46,000 x 46,000 differing lines
+
 function computeDiff(a, b) {
-    // Simple LCS-based line diff
-    const m = a.length, n = b.length;
-    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-    for (let i = m - 1; i >= 0; i--) {
-        for (let j = n - 1; j >= 0; j--) {
-            if (a[i] === b[j]) dp[i][j] = dp[i + 1][j + 1] + 1;
-            else dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
-        }
-    }
     const result = [];
+    // Leading lines both sides share never enter the table.
+    let pre = 0;
+    const maxPre = Math.min(a.length, b.length);
+    while (pre < maxPre && a[pre] === b[pre]) { result.push({ type: "equal", text: a[pre] }); pre++; }
+
+    const m = a.length - pre, n = b.length - pre;
+    if (m === 0 || n === 0) {
+        for (let j = 0; j < n; j++) result.push({ type: "add", text: b[pre + j] });
+        for (let i = 0; i < m; i++) result.push({ type: "remove", text: a[pre + i] });
+        return result;
+    }
+
+    if (m * n > DIFF_MAX_CELLS) throw new RangeError("too large");
+
+    const ids = new Map();
+    const idOf = line => { let id = ids.get(line); if (id === undefined) { id = ids.size; ids.set(line, id); } return id; };
+    const A = new Int32Array(m), B = new Int32Array(n);
+    for (let i = 0; i < m; i++) A[i] = idOf(a[pre + i]);
+    for (let j = 0; j < n; j++) B[j] = idOf(b[pre + j]);
+
+    // bit (i, j) set: at a mismatch, take the line from b (an addition) next.
+    const takeB = new Uint8Array(Math.ceil(m * n / 8));
+    let below = new Int32Array(n + 1), row = new Int32Array(n + 1);
+    for (let i = m - 1; i >= 0; i--) {
+        const ai = A[i];
+        let bit = i * n + n - 1;
+        row[n] = 0;
+        for (let j = n - 1; j >= 0; j--, bit--) {
+            if (ai === B[j]) row[j] = below[j + 1] + 1;
+            else if (row[j + 1] >= below[j]) { row[j] = row[j + 1]; takeB[bit >> 3] |= 1 << (bit & 7); }
+            else row[j] = below[j];
+        }
+        const t = below; below = row; row = t;
+    }
+
     let i = 0, j = 0;
     while (i < m || j < n) {
-        if (i < m && j < n && a[i] === b[j]) {
-            result.push({ type: "equal", text: a[i] });
+        if (i < m && j < n && A[i] === B[j]) {
+            result.push({ type: "equal", text: a[pre + i] });
             i++; j++;
-        } else if (j < n && (i >= m || dp[i][j + 1] >= dp[i + 1][j])) {
-            result.push({ type: "add", text: b[j] });
+        } else if (j < n && (i >= m || (takeB[(i * n + j) >> 3] >> ((i * n + j) & 7)) & 1)) {
+            result.push({ type: "add", text: b[pre + j] });
             j++;
         } else {
-            result.push({ type: "remove", text: a[i] });
+            result.push({ type: "remove", text: a[pre + i] });
             i++;
         }
     }
@@ -367,7 +524,7 @@ function rgbToHsl(r, g, b) {
             default: h = ((r - g) / d + 4) / 6;
         }
     }
-    return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+    return [Math.round(h * 360) % 360, Math.round(s * 100), Math.round(l * 100)];
 }
 
 function hslToRgb(h, s, l) {
@@ -409,13 +566,58 @@ function doUrlDecode() {
 }
 
 /* ── JSON Formatter ── */
+/* Re-indents the JSON text itself. Going through JSON.parse + JSON.stringify
+   changed the data: 12345678901234567890 became 12345678901234567000, 1.0
+   became 1, 1e400 became null and a repeated key lost its first value.
+   JSON.parse is still what decides whether the input is valid.
+   indent "" minifies. */
+function jsonReformat(text, indent) {
+    JSON.parse(text);
+    const out = [];
+    const n = text.length;
+    let depth = 0, i = 0;
+    const newline = () => { if (indent) out.push("\n", indent.repeat(depth)); };
+    const isSpace = c => c === 32 || c === 10 || c === 13 || c === 9;
+    while (i < n) {
+        const c = text.charCodeAt(i);
+        if (isSpace(c)) { i++; continue; }
+        if (c === 34) {                                   // "string", copied as written
+            let j = i + 1;
+            while (text.charCodeAt(j) !== 34) j += text.charCodeAt(j) === 92 ? 2 : 1;
+            out.push(text.slice(i, j + 1));
+            i = j + 1;
+        } else if (c === 123 || c === 91) {               // { [
+            let j = i + 1;
+            while (isSpace(text.charCodeAt(j))) j++;
+            const next = text.charCodeAt(j);
+            if (next === 125 || next === 93) { out.push(text[i], text[j]); i = j + 1; }  // {} and [] stay on one line
+            else { depth++; out.push(text[i]); newline(); i++; }
+        } else if (c === 125 || c === 93) {               // } ]
+            depth--; newline(); out.push(text[i]); i++;
+        } else if (c === 44) {                            // ,
+            out.push(","); newline(); i++;
+        } else if (c === 58) {                            // :
+            out.push(indent ? ": " : ":"); i++;
+        } else {                                          // number, true, false, null
+            let j = i + 1;
+            while (j < n) {
+                const d = text.charCodeAt(j);
+                if (isSpace(d) || d === 44 || d === 125 || d === 93) break;
+                j++;
+            }
+            out.push(text.slice(i, j));
+            i = j;
+        }
+    }
+    return out.join("");
+}
+
 function doJsonFormat() {
     const input = document.getElementById("json-input").value;
     const err = document.getElementById("json-error");
     err.hidden = true;
     try {
-        const obj = JSON.parse(input);
-        document.getElementById("json-output").value = JSON.stringify(obj, null, 2);
+        document.getElementById("json-output").value = jsonReformat(input, "  ");
     } catch (e) {
         err.textContent = "Invalid JSON: " + e.message;
         err.hidden = false;
@@ -427,8 +629,7 @@ function doJsonMinify() {
     const err = document.getElementById("json-error");
     err.hidden = true;
     try {
-        const obj = JSON.parse(input);
-        document.getElementById("json-output").value = JSON.stringify(obj);
+        document.getElementById("json-output").value = jsonReformat(input, "");
     } catch (e) {
         err.textContent = "Invalid JSON: " + e.message;
         err.hidden = false;
@@ -465,27 +666,40 @@ function doJwtDecode() {
     }
 
     try {
-        const header = JSON.parse(b64decode(parts[0]));
-        const payload = JSON.parse(b64decode(parts[1]));
+        const headerText = b64decode(parts[0]);
+        const payloadText = b64decode(parts[1]);
+        JSON.parse(headerText);
+        const payload = JSON.parse(payloadText);
 
-        function renderSection(title, obj) {
+        // Shown as written in the token (jsonReformat keeps long numeric ids exact).
+        function renderSection(title, jsonText) {
             let html = `<div style="margin-bottom: 16px;">
                 <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .05em;">${title}</div>
-                <pre style="font-family: ui-monospace, monospace; font-size: 0.8rem; padding: 12px; background: var(--surface-2); border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;">${esc(JSON.stringify(obj, null, 2))}</pre>
+                <pre style="font-family: ui-monospace, monospace; font-size: 0.8rem; padding: 12px; background: var(--surface-2); border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;">${esc(jsonReformat(jsonText, "  "))}</pre>
             </div>`;
             return html;
         }
 
-        results.innerHTML = renderSection("Header", header) + renderSection("Payload", payload);
+        let html = renderSection("Header", headerText) + renderSection("Payload", payloadText);
 
-        if (payload.exp) {
-            const expDate = new Date(payload.exp * 1000);
+        // exp and iat are seconds since 1970. Anything else (a string, a
+        // number too large to be a date) printed "Invalid Date".
+        const claimDate = v => {
+            if (typeof v !== "number") return null;
+            const d = new Date(v * 1000);
+            return isNaN(d.getTime()) ? null : d;
+        };
+        const claims = payload && typeof payload === "object" ? payload : {};
+        const expDate = claimDate(claims.exp);
+        if (expDate) {
             const expired = expDate < new Date();
-            results.innerHTML += `<div style="font-size: 0.85rem; color: ${expired ? "var(--danger)" : "var(--green)"};">${expired ? "Expired" : "Expires"}: ${expDate.toLocaleString()}</div>`;
+            html += `<div style="font-size: 0.85rem; color: ${expired ? "var(--danger)" : "var(--green)"};">${expired ? "Expired" : "Expires"}: ${esc(expDate.toLocaleString())}</div>`;
         }
-        if (payload.iat) {
-            results.innerHTML += `<div style="font-size: 0.85rem; color: var(--text-secondary);">Issued: ${new Date(payload.iat * 1000).toLocaleString()}</div>`;
+        const iatDate = claimDate(claims.iat);
+        if (iatDate) {
+            html += `<div style="font-size: 0.85rem; color: var(--text-secondary);">Issued: ${esc(iatDate.toLocaleString())}</div>`;
         }
+        results.innerHTML = html;
     } catch (e) {
         err.textContent = "Failed to decode JWT: " + e.message;
         err.hidden = false;
@@ -493,23 +707,38 @@ function doJwtDecode() {
 }
 
 /* ── Case Converter ── */
-function doCase(type) {
-    const input = document.getElementById("case-input").value;
-    let result;
+/* The words of one line, for camelCase / snake_case / kebab-case. Splits on
+   anything that isn't a letter or digit in any script (the old ASCII-only rule
+   turned "élève" into "l_ve") and at case changes, so "helloWorld" and
+   "HTMLParser" keep their word breaks. */
+function caseWords(line) {
+    return line.replace(/['\u2019]/g, "")
+        .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, "$1 $2")
+        .replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, "$1 $2")
+        .split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+function capitalizeWord(w) {
+    const first = String.fromCodePoint(w.codePointAt(0));
+    return first.toUpperCase() + w.slice(first.length).toLowerCase();
+}
+
+function convertCase(input, type) {
+    // Each line is its own name, so a pasted list stays a list.
+    const perLine = fn => input.split("\n").map(fn).join("\n");
     switch (type) {
-        case "upper": result = input.toUpperCase(); break;
-        case "lower": result = input.toLowerCase(); break;
-        case "title": result = input.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()); break;
-        case "camel": {
-            const words = input.replace(/[^a-zA-Z0-9\s]/g, " ").trim().split(/\s+/);
-            result = words.map((w, i) => i === 0 ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("");
-            break;
-        }
-        case "snake": result = input.replace(/[^a-zA-Z0-9]/g, " ").trim().split(/\s+/).map(w => w.toLowerCase()).join("_"); break;
-        case "kebab": result = input.replace(/[^a-zA-Z0-9]/g, " ").trim().split(/\s+/).map(w => w.toLowerCase()).join("-"); break;
-        default: result = input;
+        case "upper": return input.toUpperCase();
+        case "lower": return input.toLowerCase();
+        case "title": return input.replace(/[\p{L}\p{N}_]\S*/gu, capitalizeWord);
+        case "camel": return perLine(l => caseWords(l).map((w, i) => i === 0 ? w.toLowerCase() : capitalizeWord(w)).join(""));
+        case "snake": return perLine(l => caseWords(l).map(w => w.toLowerCase()).join("_"));
+        case "kebab": return perLine(l => caseWords(l).map(w => w.toLowerCase()).join("-"));
     }
-    document.getElementById("case-output").value = result;
+    return input;
+}
+
+function doCase(type) {
+    document.getElementById("case-output").value = convertCase(document.getElementById("case-input").value, type);
 }
 
 /* ── UUID Generator ── */
@@ -521,16 +750,35 @@ function doUuid() {
 }
 
 /* ── Unix Timestamp ── */
+/* A typed Unix timestamp as { ms, unit }, or null when it isn't one.
+   Seconds stay below 1e12 until the year 33658, so longer numbers are
+   milliseconds, microseconds or nanoseconds. */
+function parseUnixTimestamp(val) {
+    if (!/^[+-]?\d+(\.\d+)?$/.test(val)) return null;   // "12abc" used to be read as 12
+    const n = Number(val), abs = Math.abs(n);
+    let ms, unit;
+    if (abs < 1e12) { ms = n * 1000; unit = "seconds"; }
+    else if (abs < 1e15) { ms = n; unit = "milliseconds"; }
+    else if (abs < 1e18) { ms = n / 1e3; unit = "microseconds"; }
+    else { ms = n / 1e6; unit = "nanoseconds"; }
+    ms = Math.floor(ms);
+    if (!(Math.abs(ms) <= 8.64e15)) return null;         // outside what a Date can hold
+    return { ms, unit };
+}
+
 function tsFromUnix() {
     const val = document.getElementById("ts-unix").value.trim();
     const display = document.getElementById("ts-date-display");
     if (!val) { display.textContent = ""; return; }
-    const ts = parseInt(val);
-    if (isNaN(ts)) { display.textContent = "Invalid timestamp"; return; }
-    const ms = val.length > 12 ? ts : ts * 1000;
-    const d = new Date(ms);
-    display.textContent = d.toLocaleString() + " (" + Intl.DateTimeFormat().resolvedOptions().timeZone + ")";
-    document.getElementById("ts-datetime").value = new Date(ms - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
+    const ts = parseUnixTimestamp(val);
+    if (!ts) { display.textContent = "Invalid timestamp"; return; }
+    const d = new Date(ts.ms);
+    display.textContent = d.toLocaleString() + " (" + Intl.DateTimeFormat().resolvedOptions().timeZone + ")" +
+        (ts.unit === "seconds" ? "" : ", read as " + ts.unit);
+    // The date picker only takes years 0001 to 9999.
+    const year = d.getFullYear();
+    document.getElementById("ts-datetime").value = year >= 1 && year <= 9999
+        ? new Date(ts.ms - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19) : "";
     document.getElementById("ts-unix-display").textContent = "";
 }
 
@@ -538,7 +786,9 @@ function tsFromDatetime() {
     const val = document.getElementById("ts-datetime").value;
     const display = document.getElementById("ts-unix-display");
     if (!val) { display.textContent = ""; return; }
-    const ts = Math.floor(new Date(val).getTime() / 1000);
+    const t = new Date(val).getTime();
+    if (isNaN(t)) { display.textContent = "Invalid date"; return; }
+    const ts = Math.floor(t / 1000);
     display.textContent = ts;
     document.getElementById("ts-unix").value = ts;
     document.getElementById("ts-date-display").textContent = "";
@@ -590,10 +840,10 @@ function doLorem() {
 }
 
 /* ── Helpers ── */
+// Safe in element content and inside quoted attribute values.
+const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 function esc(s) {
-    const d = document.createElement("div");
-    d.textContent = s;
-    return d.innerHTML;
+    return String(s).replace(/[&<>"']/g, c => ESC_MAP[c]);
 }
 
 function copyText(id, btn) {
@@ -639,8 +889,7 @@ function doPassword() {
     document.getElementById("pw-output").value = password;
 
     // Strength estimation
-    const poolSize = (upper ? 26 : 0) + (lower ? 26 : 0) + (digits ? 10 : 0) + (symbols ? 27 : 0);
-    const entropy = Math.floor(len * Math.log2(poolSize || 36));
+    const entropy = Math.floor(len * Math.log2(chars.length));  // the symbol set has 26 characters, not 27
     let strength = "Weak";
     if (entropy >= 128) strength = "Very Strong";
     else if (entropy >= 80) strength = "Strong";
@@ -659,11 +908,16 @@ function doPassword() {
    Line Tools, Cron Explainer, HTML Entities, String Escape, Number
    Base, Unit Converter, Slug Generator, Markdown Table, Text to Speech.
    Pure functions are plain top-level so they load in Node for tests;
-   all DOM wiring lives in initTextTools2() at the bottom.
+   the DOM wiring is at the bottom of the file.
    ══════════════════════════════════════════════════════════════════ */
 
 /* ── Line Tools (pure) ── */
-function countLines(text) { return text === "" ? 0 : text.split(/\r?\n/).length; }
+// A final newline ends the last line; it doesn't start an extra empty one.
+function countLines(text) {
+    if (text === "") return 0;
+    const n = text.split(/\r?\n/).length;
+    return n > 1 && text.endsWith("\n") ? n - 1 : n;
+}
 
 function unescapeSep(s) {
     return s.replace(/\\(n|t|r|\\)/g, (m, c) => ({ n: "\n", t: "\t", r: "\r", "\\": "\\" })[c]);
@@ -677,6 +931,10 @@ function lineNumKey(line) {
 function lineTransform(text, op, opts) {
     opts = opts || {};
     let lines = text.split(/\r?\n/);
+    // Text ending in a newline used to carry a phantom empty last line: sorting
+    // moved it to the top, numbering numbered it, joining left a dangling separator.
+    const endsWithNewline = op !== "split" && lines.length > 1 && lines[lines.length - 1] === "";
+    if (endsWithNewline) lines.pop();
     switch (op) {
         case "sortaz": lines.sort((a, b) => a.localeCompare(b)); break;
         case "sortza": lines.sort((a, b) => b.localeCompare(a)); break;
@@ -712,7 +970,7 @@ function lineTransform(text, op, opts) {
             return sep ? text.split(sep).join("\n") : text;
         }
     }
-    return lines.join("\n");
+    return lines.join("\n") + (endsWithNewline ? "\n" : "");
 }
 
 /* ── Cron Explainer (pure) ── */
@@ -927,7 +1185,7 @@ const HTML_ENTITIES = {
     lowast: 8727, radic: 8730, prop: 8733, infin: 8734, ang: 8736, and: 8743, or: 8744, cap: 8745, cup: 8746, int: 8747,
     there4: 8756, sim: 8764, cong: 8773, asymp: 8776, ne: 8800, equiv: 8801, le: 8804, ge: 8805, sub: 8834, sup: 8835,
     nsub: 8836, sube: 8838, supe: 8839, oplus: 8853, otimes: 8855, perp: 8869, sdot: 8901, lceil: 8968, rceil: 8969,
-    lfloor: 8970, rfloor: 8971, lang: 9001, rang: 9002, loz: 9674, spades: 9824, clubs: 9827, hearts: 9829, diams: 9830,
+    lfloor: 8970, rfloor: 8971, lang: 10216, rang: 10217, loz: 9674, spades: 9824, clubs: 9827, hearts: 9829, diams: 9830,
     check: 10003, cross: 10007, star: 9734, starf: 9733, hyphen: 8208, dash: 8208, NewLine: 10, Tab: 9,
 };
 const HTML_ENTITY_BY_CODE = (() => {
@@ -968,7 +1226,9 @@ function decodeEntities(text) {
 function escapeCString(s, style) {
     // style: "json" | "js" | "python"
     let out = "";
-    for (const ch of s) {
+    const chars = [...s];
+    for (let k = 0; k < chars.length; k++) {
+        const ch = chars[k];
         const cp = ch.codePointAt(0);
         switch (ch) {
             case "\\": out += "\\\\"; continue;
@@ -981,7 +1241,8 @@ function escapeCString(s, style) {
         }
         if (style !== "json" && ch === "'") { out += "\\'"; continue; }
         if (style !== "json" && ch === "\v") { out += "\\v"; continue; }
-        if (style !== "json" && ch === "\0") { out += "\\0"; continue; }
+        // "\0" followed by a digit would read back as an octal escape ("\01" is U+0001).
+        if (style !== "json" && ch === "\0") { out += /[0-9]/.test(chars[k + 1] || "") ? "\\x00" : "\\0"; continue; }
         if (cp < 0x20 || cp === 0x7f) { out += style === "json" ? "\\u" + cp.toString(16).padStart(4, "0") : "\\x" + cp.toString(16).padStart(2, "0"); continue; }
         if (style === "js" && (cp === 0x2028 || cp === 0x2029)) { out += "\\u" + cp.toString(16); continue; }
         out += ch;
@@ -989,10 +1250,11 @@ function escapeCString(s, style) {
     return out;
 }
 
-function unescapeCString(s) {
+function unescapeCString(s, style) {
     const simple = { n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", "0": "\0", a: "\x07", "\\": "\\", '"': '"', "'": "'", "/": "/" };
-    return s.replace(/\\(u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([0-7]{1,3})|(\r?\n)|(.))/gs, (m, all, ub, u4, x2, oct, nl, c) => {
+    return s.replace(/\\(u\{([0-9a-fA-F]{1,6})\}|U([0-9a-fA-F]{8})|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([0-7]{1,3})|(\r?\n)|(.))/gs, (m, all, ub, u8, u4, x2, oct, nl, c) => {
         if (ub) return String.fromCodePoint(parseInt(ub, 16));
+        if (u8) return style === "python" ? String.fromCodePoint(parseInt(u8, 16)) : m.slice(1);   // \U0001F44D is Python only
         if (u4) return String.fromCharCode(parseInt(u4, 16));
         if (x2) return String.fromCharCode(parseInt(x2, 16));
         if (oct) return String.fromCharCode(parseInt(oct, 8));
@@ -1024,15 +1286,16 @@ function unescapeShellSingle(s) {
     }
     return out;
 }
-function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\\/-]/g, "\\$&"); }
-function unescapeRegex(s) { return s.replace(/\\([.*+?^${}()|[\]\\\/-])/g, "$1"); }
+// "-" becomes \x2d, as RegExp.escape does: "\-" is a syntax error in a /u or /v regex.
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&").replace(/-/g, "\\x2d"); }
+function unescapeRegex(s) { return s.replace(/\\(x2[dD]|[.*+?^${}()|[\]\\\/-])/g, (m, c) => c.length > 1 ? "-" : c); }
 
 function stringEscape(s, lang, direction) {
     const enc = direction !== "unescape";
     switch (lang) {
-        case "json": return enc ? escapeCString(s, "json") : unescapeCString(s);
-        case "js": return enc ? escapeCString(s, "js") : unescapeCString(s);
-        case "python": return enc ? escapeCString(s, "python") : unescapeCString(s);
+        case "json": return enc ? escapeCString(s, "json") : unescapeCString(s, "json");
+        case "js": return enc ? escapeCString(s, "js") : unescapeCString(s, "js");
+        case "python": return enc ? escapeCString(s, "python") : unescapeCString(s, "python");
         case "htmlattr": return enc ? encodeEntities(s, { mode: "named", scope: "unsafe" }) : decodeEntities(s);
         case "csv": return enc ? escapeCsvField(s) : unescapeCsvField(s);
         case "shell": return enc ? escapeShellSingle(s) : unescapeShellSingle(s);
@@ -1180,13 +1443,15 @@ function slugify(text, opts) {
     const sep = opts.separator || "-";
     let s = text.replace(/&/g, " and ").replace(/[$%+@€£]/g, ch => SLUG_CHAR_MAP[ch]);
     if (opts.transliterate !== false) {
-        s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").normalize("NFC");
         s = s.replace(/[^\x00-\x7F]/g, ch => SLUG_CHAR_MAP[ch] !== undefined ? SLUG_CHAR_MAP[ch] : ch);
     }
     if (opts.lowercase !== false) s = s.toLowerCase();
     s = s.replace(/'/g, "");
-    const keep = opts.transliterate !== false ? /[^A-Za-z0-9]+/g : /[^\p{L}\p{N}]+/gu;
-    let words = s.split(keep).filter(Boolean);
+    // Letters and digits of every script are kept (with the marks that belong
+    // to them). Dropping everything non-ASCII left Japanese, Russian or Hindi
+    // titles with an empty slug.
+    let words = s.split(/[^\p{L}\p{N}\p{M}]+/u).filter(Boolean);
     if (opts.removeStopWords && words.length > 1) {
         const kept = words.filter(w => !SLUG_STOP_WORDS.has(w.toLowerCase()));
         if (kept.length) words = kept;
@@ -1194,9 +1459,13 @@ function slugify(text, opts) {
     let out = words.join(sep);
     const max = parseInt(opts.maxLength, 10);
     if (max > 0 && out.length > max) {
-        out = out.slice(0, max);
-        const cut = out.lastIndexOf(sep);
-        if (cut > 0) out = out.slice(0, cut);
+        const full = out;
+        out = full.slice(0, max);
+        // Drop a word the cut split in two, but not one it ended exactly on.
+        if (!full.startsWith(sep, max)) {
+            const cut = out.lastIndexOf(sep);
+            if (cut > 0) out = out.slice(0, cut);
+        }
     }
     return out;
 }
@@ -1397,7 +1666,9 @@ function mtRender() {
 function mtFromInput() {
     const text = document.getElementById("mt-input").value;
     if (!text.trim()) return;
-    mtRows = parseDelimited(text);
+    const rows = parseDelimited(text);
+    if (!rows.length) return;   // only separators so far (","): keep the grid as it is
+    mtRows = rows;
     mtAligns = [];
     mtRenderGrid(); mtRender();
 }
@@ -1451,6 +1722,146 @@ function ttsPause() { if ("speechSynthesis" in window && speechSynthesis.speakin
 function ttsResume() { if ("speechSynthesis" in window && speechSynthesis.paused) { speechSynthesis.resume(); ttsSetStatus("Speaking…"); } }
 function ttsStop() { if ("speechSynthesis" in window) { speechSynthesis.cancel(); ttsSetStatus(""); } }
 
+/* ── DOM wiring: Cron Explainer, Number Base, Unit Converter, Slug Generator ──
+   These four had their markup and their pure functions, but nothing joined
+   them: typing in any of them did nothing. */
+function cronRun() {
+    const sentence = document.getElementById("cron-sentence");
+    const err = document.getElementById("cron-error");
+    const breakdown = document.getElementById("cron-breakdown");
+    const next = document.getElementById("cron-next");
+    const input = document.getElementById("cron-input").value;
+    err.hidden = true;
+    let p = null;
+    try {
+        if (input.trim()) p = parseCron(input);
+    } catch (e) {
+        err.textContent = e.message;
+        err.hidden = false;
+    }
+    if (!p) { sentence.textContent = ""; breakdown.innerHTML = ""; next.innerHTML = ""; return; }
+
+    sentence.textContent = cronDescribe(p);
+    const specs = p.hasSeconds ? CRON_FIELDS : CRON_FIELDS.slice(1);
+    breakdown.innerHTML = `<table class="tt-table"><thead><tr><th>Field</th><th>Value</th><th>Meaning</th></tr></thead><tbody>` +
+        specs.map(spec => {
+            const f = p.fields[spec.key];
+            return `<tr><td>${esc(spec.name)}</td><td class="mono">${esc(f.raw)}</td><td>${esc(cronFieldDesc(f, spec.key))}</td></tr>`;
+        }).join("") + `</tbody></table>`;
+
+    const now = new Date();
+    const runs = cronNext(p, now, 5);
+    if (!runs.length) {
+        next.innerHTML = `<p class="tt-note">This schedule never runs: no such date exists.</p>`;
+        return;
+    }
+    const fmt = { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
+    if (p.hasSeconds) fmt.second = "2-digit";
+    next.innerHTML = `<table class="tt-table"><thead><tr><th>Next runs</th><th></th></tr></thead><tbody>` +
+        runs.map(d => `<tr><td class="mono">${esc(d.toLocaleString(undefined, fmt))}</td><td>${esc(relativeTime(d - now))}</td></tr>`).join("") +
+        `</tbody></table>`;
+}
+
+function nbRun() {
+    const err = document.getElementById("nb-error");
+    const baseSel = document.getElementById("nb-base").value;
+    const upper = document.getElementById("nb-upper").checked;
+    const raw = document.getElementById("nb-input").value;
+    const fields = { "nb-bin": "", "nb-oct": "", "nb-dec": "", "nb-hex": "", "nb-b36": "", "nb-char": "" };
+    const bits = document.getElementById("nb-bits");
+    const show = () => { for (const id in fields) document.getElementById(id).value = fields[id]; };
+    const fail = msg => { show(); bits.innerHTML = ""; err.textContent = msg; err.hidden = false; };
+    err.hidden = true;
+    document.getElementById("nb-custom-wrap").hidden = baseSel !== "custom";
+
+    const base = parseInt(baseSel === "custom" ? document.getElementById("nb-custom").value : baseSel, 10);
+    if (!(base >= 2 && base <= 36)) { fail("The base must be a whole number from 2 to 36."); return; }
+
+    let n;
+    try {
+        n = parseBigIntBase(raw, base);
+    } catch (e) {
+        // 0x, 0b and 0o say which base the digits are in, whatever the menu says.
+        const m = /^\s*[+-]?0([xbo])/i.exec(raw);
+        const prefixBase = m ? { x: 16, b: 2, o: 8 }[m[1].toLowerCase()] : 0;
+        try {
+            if (!prefixBase || prefixBase === base) throw e;
+            n = parseBigIntBase(raw, prefixBase);
+        } catch (e2) { fail(e.message); return; }
+    }
+    if (n === null) { show(); bits.innerHTML = ""; return; }
+
+    const out = baseOutputs(n, upper);
+    fields["nb-bin"] = out.binary;
+    fields["nb-oct"] = out.octal;
+    fields["nb-dec"] = out.decimal;
+    fields["nb-hex"] = out.hex;
+    fields["nb-b36"] = out.base36;
+    const ch = out.char;
+    fields["nb-char"] = ch && ch.char !== null && !ch.control ? ch.char : "";
+    show();
+
+    let html = "";
+    if (ch) html += `<p class="tt-note">Code point ${esc(ch.codePoint)}${ch.control ? ", a control character" : ch.char === null ? ", half of a surrogate pair, not a character" : ""}</p>`;
+    html += `<div style="overflow-x: auto;"><table class="tt-table"><thead><tr><th>Width</th><th>Hex</th><th>Unsigned</th><th>Signed</th><th>Two's complement</th></tr></thead><tbody>` +
+        [8, 16, 32, 64].map(w => {
+            const t = twosComplement(n, w);
+            if (!t) return `<tr><td>${w}-bit</td><td colspan="4" style="color: var(--text-muted);">does not fit</td></tr>`;
+            return `<tr><td>${w}-bit</td><td class="mono">${upper ? t.hex.toUpperCase() : t.hex}</td><td class="mono">${t.unsigned}</td><td class="mono">${t.signed}</td><td class="mono">${t.bin}</td></tr>`;
+        }).join("") + `</tbody></table></div>`;
+    bits.innerHTML = html;
+}
+
+function unFillUnits() {
+    const cat = UNIT_CATEGORIES[document.getElementById("un-cat").value];
+    if (!cat) return;
+    const names = Object.keys(cat.units);
+    const options = names.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join("");
+    const from = document.getElementById("un-from"), to = document.getElementById("un-to");
+    from.innerHTML = options;
+    to.innerHTML = options;
+    from.value = names[0];
+    to.value = names[1] || names[0];
+}
+function unRun() {
+    const catKey = document.getElementById("un-cat").value;
+    const cat = UNIT_CATEGORIES[catKey];
+    const result = document.getElementById("un-result");
+    const summary = document.getElementById("un-summary");
+    const table = document.getElementById("un-table");
+    const from = document.getElementById("un-from").value, to = document.getElementById("un-to").value;
+    const typed = document.getElementById("un-value").value;
+    const value = parseFloat(typed);
+    if (!cat || typed.trim() === "" || isNaN(value)) { result.value = ""; summary.textContent = ""; table.innerHTML = ""; return; }
+    const shown = formatUnitValue(convertUnit(catKey, value, from, to));
+    result.value = shown;
+    summary.textContent = `${formatUnitValue(value)} ${from} = ${shown} ${to}`;
+    table.innerHTML = `<table class="tt-table"><thead><tr><th>Unit</th><th>${esc(formatUnitValue(value))} ${esc(from)} is</th></tr></thead><tbody>` +
+        Object.keys(cat.units).filter(u => u !== from).map(u =>
+            `<tr><td>${esc(u)}</td><td class="mono">${esc(formatUnitValue(convertUnit(catKey, value, from, u)))}</td></tr>`).join("") +
+        `</tbody></table>`;
+}
+function unSwap() {
+    const from = document.getElementById("un-from"), to = document.getElementById("un-to");
+    const f = from.value;
+    from.value = to.value;
+    to.value = f;
+    unRun();
+}
+
+function slugRun() {
+    const slug = slugify(document.getElementById("slug-input").value, {
+        separator: document.getElementById("slug-sep").value,
+        maxLength: document.getElementById("slug-max").value,
+        lowercase: document.getElementById("slug-lower").checked,
+        transliterate: document.getElementById("slug-translit").checked,
+        removeStopWords: document.getElementById("slug-stop").checked,
+    });
+    document.getElementById("slug-output").value = slug;
+    const n = countChars(slug);
+    document.getElementById("slug-count").textContent = slug ? `${n} character${n === 1 ? "" : "s"}` : "";
+}
+
 if (typeof document !== "undefined") {
     const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
     on("lt-input", "input", () => { document.getElementById("lt-count").textContent = `${countLines(document.getElementById("lt-input").value)} lines`; });
@@ -1471,6 +1882,37 @@ if (typeof document !== "undefined") {
     if (document.getElementById("mt-grid")) { mtRenderGrid(); mtRender(); }
     on("tts-rate", "input", () => { document.getElementById("tts-rate-val").textContent = parseFloat(document.getElementById("tts-rate").value).toFixed(1); });
     on("tts-pitch", "input", () => { document.getElementById("tts-pitch-val").textContent = parseFloat(document.getElementById("tts-pitch").value).toFixed(1); });
+    if (document.getElementById("cron-input")) {
+        on("cron-input", "input", cronRun);
+        document.querySelectorAll("#cron-examples [data-cron]").forEach(b => b.addEventListener("click", () => {
+            document.getElementById("cron-input").value = b.dataset.cron;
+            cronRun();
+        }));
+        cronRun();
+    }
+    if (document.getElementById("nb-input")) {
+        on("nb-input", "input", nbRun);
+        on("nb-base", "change", nbRun);
+        on("nb-custom", "input", nbRun);
+        on("nb-upper", "change", nbRun);
+        nbRun();
+    }
+    if (document.getElementById("un-cat")) {
+        document.getElementById("un-cat").innerHTML = Object.entries(UNIT_CATEGORIES)
+            .map(([key, c]) => `<option value="${esc(key)}">${esc(c.label)}</option>`).join("");
+        unFillUnits();
+        on("un-cat", "change", () => { unFillUnits(); unRun(); });
+        on("un-value", "input", unRun);
+        on("un-from", "change", unRun);
+        on("un-to", "change", unRun);
+        on("un-swap", "click", unSwap);
+        unRun();
+    }
+    if (document.getElementById("slug-input")) {
+        on("slug-input", "input", slugRun);
+        ["slug-sep", "slug-lower", "slug-translit", "slug-stop"].forEach(id => on(id, "change", slugRun));
+        on("slug-max", "input", slugRun);
+    }
     if ("speechSynthesis" in window) { ttsLoadVoices(); speechSynthesis.onvoiceschanged = ttsLoadVoices; }
     else if (document.getElementById("tts-voice")) { document.getElementById("tts-voice").innerHTML = "<option>Not supported in this browser</option>"; }
 }

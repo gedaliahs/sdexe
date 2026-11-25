@@ -12,7 +12,8 @@ from fractions import Fraction
 from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageOps
 from PIL.ExifTags import TAGS, GPSTAGS
 
-from sdexe.tools import _ensure_processable, _save_image, create_zip
+from sdexe.tools import (_ensure_processable, _ensure_filterable, _for_format, _icc_for,
+                         _keep_icc, _save_image, create_zip, read_image)
 
 try:
     import pillow_heif
@@ -50,18 +51,19 @@ def heic_to_image(stream, fmt: str = "jpg", quality: int = 90) -> bytes:
     """Decode a HEIC/HEIF stream and re-encode as JPG or PNG bytes."""
     if not HEIF_AVAILABLE:
         raise ValueError("HEIC support is not installed (pillow-heif missing)")
-    img = Image.open(stream)
+    img = read_image(stream)
     img.load()
     img = ImageOps.exif_transpose(img)
     fmt = "png" if fmt == "png" else "jpg"
     buf = io.BytesIO()
+    # iPhone photos are Display P3: keep the profile or the colours go dull.
     if fmt == "jpg":
-        if img.mode not in ("RGB", "L"):
-            img = img.convert("RGB")
-        img.save(buf, "JPEG", quality=int(_clamp(quality, 1, 100)), optimize=True)
+        out = _for_format(img, "JPEG")
+        out.save(buf, "JPEG", quality=int(_clamp(quality, 1, 100)), optimize=True,
+                 icc_profile=_icc_for(img, out))
     else:
-        img = _ensure_processable(img)
-        img.save(buf, "PNG", optimize=True)
+        out = _for_format(_ensure_processable(img), "PNG")
+        out.save(buf, "PNG", optimize=True, icc_profile=_icc_for(img, out))
     return buf.getvalue()
 
 
@@ -70,7 +72,8 @@ def heic_to_image(stream, fmt: str = "jpg", quality: int = 90) -> bytes:
 def adjust_image_full(img: Image.Image, brightness: float = 100, contrast: float = 100,
                       saturation: float = 100, sharpness: float = 100) -> Image.Image:
     """Adjust brightness/contrast/saturation/sharpness. Values are percents; 100 = unchanged."""
-    img = _ensure_processable(img)
+    src = img
+    img = _ensure_filterable(img)
     if img.mode not in ("RGB", "RGBA", "L", "LA"):
         img = img.convert("RGBA")
     factors = [
@@ -83,7 +86,7 @@ def adjust_image_full(img: Image.Image, brightness: float = 100, contrast: float
         factor = _clamp(float(pct), 0, 200) / 100.0
         if abs(factor - 1.0) > 1e-6:
             img = enhancer(img).enhance(factor)
-    return img
+    return _keep_icc(src, img)
 
 
 # ── EXIF Viewer ──
@@ -124,7 +127,7 @@ def _dms_to_decimal(dms, ref) -> float | None:
 
 def read_exif(stream, filename: str = "", file_size: int = 0) -> dict:
     """Return a JSON-friendly dict of image info and readable EXIF tags."""
-    img = Image.open(stream)
+    img = read_image(stream)
     result = {
         "file": {
             "name": filename,
@@ -218,7 +221,10 @@ def add_border(img: Image.Image, size: int = 20, color: str = "#ffffff",
     """
     size = int(_clamp(size, 0, 2000))
     radius = int(_clamp(radius, 0, 2000))
-    img = _ensure_processable(img)
+    return _keep_icc(img, _add_border(_ensure_filterable(img), size, color, mode, radius, transparent))
+
+
+def _add_border(img, size, color, mode, radius, transparent):
     rgb = _parse_hex(color)[:3]
 
     if mode == "padding" and transparent:
@@ -275,7 +281,7 @@ _FAVICON_SNIPPET = """<link rel="icon" type="image/x-icon" href="/favicon.ico">
 
 def favicon_set(img: Image.Image) -> bytes:
     """Build a ZIP with a full favicon set from a single image."""
-    img = ImageOps.exif_transpose(_ensure_processable(img)).convert("RGBA")
+    img = ImageOps.exif_transpose(_ensure_filterable(img)).convert("RGBA")
     square = _center_square(img)
 
     def sized(n: int) -> Image.Image:
@@ -312,7 +318,7 @@ def upscale_image(img: Image.Image, factor: int = 2) -> Image.Image:
     factor = int(factor)
     if factor not in (2, 3, 4):
         raise ValueError("Factor must be 2, 3, or 4")
-    img = _ensure_processable(img)
+    img = _ensure_filterable(img)
     new_w, new_h = img.width * factor, img.height * factor
     if new_w * new_h > MAX_UPSCALE_PIXELS:
         raise ValueError(f"Output would be {new_w}×{new_h}, which exceeds the "
@@ -377,7 +383,7 @@ def make_collage(images: list[tuple[str, Image.Image]], columns: int = 0, cell: 
     ]
     used_names = set()
     for i, (name, img) in enumerate(images):
-        img = _ensure_processable(img).convert("RGBA")
+        img = _ensure_filterable(img).convert("RGBA")
         thumb = _fit_cell(img, cell, fit)
         r, c = divmod(i, columns)
         x0 = c * (cell + gap)
@@ -424,7 +430,7 @@ def image_to_ascii(img: Image.Image, width: int = 100, charset: str = "standard"
     if invert:
         chars = chars[::-1]
 
-    img = _ensure_processable(img)
+    img = _ensure_filterable(img)
     if img.mode in ("RGBA", "LA"):
         # Flatten transparency on white so transparent areas read as light.
         bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
@@ -438,9 +444,8 @@ def image_to_ascii(img: Image.Image, width: int = 100, charset: str = "standard"
     gray = gray.resize((width, height), Image.LANCZOS)
 
     n = len(chars)
-    pixels = list(gray.getdata())
-    lines = []
-    for y in range(height):
-        row = pixels[y * width:(y + 1) * width]
-        lines.append("".join(chars[min(n - 1, (p * n) // 256)] for p in row))
-    return "\n".join(lines)
+    # One lookup table for the 256 gray levels, applied to the whole image in
+    # C, instead of a Python expression per pixel.
+    table = {level: chars[min(n - 1, (level * n) // 256)] for level in range(256)}
+    text = gray.tobytes().decode("latin-1").translate(table)
+    return "\n".join(text[y * width:(y + 1) * width] for y in range(height))

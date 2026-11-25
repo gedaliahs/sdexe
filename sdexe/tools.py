@@ -7,14 +7,16 @@ import json
 import logging
 import shutil
 import tempfile
+import time
 import subprocess
 import zipfile
 import xml.etree.ElementTree as ET
+from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
 
-from pypdf import PdfReader, PdfWriter
-from PIL import Image, ImageFilter, ImageEnhance, ImageDraw, ImageFont
+from pypdf import PdfReader, PdfWriter, Transformation
+from PIL import Image, ImageFilter, ImageEnhance, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 import markdown as md_lib
 
 try:
@@ -34,7 +36,7 @@ _ffmpeg_path_cache = None  # None = unresolved; "" = resolved to nothing
 def _binary_runs(path: str) -> bool:
     """True only if the binary actually starts (catches e.g. a dangling dylib)."""
     try:
-        return subprocess.run([path, "-version"], capture_output=True, timeout=10).returncode == 0
+        return subprocess.run([path, "-version"], stdin=subprocess.DEVNULL, capture_output=True, timeout=10).returncode == 0
     except Exception:
         return False
 
@@ -70,8 +72,9 @@ def ffmpeg_path(refresh: bool = False) -> str | None:
 
 def _reset_ffmpeg_cache():
     """Forget the cached ffmpeg path (call after an install)."""
-    global _ffmpeg_path_cache
+    global _ffmpeg_path_cache, _bundled_cache
     _ffmpeg_path_cache = None
+    _bundled_cache = None
 
 
 def _ffmpeg_exe() -> str:
@@ -96,7 +99,7 @@ def _ffmpeg_filters(exe: str) -> set:
     names = set()
     try:
         r = subprocess.run([exe, "-hide_banner", "-filters"],
-                           capture_output=True, text=True, timeout=20)
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
         for line in r.stdout.splitlines():
             parts = line.split()
             if len(parts) > 1:
@@ -105,6 +108,26 @@ def _ffmpeg_filters(exe: str) -> set:
         pass
     _filter_cache[exe] = names
     return names
+
+
+_bundled_cache = None  # None = not looked up yet; "" = there is none
+
+
+def _bundled_ffmpeg() -> str | None:
+    """The ffmpeg that ships with imageio-ffmpeg, if it runs. Looked up once:
+    starting it to check costs about 20 ms every time."""
+    global _bundled_cache
+    if _bundled_cache is None:
+        found = ""
+        try:
+            import imageio_ffmpeg
+            bundled = imageio_ffmpeg.get_ffmpeg_exe()
+            if bundled and _binary_runs(bundled):
+                found = bundled
+        except Exception:
+            pass
+        _bundled_cache = found
+    return _bundled_cache or None
 
 
 def ffmpeg_exe_with_filter(name: str) -> str | None:
@@ -117,42 +140,91 @@ def ffmpeg_exe_with_filter(name: str) -> str | None:
     default = ffmpeg_path()
     if default:
         candidates.append(default)
-    try:
-        import imageio_ffmpeg
-        bundled = imageio_ffmpeg.get_ffmpeg_exe()
-        if bundled and bundled not in candidates and _binary_runs(bundled):
-            candidates.append(bundled)
-    except Exception:
-        pass
+    bundled = _bundled_ffmpeg()
+    if bundled and bundled not in candidates:
+        candidates.append(bundled)
     for exe in candidates:
         if name in _ffmpeg_filters(exe):
             return exe
     return None
 
 
+_encoder_cache: dict[str, set] = {}
+
+
+def _ffmpeg_encoders(exe: str) -> set:
+    """Encoder names a given ffmpeg build provides."""
+    if exe not in _encoder_cache:
+        names = set()
+        try:
+            r = subprocess.run([exe, "-hide_banner", "-encoders"],
+                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
+            for line in r.stdout.splitlines():
+                parts = line.split()
+                if len(parts) > 1:
+                    names.add(parts[1])
+        except Exception:
+            pass
+        _encoder_cache[exe] = names
+    return _encoder_cache[exe]
+
+
+def ffmpeg_for_output(out_ext: str, args: list | tuple = ()) -> str:
+    """The ffmpeg to write this output with. Current Homebrew builds have no
+    libvorbis, so every .ogg job failed there ("cannot write that output
+    format") or came out as FLAC inside an Ogg file; the bundled build has it."""
+    exe = _ffmpeg_exe()
+    if out_ext.lower().lstrip(".") in ("ogg", "oga") or "libvorbis" in args:
+        if "libvorbis" not in _ffmpeg_encoders(exe):
+            bundled = _bundled_ffmpeg()
+            if bundled and "libvorbis" in _ffmpeg_encoders(bundled):
+                return bundled
+    return exe
+
+
 def ffprobe_available() -> bool:
     return shutil.which("ffprobe") is not None
 
 
-def probe_duration(data: bytes, ext: str) -> float:
-    """Duration of a media blob in seconds, or 0 when it cannot be determined."""
-    exe = _ffmpeg_exe()
-    tmp = tempfile.NamedTemporaryFile(suffix=f".{ext.lstrip('.')}", delete=False)
+def _probe_file(path: str) -> dict:
+    """{"duration": seconds, "sample_rate": Hz} of a media file, 0 where unknown."""
+    info = {"duration": 0.0, "sample_rate": 0}
     try:
-        tmp.write(data)
-        tmp.close()
         # ffprobe may be absent when only the bundled ffmpeg is available, so
-        # read the duration off ffmpeg's own stderr instead.
-        r = subprocess.run([exe, "-i", tmp.name], capture_output=True, text=True, timeout=60)
+        # read these off ffmpeg's own stderr instead.
+        r = subprocess.run([_ffmpeg_exe(), "-hide_banner", "-i", path], stdin=subprocess.DEVNULL, capture_output=True,
+                           text=True, errors="replace", timeout=60)
         match = re.search(r"Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)", r.stderr or "")
-        if not match:
-            return 0.0
-        hours, minutes, seconds = match.groups()
-        return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+        if match:
+            hours, minutes, seconds = match.groups()
+            info["duration"] = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+        match = re.search(r"Stream #0:\d+.*?: Audio: .*?(\d+) Hz", r.stderr or "")
+        if match:
+            info["sample_rate"] = int(match.group(1))
+    except FFmpegMissingError:
+        raise
     except Exception:
-        return 0.0
+        pass
+    return info
+
+
+@contextmanager
+def _input_file(data: bytes, suffix: str):
+    """data in a temp file that is removed afterwards, also when writing it fails."""
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    try:
+        with tmp:
+            tmp.write(data)
+        yield tmp.name
     finally:
         Path(tmp.name).unlink(missing_ok=True)
+
+
+def probe_duration(data: bytes, ext: str) -> float:
+    """Duration of a media blob in seconds, or 0 when it cannot be determined."""
+    _ffmpeg_exe()
+    with _input_file(data, f".{ext.lstrip('.')}") as path:
+        return _probe_file(path)["duration"]
 
 
 def ffmpeg_version() -> str | None:
@@ -161,7 +233,7 @@ def ffmpeg_version() -> str | None:
     if not path:
         return None
     try:
-        r = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=10)
+        r = subprocess.run([path, "-version"], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10)
         if r.returncode == 0 and r.stdout:
             parts = r.stdout.split("\n", 1)[0].split()
             if len(parts) >= 3:
@@ -178,21 +250,113 @@ _MIME_MAP = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "web
 
 
 def _ext_from_filename(filename: str, default: str = "png") -> str:
-    return filename.rsplit(".", 1)[-1].lower() if "." in filename else default
+    # Letters and digits only. The extension ends up in temp-file names, so
+    # "a./x" (extension "/x") pointed into a folder that does not exist.
+    ext = filename.rsplit(".", 1)[-1].strip().lower() if "." in filename else ""
+    return ext if ext.isascii() and ext.isalnum() else default
+
+
+def output_image_format(filename: str, img: Image.Image | None = None,
+                        writable: tuple = ("jpg", "png", "webp", "gif")) -> str:
+    """The format to save an edited image in: the input's own when we can
+    write it, else PNG. So a .bmp/.tiff/.heic comes back as a real .png, not
+    PNG bytes under the old name, and transparency never goes to JPEG/GIF."""
+    fmt = _ext_from_filename(filename)
+    fmt = "jpg" if fmt == "jpeg" else fmt
+    if fmt not in writable:
+        fmt = "png"
+    if img is not None and fmt in ("jpg", "gif") and img.mode in ("RGBA", "LA"):
+        fmt = "png"
+    return fmt
 
 
 def _base_from_filename(filename: str, default: str = "file") -> str:
     return filename.rsplit(".", 1)[0] if "." in filename else default
 
 
+def _gray8(img: Image.Image) -> Image.Image:
+    """8-bit gray from 16/32-bit or float gray. convert("L") clips instead of
+    scaling, which turns a 16-bit scan solid white."""
+    hi = img.getextrema()[1]
+    if img.mode == "F" and hi <= 1.0:
+        scale = 255.0
+    elif hi <= 255:
+        scale = 1.0
+    else:
+        scale = 255.0 / (65535 if hi <= 65535 else hi)
+    if scale != 1.0:
+        img = img.point(lambda v: v * scale)
+    return img.convert("L")
+
+
+_DEEP_GRAY = ("I", "F", "I;16", "I;16L", "I;16B", "I;16N")
+
+
 def _ensure_processable(img: Image.Image) -> Image.Image:
     """Convert palette, CMYK, and other exotic modes to RGB/RGBA for processing."""
     if img.mode in ("P", "PA"):
-        return img.convert("RGBA" if "transparency" in img.info else "RGB")
+        return img.convert("RGBA" if img.mode == "PA" or "transparency" in img.info else "RGB")
     if img.mode in ("CMYK", "YCbCr", "LAB", "HSV"):
         return img.convert("RGB")
     if img.mode == "I":
+        return _gray8(img)
+    return img
+
+
+def _ensure_filterable(img: Image.Image) -> Image.Image:
+    """_ensure_processable, plus 8-bit gray for the modes Pillow's filters and
+    enhancers reject (1-bit, 16-bit, float)."""
+    img = _ensure_processable(img)
+    if img.mode == "1":
         return img.convert("L")
+    if img.mode in _DEEP_GRAY:
+        return _gray8(img)
+    return img
+
+
+def _has_alpha(img: Image.Image) -> bool:
+    return img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info)
+
+
+def _icc_for(img: Image.Image, saved: Image.Image) -> bytes | None:
+    """The source's colour profile, if it still describes the pixels being
+    saved. Pillow only writes it to JPEG/WebP when asked, and without it a
+    Display P3 phone photo comes back with duller colours."""
+    icc = img.info.get("icc_profile")
+    if not icc or len(icc) < 20:
+        return None
+    space = bytes(icc[16:20])
+    if space == b"RGB " and saved.mode in ("RGB", "RGBA", "P"):
+        return icc
+    if space == b"GRAY" and saved.mode in ("L", "LA"):
+        return icc
+    return None
+
+
+def _keep_icc(src: Image.Image, out: Image.Image) -> Image.Image:
+    """Carry the colour profile onto an image Pillow built from scratch."""
+    if "icc_profile" in src.info and "icc_profile" not in out.info:
+        out.info["icc_profile"] = src.info["icc_profile"]
+    return out
+
+
+def _for_format(img: Image.Image, pil_fmt: str) -> Image.Image:
+    """img in a mode pil_fmt can store."""
+    mode = img.mode
+    if pil_fmt == "JPEG":
+        if mode in ("RGB", "L"):
+            return img
+        if mode in _DEEP_GRAY:
+            return _gray8(img)
+        if mode == "PA":
+            img = img.convert("RGBA")
+        return _flatten_alpha(img)  # see-through areas go white, not black
+    if mode == "PA" or (mode == "LA" and pil_fmt == "GIF"):
+        return img.convert("RGBA")  # GIF only keeps transparency from RGBA or a palette
+    if mode in ("CMYK", "YCbCr", "LAB", "HSV"):
+        return img.convert("RGB")
+    if mode in ("I", "F") or (mode in _DEEP_GRAY and pil_fmt != "PNG"):
+        return _gray8(img)  # PNG keeps 16-bit gray as it is
     return img
 
 
@@ -200,28 +364,61 @@ def _save_image(img: Image.Image, fmt: str) -> bytes:
     """Save a PIL Image to bytes in the given format string (e.g. 'png', 'jpg')."""
     pil_fmt = _PIL_FMT_MAP.get(fmt, "PNG")
     buf = io.BytesIO()
-    if pil_fmt == "JPEG" and img.mode in ("RGBA", "LA", "PA", "P"):
-        save_img = img.convert("RGB")
-    elif pil_fmt == "GIF":
-        save_img = img
-    elif img.mode in ("CMYK", "YCbCr", "LAB", "HSV", "I"):
-        save_img = img.convert("RGB")
-    elif img.mode in ("P", "PA") and pil_fmt == "PNG":
-        save_img = img  # PNG supports palette
-    else:
-        save_img = img
-    save_img.save(buf, pil_fmt)
+    save_img = _for_format(img, pil_fmt)
+    save_img.save(buf, pil_fmt, icc_profile=_icc_for(img, save_img))
     return buf.getvalue()
 
 
 # ── PDF Tools ──
 
+def _whole_writer(reader: PdfReader) -> PdfWriter:
+    """A writer holding the whole document, not just its pages: copying pages
+    one by one drops the bookmarks, the fillable form and the title/author."""
+    try:
+        return PdfWriter(clone_from=reader)
+    except Exception:
+        if reader.is_encrypted:
+            raise
+        # A damaged outline or form: the pages alone still copy.
+        writer = PdfWriter()
+        for page in reader.pages:
+            writer.add_page(page)
+        return writer
+
+
+def _append_pages(writer: PdfWriter, reader: PdfReader, pages: list[int] | None = None,
+                  outline: bool = True) -> None:
+    """Add pages (all, or these 0-based ones in this order) with the
+    bookmarks and form fields that belong to them. Unlike add_page, this
+    doesn't follow a link and bring the page it points to along, hidden in the
+    file: removed pages really are gone."""
+    before = len(writer.pages)
+    try:
+        if pages is None:
+            writer.append(reader, import_outline=outline)
+        else:
+            writer.append(reader, pages=pages, import_outline=outline)
+    except Exception:
+        if reader.is_encrypted:
+            raise
+        # Drop whatever it added before failing, then copy the plain pages.
+        while len(writer.pages) > before:
+            writer.remove_page(len(writer.pages) - 1)
+        for i in (range(len(reader.pages)) if pages is None else pages):
+            writer.add_page(reader.pages[i])
+
+
+def _keep_metadata(reader: PdfReader, writer: PdfWriter) -> None:
+    meta = {k: v for k, v in (reader.metadata or {}).items() if isinstance(v, str)}
+    if meta:
+        writer.add_metadata(meta)
+
+
 def merge_pdfs(streams: list[BinaryIO]) -> bytes:
     """Merge multiple PDF streams into one PDF. Returns PDF bytes."""
     writer = PdfWriter()
     for stream in streams:
-        for page in PdfReader(stream).pages:
-            writer.add_page(page)
+        _append_pages(writer, PdfReader(stream))
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()
@@ -243,7 +440,7 @@ def split_pdf(stream: BinaryIO, ranges_str: str = "") -> list[tuple[str, bytes]]
             try:
                 if "-" in part:
                     start_str, end_str = part.split("-", 1)
-                    start = max(1, int(start_str.strip()))
+                    start = int(start_str.strip())
                     end = min(total, int(end_str.strip()))
                 else:
                     start = end = int(part.strip())
@@ -251,7 +448,7 @@ def split_pdf(stream: BinaryIO, ranges_str: str = "") -> list[tuple[str, bytes]]
                 raise ValueError(f"Invalid page range: {part}")
             # A reversed or out-of-range group would otherwise produce a
             # zero-page PDF that looks like a successful split.
-            if start > end or start > total:
+            if start < 1 or start > end or start > total:
                 raise ValueError(f"Page range out of bounds for a {total}-page PDF: {part}")
             page_groups.append(list(range(start - 1, end)))
         if not page_groups:
@@ -262,19 +459,69 @@ def split_pdf(stream: BinaryIO, ranges_str: str = "") -> list[tuple[str, bytes]]
     results = []
     for idx, pages in enumerate(page_groups, 1):
         writer = PdfWriter()
-        for p in pages:
-            writer.add_page(reader.pages[p])
+        _append_pages(writer, reader, pages, outline=False)
         buf = io.BytesIO()
         writer.write(buf)
         results.append((f"page_{idx}.pdf", buf.getvalue()))
     return results
 
 
+def _page_set(pages_str: str, total: int) -> set:
+    """0-based page indices for "2,5,7-10". A typo ("a", "3-1", page 99 of 3)
+    is an error, not a silent no-op that still reports success."""
+    indices = set()
+    for part in (pages_str or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            if "-" in part:
+                s, e = part.split("-", 1)
+                start, end = int(s.strip()), int(e.strip())
+            else:
+                start = end = int(part)
+        except ValueError:
+            raise ValueError(f"Invalid page range: {part}")
+        if start < 1 or end < start or start > total:
+            raise ValueError(f"Page range out of bounds for a {total}-page PDF: {part}")
+        indices.update(range(start - 1, min(end, total)))
+    if not indices:
+        raise ValueError("No pages selected")
+    return indices
+
+
+def read_image(src) -> Image.Image:
+    """Image.open, with an error a person can read. Pillow's own names the
+    upload's internals: "cannot identify image file <tempfile.Spooled… at 0x…>"."""
+    try:
+        return Image.open(src)
+    except UnidentifiedImageError:
+        raise ValueError("This is not an image sdexe can read.") from None
+
+
+def open_image(src) -> Image.Image:
+    """Open an image to edit it, upright. Phone photos store "rotate me" in an
+    EXIF tag instead of rotating the pixels; without applying it they come out
+    sideways, and saving drops the tag."""
+    img = read_image(src)
+    img.load()
+    return ImageOps.exif_transpose(img) or img
+
+
+def _flatten_alpha(img: Image.Image, background=(255, 255, 255)) -> Image.Image:
+    """RGB for formats without transparency: see-through areas become white,
+    not black."""
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        rgba = img.convert("RGBA")
+        canvas = Image.new("RGB", rgba.size, background)
+        canvas.paste(rgba, mask=rgba.getchannel("A"))
+        return canvas
+    return img.convert("RGB") if img.mode != "RGB" else img
+
+
 def images_to_pdf(images: list[Image.Image]) -> bytes:
     """Convert PIL Images to a single PDF. Returns PDF bytes."""
-    rgb_images = []
-    for img in images:
-        rgb_images.append(img.convert("RGB") if img.mode != "RGB" else img)
+    rgb_images = [_flatten_alpha(img) for img in images]
     buf = io.BytesIO()
     if len(rgb_images) == 1:
         rgb_images[0].save(buf, "PDF")
@@ -289,9 +536,7 @@ def pdf_page_count(stream: BinaryIO) -> int:
 
 def compress_pdf(stream: BinaryIO) -> bytes:
     reader = PdfReader(stream)
-    writer = PdfWriter()
-    for page in reader.pages:
-        writer.add_page(page)
+    writer = _whole_writer(reader)
     # pypdf >= 5 only compresses pages that already belong to a writer.
     for page in writer.pages:
         page.compress_content_streams()
@@ -313,9 +558,7 @@ def pdf_to_text(stream: BinaryIO) -> str:
 
 def add_pdf_password(stream: BinaryIO, password: str) -> bytes:
     reader = PdfReader(stream)
-    writer = PdfWriter()
-    for page in reader.pages:
-        writer.add_page(page)
+    writer = _whole_writer(reader)
     writer.encrypt(password)
     buf = io.BytesIO()
     writer.write(buf)
@@ -328,9 +571,7 @@ def remove_pdf_password(stream: BinaryIO, password: str) -> bytes:
         result = reader.decrypt(password)
         if not result:
             raise ValueError("Incorrect password")
-    writer = PdfWriter()
-    for page in reader.pages:
-        writer.add_page(page)
+    writer = _whole_writer(reader)
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()
@@ -340,24 +581,15 @@ def rotate_pdf(stream: BinaryIO, angle: int, pages_str: str = "all") -> bytes:
     if angle not in (90, 180, 270):
         raise ValueError("Angle must be 90, 180, or 270")
     reader = PdfReader(stream)
-    writer = PdfWriter()
     total = len(reader.pages)
-    if pages_str == "all":
+    if (pages_str or "").strip().lower() in ("", "all"):
         page_indices = set(range(total))
     else:
-        page_indices = set()
-        for part in pages_str.split(","):
-            part = part.strip()
-            if "-" in part:
-                s, e = part.split("-", 1)
-                page_indices.update(range(int(s.strip()) - 1, int(e.strip())))
-            elif part:
-                page_indices.add(int(part) - 1)
-        page_indices = {i for i in page_indices if 0 <= i < total}
-    for i, page in enumerate(reader.pages):
+        page_indices = _page_set(pages_str, total)
+    writer = _whole_writer(reader)
+    for i, page in enumerate(writer.pages):
         if i in page_indices:
             page.rotate(angle)
-        writer.add_page(page)
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()
@@ -369,10 +601,10 @@ def reorder_pdf(stream: BinaryIO, order: list[int]) -> bytes:
     total = len(reader.pages)
     writer = PdfWriter()
     for num in order:
-        idx = num - 1
-        if idx < 0 or idx >= total:
+        if num < 1 or num > total:
             raise ValueError(f"Page {num} out of range (1-{total})")
-        writer.add_page(reader.pages[idx])
+    _append_pages(writer, reader, [num - 1 for num in order])
+    _keep_metadata(reader, writer)
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()
@@ -382,21 +614,12 @@ def delete_pdf_pages(stream: BinaryIO, pages_str: str) -> bytes:
     """Delete specific pages. pages_str like '2,5,7-10' (1-based)."""
     reader = PdfReader(stream)
     total = len(reader.pages)
-    to_delete = set()
-    for part in pages_str.split(","):
-        part = part.strip()
-        if "-" in part:
-            s, e = part.split("-", 1)
-            to_delete.update(range(int(s.strip()) - 1, int(e.strip())))
-        elif part:
-            to_delete.add(int(part) - 1)
-    to_delete = {i for i in to_delete if 0 <= i < total}
+    to_delete = _page_set(pages_str, total)
     if len(to_delete) >= total:
         raise ValueError("Cannot delete all pages")
     writer = PdfWriter()
-    for i, page in enumerate(reader.pages):
-        if i not in to_delete:
-            writer.add_page(page)
+    _append_pages(writer, reader, [i for i in range(total) if i not in to_delete])
+    _keep_metadata(reader, writer)
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()
@@ -417,22 +640,18 @@ def get_pdf_metadata(stream: BinaryIO) -> dict:
     }
 
 
-def set_pdf_metadata(stream: BinaryIO, title: str = "", author: str = "",
-                     subject: str = "", keywords: str = "",
-                     creator: str = "") -> bytes:
-    """Set PDF metadata. Returns new PDF bytes."""
+def set_pdf_metadata(stream: BinaryIO, title: str | None = "", author: str | None = "",
+                     subject: str | None = "", keywords: str | None = None,
+                     creator: str | None = None) -> bytes:
+    """Set PDF metadata. Returns new PDF bytes. A field passed as None keeps
+    whatever the PDF already had; "" clears it."""
     reader = PdfReader(stream)
-    writer = PdfWriter()
-    for page in reader.pages:
-        writer.add_page(page)
-    meta = {
-        "/Title": title,
-        "/Author": author,
-        "/Subject": subject,
-        "/Keywords": keywords,
-    }
-    if creator:
-        meta["/Creator"] = creator
+    writer = _whole_writer(reader)
+    meta = {k: v for k, v in (reader.metadata or {}).items() if isinstance(v, str)}
+    for key, value in (("/Title", title), ("/Author", author), ("/Subject", subject),
+                       ("/Keywords", keywords), ("/Creator", creator)):
+        if value is not None:
+            meta[key] = value
     writer.add_metadata(meta)
     buf = io.BytesIO()
     writer.write(buf)
@@ -461,7 +680,13 @@ def _helvetica_width(text: str, size: float) -> float:
 
 def _pdf_escape(text: str) -> bytes:
     """Encode text for a PDF literal string using WinAnsi (standard-font) encoding."""
-    raw = text.encode("cp1252", "replace")
+    try:
+        raw = text.encode("cp1252")
+    except UnicodeEncodeError:
+        # The built-in PDF fonts only cover Western European letters; anything
+        # else used to come out as "????" with no warning.
+        raise ValueError("PDF text stamps support Western European characters only "
+                         "(no Hebrew, Arabic, Chinese, emoji…) for now.")
     out = bytearray()
     for byte in raw:
         if byte in (0x28, 0x29, 0x5C):  # ( ) backslash
@@ -510,17 +735,35 @@ def _text_overlay_pdf(width: float, height: float, items: list) -> bytes:
     return bytes(out)
 
 
+def _view_box(page):
+    """(width, height, transform) of the page as the reader sees it: the
+    cropbox, turned by /Rotate. The transform takes a point in that upright
+    space (origin bottom-left) to the page's own coordinates, so an overlay
+    lands where it looks right and the page itself is left alone. (Rotating
+    the page's content instead leaves its links and form fields behind.)"""
+    box = page.cropbox
+    left, bottom = float(box.left), float(box.bottom)
+    w, h = float(box.width), float(box.height)
+    rot = int(page.rotation or 0) % 360
+    if rot == 90:
+        return h, w, Transformation().rotate(90).translate(left + w, bottom)
+    if rot == 180:
+        return w, h, Transformation().rotate(180).translate(left + w, bottom + h)
+    if rot == 270:
+        return h, w, Transformation().rotate(-90).translate(left, bottom + h)
+    return w, h, Transformation().translate(left, bottom)
+
+
 def watermark_pdf(stream: BinaryIO, text: str, font_size: int = 36,
                   opacity: float = 0.3, position: str = "center") -> bytes:
     """Add a text watermark to every page of a PDF."""
     reader = PdfReader(stream)
-    writer = PdfWriter()
+    # pypdf 7 only edits pages that already belong to a writer.
+    writer = _whole_writer(reader)
     alpha = max(0.02, min(1.0, float(opacity)))
 
-    for page in reader.pages:
-        box = page.mediabox
-        w = float(box.width)
-        h = float(box.height)
+    for page in writer.pages:
+        w, h, to_page = _view_box(page)
 
         tw = _helvetica_width(text, font_size)
         # Cap-height baseline offset, close enough for placement.
@@ -539,8 +782,7 @@ def watermark_pdf(stream: BinaryIO, text: str, font_size: int = 36,
             x, y = (w - tw) / 2, (h - th) / 2
 
         overlay = _text_overlay_pdf(w, h, [(x, y, float(font_size), text, 0.5, alpha)])
-        page.merge_page(PdfReader(io.BytesIO(overlay)).pages[0])
-        writer.add_page(page)
+        page.merge_transformed_page(PdfReader(io.BytesIO(overlay)).pages[0], to_page)
 
     buf = io.BytesIO()
     writer.write(buf)
@@ -549,11 +791,16 @@ def watermark_pdf(stream: BinaryIO, text: str, font_size: int = 36,
 
 # ── Image Tools ──
 
+MAX_RESIZE_PIXELS = 300_000_000
+
+
 def resize_image(img: Image.Image, mode: str = "dimensions",
                  width: int = 0, height: int = 0,
                  percentage: float = 100,
                  maintain_aspect: bool = True) -> Image.Image:
     if mode == "percentage":
+        if not percentage > 0:
+            raise ValueError("Percentage must be greater than 0")
         pct = percentage / 100
         new_w = max(1, int(img.width * pct))
         new_h = max(1, int(img.height * pct))
@@ -572,6 +819,11 @@ def resize_image(img: Image.Image, mode: str = "dimensions",
             new_w = max(1, int(img.width * (height / img.height))) if maintain_aspect else img.width
         else:
             raise ValueError("Provide width, height, or percentage")
+    if new_w < 1 or new_h < 1:
+        raise ValueError("Width and height must be at least 1 pixel")
+    if new_w * new_h > MAX_RESIZE_PIXELS:
+        # 100000 x 100000 would need 30 GB of memory and take the app down.
+        raise ValueError(f"{new_w} x {new_h} is too large (limit {MAX_RESIZE_PIXELS // 1_000_000} megapixels)")
     return img.resize((new_w, new_h), Image.LANCZOS)
 
 
@@ -579,27 +831,27 @@ def compress_image(img: Image.Image, quality: int, fmt: str) -> bytes:
     """Compress image. quality: 0-100, fmt: file extension string."""
     buf = io.BytesIO()
     if fmt in ("jpg", "jpeg"):
-        if img.mode not in ("RGB", "L"):
-            img = img.convert("RGB")
-        img.save(buf, "JPEG", quality=quality, optimize=True)
+        out = _for_format(img, "JPEG")
+        out.save(buf, "JPEG", quality=quality, optimize=True, icc_profile=_icc_for(img, out))
     elif fmt == "webp":
-        img = _ensure_processable(img)
-        img.save(buf, "WEBP", quality=quality)
+        out = _for_format(_ensure_processable(img), "WEBP")
+        out.save(buf, "WEBP", quality=quality, icc_profile=_icc_for(img, out))
     else:
-        img = _ensure_processable(img)
-        img.save(buf, "PNG", optimize=True)
+        out = _for_format(_ensure_processable(img), "PNG")
+        out.save(buf, "PNG", optimize=True, icc_profile=_icc_for(img, out))
     return buf.getvalue()
 
 
 def convert_image(img: Image.Image, target: str) -> bytes:
     """Convert image to target format. target: 'png', 'jpg', 'webp'."""
-    pil_fmt = "JPEG" if target == "jpg" else target.upper()
-    if pil_fmt == "JPEG" and img.mode not in ("RGB", "L"):
-        img = img.convert("RGB")
-    elif pil_fmt in ("PNG", "WEBP"):
-        img = _ensure_processable(img)
+    pil_fmt = "JPEG" if target in ("jpg", "jpeg") else target.upper()
+    out = img
+    if pil_fmt in ("PNG", "WEBP"):
+        out = _ensure_processable(out)
+    if pil_fmt in ("JPEG", "PNG", "WEBP", "GIF"):
+        out = _for_format(out, pil_fmt)
     buf = io.BytesIO()
-    img.save(buf, pil_fmt)
+    out.save(buf, pil_fmt, icc_profile=_icc_for(img, out))
     return buf.getvalue()
 
 
@@ -617,9 +869,14 @@ def rotate_image(img: Image.Image, angle: int) -> Image.Image:
 
 def strip_exif(img: Image.Image) -> Image.Image:
     new_img = Image.new(img.mode, img.size)
-    if img.mode == "P":
+    if img.mode in ("P", "PA"):
         new_img.putpalette(img.getpalette())
-    new_img.putdata(list(img.getdata()))
+    new_img.paste(img)  # pixels only, no metadata
+    # These two are part of how the picture looks, not data about it: without
+    # them a transparent GIF/PNG turns opaque and wide-gamut colours shift.
+    for key in ("transparency", "icc_profile"):
+        if key in img.info:
+            new_img.info[key] = img.info[key]
     return new_img
 
 
@@ -640,11 +897,14 @@ def flip_image(img: Image.Image, direction: str = "horizontal") -> Image.Image:
 
 
 def grayscale_image(img: Image.Image) -> Image.Image:
-    return img.convert("L")
+    if img.mode in _DEEP_GRAY:
+        return _gray8(img)
+    # Keep transparency: "L" alone shows whatever colour hid under it.
+    return img.convert("RGBA").convert("LA") if _has_alpha(img) else img.convert("L")
 
 
 def blur_image(img: Image.Image, radius: float = 5.0) -> Image.Image:
-    img = _ensure_processable(img)
+    img = _ensure_filterable(img)
     return img.filter(ImageFilter.GaussianBlur(radius=radius))
 
 
@@ -682,10 +942,11 @@ def watermark_image(img: Image.Image, text: str, position: str = "center",
     x, y = positions.get(position, positions["center"])
     draw.text((x, y), text, fill=(255, 255, 255, opacity), font=font)
 
+    src = img
     if img.mode != "RGBA":
-        img = img.convert("RGBA")
+        img = _ensure_filterable(img).convert("RGBA")
     result = Image.alpha_composite(img, overlay)
-    return result
+    return _keep_icc(src, result)
 
 
 def image_info(img: Image.Image) -> dict:
@@ -715,14 +976,15 @@ def image_info(img: Image.Image) -> dict:
 def adjust_image(img: Image.Image, brightness: float = 1.0,
                  contrast: float = 1.0, sharpness: float = 1.0) -> Image.Image:
     """Adjust brightness, contrast, and sharpness. 1.0 = original."""
-    img = _ensure_processable(img)
+    src = img
+    img = _ensure_filterable(img)
     if brightness != 1.0:
         img = ImageEnhance.Brightness(img).enhance(brightness)
     if contrast != 1.0:
         img = ImageEnhance.Contrast(img).enhance(contrast)
     if sharpness != 1.0:
         img = ImageEnhance.Sharpness(img).enhance(sharpness)
-    return img
+    return _keep_icc(src, img)
 
 
 # ── Conversion Tools ──
@@ -760,15 +1022,31 @@ def md_preview(text: str) -> str:
     return md_lib.markdown(text, extensions=["tables", "fenced_code"])
 
 
+def _no_bom(text: str) -> str:
+    """Files saved by Excel/Notepad start with an invisible byte-order mark,
+    which otherwise ends up inside the first CSV header or breaks JSON."""
+    return text[1:] if text[:1] == "\ufeff" else text
+
+
+def _csv_cell(value):
+    """Nested values as JSON and true/false as JSON spells them, not Python's
+    {'a': 1} / True."""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return value
+
+
 def csv_to_json_str(text: str) -> str:
-    reader = csv.DictReader(io.StringIO(text))
+    reader = csv.DictReader(io.StringIO(_no_bom(text)))
     rows = list(reader)
     return json.dumps(rows, indent=2, ensure_ascii=False)
 
 
 def json_to_csv_str(text: str) -> str:
-    data = json.loads(text)
-    if not isinstance(data, list):
+    data = json.loads(_no_bom(text))
+    if not isinstance(data, list) or (data and not any(isinstance(obj, dict) for obj in data)):
         raise ValueError("JSON must be an array of objects")
     headers = []
     seen = set()
@@ -783,22 +1061,56 @@ def json_to_csv_str(text: str) -> str:
     writer.writeheader()
     for obj in data:
         if isinstance(obj, dict):
-            writer.writerow(obj)
+            writer.writerow({k: _csv_cell(v) for k, v in obj.items()})
     return output.getvalue()
+
+
+def _yaml_json_default(value):
+    """YAML types JSON has no word for: dates, sets, binary."""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, (set, frozenset)):
+        return sorted(value, key=str)
+    if isinstance(value, (bytes, bytearray)):
+        import base64
+        return base64.b64encode(value).decode("ascii")
+    return str(value)
+
+
+def _check_expansion(data, limit: int = 2_000_000) -> None:
+    """YAML aliases can make a 1 KB file stand for billions of values ("billion
+    laughs"); writing that out as JSON would fill memory. Count before dumping."""
+    seen = 0
+    containers = set()
+    repeats = False
+    stack = [data]
+    while stack:
+        item = stack.pop()
+        seen += 1
+        if repeats and seen > limit:
+            raise ValueError("This YAML expands to too many values to convert (it repeats itself through aliases).")
+        if isinstance(item, (dict, list)):
+            if id(item) in containers:
+                repeats = True
+            else:
+                containers.add(id(item))
+            stack.extend(item.values() if isinstance(item, dict) else item)
 
 
 def yaml_to_json_str(text: str) -> str:
     if not _YAML_AVAILABLE:
         raise RuntimeError("PyYAML not installed. Run: pip install PyYAML")
     data = _yaml.safe_load(text)
-    return json.dumps(data, indent=2, ensure_ascii=False)
+    _check_expansion(data)
+    return json.dumps(data, indent=2, ensure_ascii=False, default=_yaml_json_default)
 
 
 def json_to_yaml_str(text: str) -> str:
     if not _YAML_AVAILABLE:
         raise RuntimeError("PyYAML not installed. Run: pip install PyYAML")
-    data = json.loads(text)
-    return _yaml.dump(data, default_flow_style=False, allow_unicode=True)
+    data = json.loads(_no_bom(text))
+    # sort_keys=False: keep the keys in the order the JSON had them.
+    return _yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
 
 def csv_to_tsv_str(text: str) -> str:
@@ -857,10 +1169,14 @@ def _friendly_ffmpeg_error(stderr: str) -> str:
         return "That file could not be read. It may be corrupt or an unsupported format."
     if "no such file or directory" in low:
         return "The media file could not be opened."
-    if "does not contain any stream" in low or "stream map" in low:
-        return "That file has no usable audio or video stream."
     if "not divisible by 2" in low or "width/height" in low:
         return "Those dimensions are not valid for this video format. Try an even width and height."
+    if "invalid too big or non positive size" in low:
+        return "That area does not fit inside the video. Use a smaller size or offset."
+    # "matches no streams", not "stream map": every ffmpeg run prints "Stream
+    # mapping:", so nearly any failure used to be reported as a missing stream.
+    if "does not contain any stream" in low or "matches no streams" in low:
+        return "That file has no usable audio or video stream."
     if "permission denied" in low:
         return "Permission denied while writing the output file."
     if "unknown encoder" in low or "encoder not found" in low:
@@ -870,24 +1186,36 @@ def _friendly_ffmpeg_error(stderr: str) -> str:
     return "The media operation failed. Check that the file is a valid, complete media file."
 
 
+# How long a real media job (convert, compress, trim, merge…) may run before we
+# give up on it. Generous on purpose: a two-hour video takes a while, and the
+# old 5-minute cap made long files fail halfway. This only guards against a
+# truly stuck ffmpeg; quick probes keep their own short limits.
+MEDIA_TIMEOUT = 6 * 3600
+
+
 def run_ffmpeg(input_data: bytes, in_suffix: str, out_suffix: str,
-               ffmpeg_args: list[str], timeout: int = 300,
+               ffmpeg_args: list[str], timeout: int | None = None,
                pre_input_args: list[str] | None = None) -> bytes:
     """Run ffmpeg with input data, return output bytes."""
-    exe = ffmpeg_path()
-    if not exe:
-        raise FFmpegMissingError("ffmpeg is not installed")
-    with tempfile.NamedTemporaryFile(suffix=in_suffix, delete=False) as inf:
-        inf.write(input_data)
-        inf_path = inf.name
+    _ffmpeg_exe()
+    with _input_file(input_data, in_suffix) as inf_path:
+        return _run_ffmpeg_file(inf_path, out_suffix, ffmpeg_args, timeout, pre_input_args)
+
+
+def _run_ffmpeg_file(inf_path: str, out_suffix: str, ffmpeg_args: list[str],
+                     timeout: int | None = None, pre_input_args: list[str] | None = None) -> bytes:
+    """run_ffmpeg for an input that is already on disk."""
+    exe = ffmpeg_for_output(out_suffix, ffmpeg_args)
     with tempfile.NamedTemporaryFile(suffix=out_suffix, delete=False) as outf:
         out_path = outf.name
     try:
         cmd = [exe, "-y"] + (pre_input_args or []) + ["-i", inf_path] + ffmpeg_args + [out_path]
         try:
-            result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+            result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=timeout or MEDIA_TIMEOUT)
         except FileNotFoundError:
             raise FFmpegMissingError("ffmpeg is not installed")
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("The media operation timed out.")
         if result.returncode != 0:
             stderr = result.stderr.decode("utf-8", errors="replace").strip()
             # Log the real output for the operator, show the user a readable
@@ -896,11 +1224,14 @@ def run_ffmpeg(input_data: bytes, in_suffix: str, out_suffix: str,
             raise RuntimeError(_friendly_ffmpeg_error(stderr))
         return Path(out_path).read_bytes()
     finally:
-        Path(inf_path).unlink(missing_ok=True)
         Path(out_path).unlink(missing_ok=True)
 
 
 # Codec maps for AV operations
+# The first audio track. "0:a" maps every track, and single-track formats
+# (mp3, wav…) then refuse a file that has two, such as a dual-language video.
+_FIRST_AUDIO = ("-map", "0:a:0")
+
 AUDIO_CODEC_MAP = {
     "mp3": ["-codec:a", "libmp3lame", "-q:a", "2"],
     "wav": ["-codec:a", "pcm_s16le"],
@@ -918,23 +1249,50 @@ VIDEO_CODEC_MAP = {
 }
 
 
+# Even dimensions and 4:2:0 colour. A GIF, a screen recording or a 10-bit
+# phone clip otherwise becomes "High 4:4:4"/"High 10" H.264, which QuickTime,
+# Safari, phones and TVs will not play. A no-op for ordinary video.
+EVEN_SCALE = "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+_PLAYABLE_H264 = ("-vf", EVEN_SCALE, "-pix_fmt", "yuv420p")
+
+
 def convert_audio(data: bytes, in_ext: str, out_fmt: str) -> bytes:
     if out_fmt not in AUDIO_CODEC_MAP:
         raise ValueError(f"Unsupported audio format: {out_fmt}")
     return run_ffmpeg(data, f".{in_ext}", f".{out_fmt}",
-                      ["-map", "0:a"] + AUDIO_CODEC_MAP[out_fmt])
+                      [*_FIRST_AUDIO] + AUDIO_CODEC_MAP[out_fmt])
+
+
+def _trim_range(start, end) -> tuple[float, float | None]:
+    """Start and optional end in seconds, checked."""
+    begin = max(0.0, parse_timestamp(start)) if str(start or "").strip() else 0.0
+    stop = parse_timestamp(end) if str(end or "").strip() else None
+    if stop is not None and stop <= begin:
+        raise ValueError("End time must be after start time")
+    return begin, stop
+
+
+def _trim(data: bytes, ext: str, begin: float, args: list[str], pre: list[str] | None = None) -> bytes:
+    with _input_file(data, f".{ext}") as path:
+        # A start past the end used to "succeed" with an empty audio file, or
+        # with the whole video untouched.
+        length = _probe_file(path)["duration"]
+        if length and begin >= length:
+            raise ValueError(f"Start time is past the end of the file (it is {length:.1f} seconds long)")
+        return _run_ffmpeg_file(path, f".{ext}", args, MEDIA_TIMEOUT, pre)
 
 
 def trim_audio(data: bytes, ext: str, start: str, end: str = "") -> bytes:
-    args = ["-ss", start]
-    if end:
-        args += ["-to", end]
+    begin, stop = _trim_range(start, end)
+    args = ["-ss", f"{begin:.3f}"]
+    if stop is not None:
+        args += ["-to", f"{stop:.3f}"]
     args += ["-map", "0:a", "-c", "copy"]
-    return run_ffmpeg(data, f".{ext}", f".{ext}", args)
+    return _trim(data, ext, begin, args)
 
 
 def audio_speed(data: bytes, ext: str, speed: float) -> bytes:
-    if speed < 0.25 or speed > 4.0:
+    if not 0.25 <= speed <= 4.0:
         raise ValueError("Speed must be between 0.25 and 4.0")
     if 0.5 <= speed <= 2.0:
         atempo_chain = f"atempo={speed}"
@@ -944,14 +1302,14 @@ def audio_speed(data: bytes, ext: str, speed: float) -> bytes:
         atempo_chain = f"atempo=2.0,atempo={speed / 2.0:.4f}"
     out_ext = ext if ext in ("mp3", "wav", "ogg", "flac") else "mp3"
     return run_ffmpeg(data, f".{ext}", f".{out_ext}",
-                      ["-map", "0:a", "-filter:a", atempo_chain])
+                      [*_FIRST_AUDIO, "-filter:a", atempo_chain])
 
 
 def extract_audio(data: bytes, in_ext: str, out_fmt: str) -> bytes:
     if out_fmt not in AUDIO_CODEC_MAP:
         raise ValueError(f"Unsupported audio format: {out_fmt}")
     return run_ffmpeg(data, f".{in_ext}", f".{out_fmt}",
-                      ["-vn", "-map", "0:a"] + AUDIO_CODEC_MAP[out_fmt])
+                      ["-vn", *_FIRST_AUDIO] + AUDIO_CODEC_MAP[out_fmt])
 
 
 def parse_timestamp(value: str) -> float:
@@ -960,8 +1318,13 @@ def parse_timestamp(value: str) -> float:
     if len(parts) > 3:
         raise ValueError(f"Invalid timestamp: {value}")
     total = 0.0
-    for part in parts:
-        total = total * 60 + float(part or 0)
+    try:
+        for part in parts:
+            total = total * 60 + float(part or 0)
+    except ValueError:
+        raise ValueError(f"Invalid timestamp: {value}")
+    if total != total or total in (float("inf"), float("-inf")):
+        raise ValueError(f"Invalid timestamp: {value}")
     return total
 
 
@@ -969,63 +1332,111 @@ def trim_video(data: bytes, ext: str, start: str, end: str = "") -> bytes:
     # A pre-input -ss rebases output timestamps to zero, so -to would be measured
     # from the cut point and produce a clip of length `end` instead of
     # `end - start`. Convert the range to an explicit duration instead.
-    pre = ["-ss", start]
+    begin, stop = _trim_range(start, end)
+    pre = ["-ss", f"{begin:.3f}"]
     args = []
-    if end:
-        duration = parse_timestamp(end) - parse_timestamp(start)
-        if duration <= 0:
-            raise ValueError("End time must be after start time")
-        args += ["-t", f"{duration:.3f}"]
+    if stop is not None:
+        args += ["-t", f"{stop - begin:.3f}"]
     args += ["-c", "copy"]
-    return run_ffmpeg(data, f".{ext}", f".{ext}", args, timeout=300, pre_input_args=pre)
+    return _trim(data, ext, begin, args, pre)
 
 
 def compress_video(data: bytes, ext: str, quality: str = "medium") -> bytes:
     crf_map = {"high": "18", "medium": "23", "low": "28"}
     crf = crf_map.get(quality, "23")
     return run_ffmpeg(data, f".{ext}", ".mp4",
-                      ["-vcodec", "libx264", "-crf", crf, "-preset", "fast", "-acodec", "aac"],
-                      timeout=300)
+                      ["-vcodec", "libx264", "-crf", crf, "-preset", "fast", "-acodec", "aac", *_PLAYABLE_H264],
+                      timeout=MEDIA_TIMEOUT)
 
 
 def convert_video(data: bytes, in_ext: str, out_fmt: str) -> bytes:
     if out_fmt not in VIDEO_CODEC_MAP:
         raise ValueError(f"Unsupported video format: {out_fmt}")
+    extra = {"mp4": _PLAYABLE_H264, "mov": _PLAYABLE_H264, "webm": ("-pix_fmt", "yuv420p")}.get(out_fmt, ())
     return run_ffmpeg(data, f".{in_ext}", f".{out_fmt}",
-                      VIDEO_CODEC_MAP[out_fmt], timeout=300)
+                      VIDEO_CODEC_MAP[out_fmt] + [*extra], timeout=MEDIA_TIMEOUT)
 
 
 # ── Archive Tools ──
 
+def _unique_name(name: str, used: set) -> str:
+    """name, or name_2, name_3… if it's taken. Records the result in used."""
+    if name in used:
+        # Number the file, not a folder that happens to have a dot in it
+        # ("docs.v2/readme" -> "docs.v2/readme_2").
+        head, slash, tail = name.rpartition("/")
+        stem, dot, suffix = tail.rpartition(".")
+        if not stem:
+            stem, dot, suffix = tail, "", ""
+        n = 2
+        while f"{head}{slash}{stem}_{n}{dot}{suffix}" in used:
+            n += 1
+        name = f"{head}{slash}{stem}_{n}{dot}{suffix}"
+    used.add(name)
+    return name
+
+
+def _archive_name(name: str) -> str:
+    """An archive entry's name as a plain relative path: no "..", no leading
+    slash, no drive letter. Anything else can land outside the folder it is
+    unpacked into ("C:\\x" does on Windows)."""
+    parts = [p for p in name.replace("\\", "/").split("/") if p not in ("", ".", "..")]
+    if parts and re.fullmatch(r"[A-Za-z]:", parts[0]):
+        parts = parts[1:]
+    return "/".join(parts)
+
+
 def create_zip(files: list[tuple[str, bytes]]) -> bytes:
-    """Create a ZIP from list of (filename, data) tuples."""
+    """Create a ZIP from list of (filename, data) tuples. Two files with the
+    same name both go in ("notes.txt", "notes_2.txt"); a ZIP with duplicate
+    entries extracts only one of them."""
     buf = io.BytesIO()
+    used = set()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, data in files:
-            zf.writestr(name, data)
+            name = _unique_name(_archive_name(name) or "file", used)
+            if len(data) < 8 * 1024 * 1024 or isinstance(data, str):
+                zf.writestr(name, data)
+                continue
+            # A big file goes in a megabyte at a time: writestr compresses it
+            # into a second full-size buffer first (815 MB peak for a 200 MB
+            # file, 420 MB this way).
+            info = zipfile.ZipInfo(name, time.localtime()[:6])
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o600 << 16
+            info.file_size = len(data)
+            view = memoryview(data)
+            with zf.open(info, "w") as dest:
+                for i in range(0, len(view), 1 << 20):
+                    dest.write(view[i:i + (1 << 20)])
     return buf.getvalue()
+
+
+# Refuse archives that would expand past this: a small "zip bomb" upload can
+# otherwise inflate to many GB in memory.
+MAX_EXTRACTED_BYTES = 4 * 1024 ** 3
 
 
 def extract_zip(data: bytes) -> list[tuple[str, bytes]]:
     """Extract ZIP. Returns list of (filename, data) tuples."""
     zf = zipfile.ZipFile(io.BytesIO(data))
-    members = [m for m in zf.namelist() if not m.endswith("/")]
+    if sum(i.file_size for i in zf.infolist()) > MAX_EXTRACTED_BYTES:
+        raise ValueError("This archive expands to more than 4 GB, which is too large to open here.")
     results = []
     used = set()
-    for m in members:
+    # By entry, not by name: reading by name returns the last of two entries
+    # that share one, twice.
+    for info in zf.infolist():
+        if info.is_dir():
+            continue
         # Keep the directory structure. Collapsing to the basename made
         # "a/config.json" and "b/config.json" collide and lose a file.
-        parts = [p for p in Path(m.replace("\\", "/")).parts
-                 if p not in ("", ".", "..", "/")]
-        name = "/".join(parts) or Path(m).name
-        if name in used:
-            stem, dot, suffix = name.rpartition(".")
-            n = 2
-            while name in used:
-                name = f"{stem}_{n}{dot}{suffix}" if dot else f"{name}_{n}"
-                n += 1
-        used.add(name)
-        results.append((name, zf.read(m)))
+        name = _archive_name(info.filename)
+        if not name:
+            continue
+        if info.flag_bits & 0x1:
+            raise ValueError("This ZIP is password-protected, which is not supported.")
+        results.append((_unique_name(name, used), zf.read(info)))
     return results
 
 
@@ -1041,15 +1452,21 @@ def extract_images_from_pdf(stream: BinaryIO) -> list[tuple[str, bytes]]:
             for img in page.images:
                 img_num += 1
                 data = img.data
-                name = img.name or f"image_{img_num}"
-                # Clean name for filesystem
-                name = name.replace("/", "_").replace("\\", "_")
+                # pypdf's name already carries an extension ("image.jpg"), so
+                # take the stem and derive the extension from the bytes.
+                name = Path((img.name or f"image_{img_num}").replace("/", "_").replace("\\", "_")).stem
                 if data[:2] == b'\xff\xd8':
                     ext = "jpg"
                 elif data[:8] == b'\x89PNG\r\n\x1a\n':
                     ext = "png"
+                elif data[:12] in (b'\x00\x00\x00\x0cjP  \r\n\x87\n',) or data[:4] == b'\xff\x4f\xff\x51':
+                    ext = "jp2"
+                elif data[:4] in (b'II*\x00', b'MM\x00*'):
+                    ext = "tif"
+                elif data[:6] in (b'GIF87a', b'GIF89a'):
+                    ext = "gif"
                 else:
-                    ext = "png"
+                    ext = Path(img.name or "").suffix.lstrip(".").lower() or "png"
                 results.append((f"page{page_num}_{name}.{ext}", data))
         except Exception:
             continue
@@ -1060,13 +1477,11 @@ def number_pdf_pages(stream: BinaryIO, start: int = 1,
                      position: str = "bottom-center", font_size: int = 11) -> bytes:
     """Add page numbers to every page of a PDF."""
     reader = PdfReader(stream)
-    writer = PdfWriter()
+    writer = _whole_writer(reader)  # pages must belong to a writer before pypdf 7 edits them
 
-    for i, page in enumerate(reader.pages):
+    for i, page in enumerate(writer.pages):
         page_num = start + i
-        box = page.mediabox
-        w = float(box.width)
-        h = float(box.height)
+        w, h, to_page = _view_box(page)
 
         text = str(page_num)
         tw = _helvetica_width(text, font_size)
@@ -1080,8 +1495,7 @@ def number_pdf_pages(stream: BinaryIO, start: int = 1,
             x = (w - tw) / 2
 
         overlay = _text_overlay_pdf(w, h, [(x, y, float(font_size), text, 0.0, 1.0)])
-        page.merge_page(PdfReader(io.BytesIO(overlay)).pages[0])
-        writer.add_page(page)
+        page.merge_transformed_page(PdfReader(io.BytesIO(overlay)).pages[0], to_page)
 
     buf = io.BytesIO()
     writer.write(buf)
@@ -1105,7 +1519,7 @@ def merge_audio_files(files_data: list[tuple[str, bytes]], out_fmt: str = "mp3")
 
         out_path = str(Path(tmpdir) / f"output.{out_fmt}")
 
-        cmd = [_ffmpeg_exe(), "-y"]
+        cmd = [ffmpeg_for_output(out_fmt, AUDIO_CODEC_MAP[out_fmt]), "-y"]
         for p in input_paths:
             cmd += ["-i", p]
 
@@ -1114,9 +1528,10 @@ def merge_audio_files(files_data: list[tuple[str, bytes]], out_fmt: str = "mp3")
         cmd += ["-filter_complex", filter_str, "-map", "[out]"]
         cmd += AUDIO_CODEC_MAP[out_fmt] + [out_path]
 
-        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=MEDIA_TIMEOUT)
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
+            # The raw stderr has ffmpeg's build banner and temp paths; say what went wrong instead.
+            raise RuntimeError(_friendly_ffmpeg_error(result.stderr.decode("utf-8", errors="replace")))
 
         return Path(out_path).read_bytes()
     finally:
@@ -1126,21 +1541,27 @@ def merge_audio_files(files_data: list[tuple[str, bytes]], out_fmt: str = "mp3")
 
 def normalize_volume(data: bytes, ext: str) -> bytes:
     """Normalize audio volume using ffmpeg loudnorm filter."""
-    return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-map", "0:a"])
+    with _input_file(data, f".{ext}") as path:
+        args = ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", *_FIRST_AUDIO]
+        # loudnorm works at 192 kHz and leaves the audio there, so a WAV came
+        # back four times its size. Put the original rate back.
+        rate = _probe_file(path)["sample_rate"]
+        if rate:
+            args += ["-ar", str(rate)]
+        return _run_ffmpeg_file(path, f".{ext}", args)
 
 
 def video_to_gif(data: bytes, ext: str, fps: int = 10, width: int = 480) -> bytes:
     """Convert a video to animated GIF."""
     return run_ffmpeg(data, f".{ext}", ".gif",
                       ["-vf", f"fps={fps},scale={width}:-1:flags=lanczos", "-loop", "0"],
-                      timeout=300)
+                      timeout=MEDIA_TIMEOUT)
 
 
 def reverse_audio(data: bytes, ext: str) -> bytes:
     """Reverse audio using ffmpeg areverse filter. Returns audio bytes."""
     return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-map", "0:a", "-af", "areverse"])
+                      [*_FIRST_AUDIO, "-af", "areverse"])
 
 
 def change_pitch(data: bytes, ext: str, semitones: float) -> bytes:
@@ -1158,7 +1579,7 @@ def change_pitch(data: bytes, ext: str, semitones: float) -> bytes:
     af = (f"aresample=44100,asetrate=44100*{semitone_ratio:.6f},"
           f"atempo={tempo_correction:.6f},aresample=44100")
     return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-map", "0:a", "-af", af])
+                      [*_FIRST_AUDIO, "-af", af])
 
 
 def audio_equalizer(data: bytes, ext: str, bass: float = 0,
@@ -1174,7 +1595,7 @@ def audio_equalizer(data: bytes, ext: str, bass: float = 0,
     treble = max(-10, min(10, treble))
     af = f"bass=g={bass}:f=100,treble=g={treble}:f=4000,equalizer=f=1000:t=h:width=500:g={mid}"
     return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-map", "0:a", "-af", af])
+                      [*_FIRST_AUDIO, "-af", af])
 
 
 def audio_fade(data: bytes, ext: str, fade_in: float = 0,
@@ -1201,7 +1622,7 @@ def audio_fade(data: bytes, ext: str, fade_in: float = 0,
         raise ValueError("Provide fade_in and/or fade_out duration")
     af = ",".join(filters)
     return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-map", "0:a", "-af", af])
+                      [*_FIRST_AUDIO, "-af", af])
 
 
 def crop_video(data: bytes, ext: str, width: int, height: int,
@@ -1218,7 +1639,7 @@ def crop_video(data: bytes, ext: str, width: int, height: int,
         raise ValueError("Crop width and height must be at least 2 pixels")
     vf = f"crop={width}:{height}:{x}:{y}"
     return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-vf", vf, "-c:a", "copy"], timeout=300)
+                      ["-vf", vf, "-c:a", "copy"], timeout=MEDIA_TIMEOUT)
 
 
 def rotate_video(data: bytes, ext: str, angle: int) -> bytes:
@@ -1238,7 +1659,7 @@ def rotate_video(data: bytes, ext: str, angle: int) -> bytes:
     else:
         raise ValueError("Angle must be 90, 180, or 270")
     return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-vf", vf, "-c:a", "copy"], timeout=300)
+                      ["-vf", vf, "-c:a", "copy"], timeout=MEDIA_TIMEOUT)
 
 
 def resize_video(data: bytes, ext: str, width: int, height: int = -1) -> bytes:
@@ -1253,13 +1674,13 @@ def resize_video(data: bytes, ext: str, width: int, height: int = -1) -> bytes:
     h = height if height <= 0 else height - (height % 2)
     vf = f"scale={w if w > 0 else -2}:{h if h > 0 else -2}"
     return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-vf", vf, "-c:a", "copy"], timeout=300)
+                      ["-vf", vf, "-c:a", "copy"], timeout=MEDIA_TIMEOUT)
 
 
 def reverse_video(data: bytes, ext: str) -> bytes:
     """Reverse video and audio using ffmpeg reverse and areverse filters."""
     return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-vf", "reverse", "-af", "areverse"], timeout=300)
+                      ["-vf", "reverse", "-af", "areverse"], timeout=MEDIA_TIMEOUT)
 
 
 def loop_video(data: bytes, ext: str, count: int = 2) -> bytes:
@@ -1278,9 +1699,10 @@ def loop_video(data: bytes, ext: str, count: int = 2) -> bytes:
     try:
         cmd = [_ffmpeg_exe(), "-y", "-stream_loop", str(count - 1),
                "-i", inf_path, "-c", "copy", out_path]
-        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=MEDIA_TIMEOUT)
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
+            # The raw stderr has ffmpeg's build banner and temp paths; say what went wrong instead.
+            raise RuntimeError(_friendly_ffmpeg_error(result.stderr.decode("utf-8", errors="replace")))
         return Path(out_path).read_bytes()
     finally:
         Path(inf_path).unlink(missing_ok=True)
@@ -1290,7 +1712,7 @@ def loop_video(data: bytes, ext: str, count: int = 2) -> bytes:
 def mute_video(data: bytes, ext: str) -> bytes:
     """Strip audio track from video."""
     return run_ffmpeg(data, f".{ext}", f".{ext}",
-                      ["-an", "-c:v", "copy"], timeout=300)
+                      ["-an", "-c:v", "copy"], timeout=MEDIA_TIMEOUT)
 
 
 def add_audio_to_video(video_data: bytes, video_ext: str,
@@ -1309,25 +1731,44 @@ def add_audio_to_video(video_data: bytes, video_ext: str,
         Path(video_path).write_bytes(video_data)
         Path(audio_path).write_bytes(audio_data)
 
+        # The audio codec the container takes (AAC cannot go into WebM), and
+        # apad so audio shorter than the video is padded with silence: with
+        # -shortest alone the video was cut down to the length of the audio.
+        codecs = VIDEO_CODEC_MAP.get(video_ext.lower(), VIDEO_CODEC_MAP["mp4"])
         cmd = [
             _ffmpeg_exe(), "-y",
             "-i", video_path,
             "-i", audio_path,
             "-c:v", "copy",
-            "-c:a", "aac",
+            "-c:a", codecs[codecs.index("-acodec") + 1],
+            "-af", "apad",
             "-map", "0:v:0",
             "-map", "1:a:0",
             "-shortest",
             out_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=MEDIA_TIMEOUT)
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip())
+            # The raw stderr has ffmpeg's build banner and temp paths; say what went wrong instead.
+            raise RuntimeError(_friendly_ffmpeg_error(result.stderr.decode("utf-8", errors="replace")))
 
         return Path(out_path).read_bytes()
     finally:
         import shutil
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def _subtitles_utf8(data: bytes) -> bytes:
+    """Subtitle text as UTF-8, which is all the subtitles filter reads. A file
+    in a legacy code page (Hebrew cp1255, Cyrillic cp1251…) used to fail as
+    "could not be read, it may be corrupt". Which code page it is cannot be
+    told reliably from the bytes (a guess burns in gibberish), so say what to do."""
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return data.decode("utf-16", errors="replace").encode("utf-8")
+    try:
+        return data.decode("utf-8-sig").encode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("These subtitles are not saved as UTF-8. Save the file as UTF-8 and try again.")
 
 
 def burn_subtitles(video_data: bytes, video_ext: str, srt_data: bytes) -> bytes:
@@ -1342,7 +1783,7 @@ def burn_subtitles(video_data: bytes, video_ext: str, srt_data: bytes) -> bytes:
         out_path = str(Path(tmpdir) / f"output.{video_ext}")
 
         Path(video_path).write_bytes(video_data)
-        Path(srt_path).write_bytes(srt_data)
+        Path(srt_path).write_bytes(_subtitles_utf8(srt_data))
 
         exe = ffmpeg_exe_with_filter("subtitles")
         if not exe:
@@ -1351,17 +1792,17 @@ def burn_subtitles(video_data: bytes, video_ext: str, srt_data: bytes) -> bytes:
                 "built with libass, then try again."
             )
 
-        # Escape special characters in path for ffmpeg subtitles filter
-        escaped_srt = srt_path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
-
+        # Run inside the temp folder and name the file without its path: a
+        # folder with ' , [ ] or ; in its name (a Windows user called O'Brien)
+        # cannot be escaped reliably inside a filter description.
         cmd = [
             exe, "-y",
             "-i", video_path,
-            "-vf", f"subtitles={escaped_srt}",
+            "-vf", "subtitles=subs.srt",
             "-c:a", "copy",
             out_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=MEDIA_TIMEOUT, cwd=tmpdir)
         if result.returncode != 0:
             stderr = result.stderr.decode("utf-8", errors="replace").strip()
             logger.error("burn_subtitles failed: %s", stderr[-2000:])
@@ -1415,20 +1856,20 @@ def generate_hash(data: bytes, algorithm: str = "sha256") -> dict:
 
 def json_format(text: str, indent: int = 2) -> str:
     """Format/prettify JSON string."""
-    data = json.loads(text)
+    data = json.loads(_no_bom(text))
     return json.dumps(data, indent=indent, ensure_ascii=False, sort_keys=False)
 
 
 def json_minify(text: str) -> str:
     """Minify JSON string."""
-    data = json.loads(text)
+    data = json.loads(_no_bom(text))
     return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
 
 
 def json_validate(text: str) -> dict:
     """Validate JSON and return info."""
     try:
-        data = json.loads(text)
+        data = json.loads(_no_bom(text))
         info = {"valid": True, "type": type(data).__name__}
         if isinstance(data, list):
             info["length"] = len(data)
@@ -1437,6 +1878,8 @@ def json_validate(text: str) -> dict:
         return info
     except json.JSONDecodeError as e:
         return {"valid": False, "error": str(e), "line": e.lineno, "column": e.colno}
+    except RecursionError:
+        return {"valid": False, "error": "Nested too deeply to parse", "line": 1, "column": 1}
 
 
 def base64_encode(data: bytes) -> str:
@@ -1446,9 +1889,15 @@ def base64_encode(data: bytes) -> str:
 
 
 def base64_decode(text: str) -> bytes:
-    """Base64 decode a string."""
+    """Base64 decode a string. Accepts what people actually paste: a data:
+    URL, line breaks, the URL-safe alphabet (- and _), and missing = padding.
+    Anything else is an error, not a silently shorter result."""
     import base64
-    return base64.b64decode(text)
+    text = text.strip()
+    if text[:5].lower() == "data:" and "," in text:
+        text = text.split(",", 1)[1]
+    text = "".join(text.split()).replace("-", "+").replace("_", "/").rstrip("=")
+    return base64.b64decode(text + "=" * (-len(text) % 4), validate=True)
 
 
 def generate_placeholder_image(width: int, height: int, bg_color: str = "#cccccc",
@@ -1533,6 +1982,7 @@ def generate_lorem(paragraphs: int = 3) -> str:
 
 def text_stats(text: str) -> dict:
     """Get text statistics."""
+    text = text.replace("\r\n", "\n")  # browsers send textarea text with CRLF
     lines = text.split("\n")
     words = text.split()
     return {
@@ -1540,7 +1990,7 @@ def text_stats(text: str) -> dict:
         "characters_no_spaces": len(text.replace(" ", "").replace("\n", "")),
         "words": len(words),
         "lines": len(lines),
-        "paragraphs": len([p for p in text.split("\n\n") if p.strip()]),
+        "paragraphs": len([p for p in re.split(r"\n\s*\n", text) if p.strip()]),
         "sentences": len([s for s in text.replace("!", ".").replace("?", ".").split(".") if s.strip()]),
     }
 
@@ -1548,10 +1998,11 @@ def text_stats(text: str) -> dict:
 def text_diff(text1: str, text2: str) -> str:
     """Generate a unified diff between two texts."""
     import difflib
-    lines1 = text1.splitlines(keepends=True)
-    lines2 = text2.splitlines(keepends=True)
-    diff = difflib.unified_diff(lines1, lines2, fromfile="Original", tofile="Modified")
-    return "".join(diff)
+    # Without line endings on the lines themselves: a last line with no
+    # newline used to run into the next one ("-b+c").
+    diff = list(difflib.unified_diff(text1.splitlines(), text2.splitlines(),
+                                     fromfile="Original", tofile="Modified", lineterm=""))
+    return "\n".join(diff) + "\n" if diff else ""
 
 
 def file_metadata(filepath: str) -> dict:
@@ -1596,7 +2047,7 @@ def extract_audio_for_transcription(input_path: str, output_path: str):
         "-ar", "16000", "-ac", "1",
         output_path
     ]
-    result = subprocess.run(cmd, capture_output=True, timeout=300)
+    result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=MEDIA_TIMEOUT)
     if result.returncode != 0:
         raise RuntimeError(f"Audio extraction failed: {result.stderr.decode('utf-8', errors='replace')[:500]}")
 
@@ -1650,9 +2101,10 @@ def diarize_audio(audio_path: str, hf_token: str,
     if progress_cb:
         progress_cb(72, "diarizing", "Loading diarization model...")
 
-    pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1", use_auth_token=hf_token,
-    )
+    # pyannote.audio 4 renamed use_auth_token to token.
+    import inspect
+    auth = "token" if "token" in inspect.signature(Pipeline.from_pretrained).parameters else "use_auth_token"
+    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", **{auth: hf_token})
 
     if progress_cb:
         progress_cb(78, "diarizing", "Identifying speakers...")
@@ -1662,6 +2114,8 @@ def diarize_audio(audio_path: str, hf_token: str,
         kwargs["num_speakers"] = num_speakers
 
     diarization = pipeline(audio_path, **kwargs)
+    # pyannote.audio 4 wraps the speaker turns in a result object.
+    diarization = getattr(diarization, "speaker_diarization", diarization)
 
     if progress_cb:
         progress_cb(90, "diarizing", "Processing speaker labels...")
@@ -1696,25 +2150,41 @@ def merge_transcription_and_diarization(segments: list[dict], diarization: list[
     return segments
 
 
-def _fmt_ts(seconds: float) -> str:
+def _fmt_ts(seconds: float, sep: str = ".") -> str:
     """Convert seconds to HH:MM:SS.mmm format."""
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    ms = int((seconds % 1) * 1000)
-    return f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
+    # Whole milliseconds first: int((2.3 % 1) * 1000) is 299, not 300.
+    total_ms = max(0, int(round(seconds * 1000)))
+    s, ms = divmod(total_ms, 1000)
+    return f"{s // 3600:02d}:{s % 3600 // 60:02d}:{s % 60:02d}{sep}{ms:03d}"
 
 
 def _srt_ts(seconds: float) -> str:
     """Format seconds as SRT timestamp: HH:MM:SS,mmm"""
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    ms = int((seconds % 1) * 1000)
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+    return _fmt_ts(seconds, ",")
+
+
+def _cue_text(text: str) -> str:
+    """A blank line ends a subtitle cue, so one inside the text would cut it short."""
+    return "\n".join(line for line in text.splitlines() if line.strip())
+
+
+def _clean_segments(segments) -> list[dict]:
+    """Segments as sent back by the transcript page can be edited or partial;
+    fill the fields every exporter needs instead of crashing on a missing one."""
+    out = []
+    for seg in segments or []:
+        if not isinstance(seg, dict):
+            continue
+        try:
+            start, end = float(seg.get("start") or 0), float(seg.get("end") or 0)
+        except (TypeError, ValueError):
+            start = end = 0.0
+        out.append({**seg, "start": start, "end": end, "text": str(seg.get("text") or "")})
+    return out
 
 
 def export_transcript_txt(segments: list[dict], include_speakers: bool = True) -> str:
+    segments = _clean_segments(segments)
     lines = []
     for seg in segments:
         prefix = f"[{seg.get('speaker', '')}] " if include_speakers and seg.get('speaker') else ""
@@ -1723,27 +2193,30 @@ def export_transcript_txt(segments: list[dict], include_speakers: bool = True) -
 
 
 def export_transcript_srt(segments: list[dict]) -> str:
+    segments = _clean_segments(segments)
     lines = []
     for i, seg in enumerate(segments, 1):
         speaker = f"[{seg.get('speaker', '')}] " if seg.get('speaker') else ""
         lines.append(f"{i}")
         lines.append(f"{_srt_ts(seg['start'])} --> {_srt_ts(seg['end'])}")
-        lines.append(f"{speaker}{seg['text']}")
+        lines.append(f"{speaker}{_cue_text(seg['text'])}")
         lines.append("")
     return "\n".join(lines)
 
 
 def export_transcript_vtt(segments: list[dict]) -> str:
+    segments = _clean_segments(segments)
     lines = ["WEBVTT", ""]
     for seg in segments:
         speaker = f"<v {seg.get('speaker', 'Speaker')}>" if seg.get('speaker') else ""
         lines.append(f"{_fmt_ts(seg['start'])} --> {_fmt_ts(seg['end'])}")
-        lines.append(f"{speaker}{seg['text']}")
+        lines.append(f"{speaker}{_cue_text(seg['text'])}")
         lines.append("")
     return "\n".join(lines)
 
 
 def export_transcript_csv(segments: list[dict]) -> str:
+    segments = _clean_segments(segments)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["start", "end", "speaker", "text"])

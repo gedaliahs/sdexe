@@ -1,8 +1,2 @@
-flask
-yt-dlp
-pypdf
-Pillow
-markdown
-rich
-pystray
-PyYAML
+# The dependency list lives in pyproject.toml.
+-e .

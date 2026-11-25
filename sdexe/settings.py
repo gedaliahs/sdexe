@@ -13,6 +13,7 @@ also be read and written by scripts and agents:
 
 import json
 import os
+import re
 import select
 import shutil
 import subprocess
@@ -65,7 +66,7 @@ class Setting:
         if self.kind == "int":
             try:
                 n = int(raw)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):  # 1e400 in config.json reads as infinity
                 raise ValueError(f"{self.key} takes a number")
             if not self.low <= n <= self.high:
                 raise ValueError(f"{self.key} must be between {self.low} and {self.high}")
@@ -73,7 +74,10 @@ class Setting:
         if self.kind == "path":
             if raw in ("", None, "-", "."):
                 return ""
-            p = Path(str(raw)).expanduser().resolve()
+            try:
+                p = Path(str(raw)).expanduser().resolve()
+            except RuntimeError:  # "~nobody/x": no such user
+                raise ValueError(f"{raw} is not a folder sdexe can find")
             if p.exists() and not p.is_dir():
                 raise ValueError(f"{p} is a file, not a folder")
             return str(p)
@@ -146,15 +150,18 @@ def get(key: str, cfg: dict | None = None):
 
 
 def put(key: str, value):
-    from sdexe.app import load_config, save_config
+    from sdexe import app
     s = BY_KEY[key]
     value = s.parse(value)
-    cfg = load_config()
-    if value == s.default:
-        cfg.pop(key, None)
-    else:
-        cfg[key] = value
-    save_config(cfg)
+    # One read-change-write at a time: the web settings page saves the same
+    # file from the server thread while the terminal app runs this one.
+    with app._state_lock:
+        cfg = app.load_config()
+        if value == s.default:
+            cfg.pop(key, None)
+        else:
+            cfg[key] = value
+        app.save_config(cfg)
     if key == "accent":
         ui.set_accent(value)
     return value
@@ -176,31 +183,55 @@ def zshrc() -> Path | None:
     return Path(os.environ.get("ZDOTDIR") or Path.home()) / ".zshrc"
 
 
+# The alias line itself, however it was typed. Not any line that mentions
+# "noglob sdexe": alias yt='noglob sdexe download -mp3' is the user's own, and
+# turning this off used to delete it.
+_ZSH_ALIAS = re.compile(r"""[ \t]*alias[ \t]+sdexe=(['"]?)noglob[ \t]+sdexe\1[ \t]*(#.*)?\r?\n?""")
+
+
+def _read_rc(rc: Path) -> str | None:
+    """~/.zshrc exactly as it is on disk, or None if it can't be read. Bytes
+    that aren't UTF-8 and \\r\\n line ends survive being written back."""
+    try:
+        with open(rc, encoding="utf-8", errors="surrogateescape", newline="") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
 def zsh_alias_on() -> bool:
     rc = zshrc()
-    try:
-        return bool(rc) and "noglob sdexe" in rc.read_text()
-    except OSError:
-        return False
+    text = _read_rc(rc) if rc else None
+    return bool(text) and any(_ZSH_ALIAS.fullmatch(ln) for ln in text.splitlines(keepends=True))
 
 
 def set_zsh_alias(on: bool) -> str:
     rc = zshrc()
     if not rc:
         return "Only needed in zsh."
-    if on:
-        if not zsh_alias_on():
-            with open(rc, "a") as f:
-                f.write(ZSH_BLOCK)
-        return f"Added to ~/{rc.name}. Takes effect in new terminal tabs."
-    text = rc.read_text()
-    if ZSH_BLOCK in text:  # exactly what we added, blank line included
-        rc.write_text(text.replace(ZSH_BLOCK, "", 1))
+    try:
+        if on:
+            if not zsh_alias_on():
+                with open(rc, "a", encoding="utf-8", newline="") as f:
+                    f.write(ZSH_BLOCK)
+            return f"Added to ~/{rc.name}. Takes effect in new terminal tabs."
+        text = _read_rc(rc)
+        if text is None and rc.exists():
+            return f"Couldn't read ~/{rc.name}, so nothing was changed."
+        text = text or ""
+        if ZSH_BLOCK in text:  # exactly what we added, blank line included
+            new = text.replace(ZSH_BLOCK, "", 1)
+        else:
+            note = ZSH_BLOCK.strip().splitlines()[0]
+            new = "".join(ln for ln in text.splitlines(keepends=True)
+                          if not _ZSH_ALIAS.fullmatch(ln) and ln.strip() != note)
+        if new != text:
+            with open(rc, "w", encoding="utf-8", errors="surrogateescape", newline="") as f:
+                f.write(new)
         return f"Removed from ~/{rc.name}. Quote links again in new tabs."
-    lines = [ln for ln in text.splitlines(keepends=True)
-             if "noglob sdexe" not in ln and ln.strip() != ZSH_BLOCK.strip().splitlines()[0]]
-    rc.write_text("".join(lines))
-    return f"Removed from ~/{rc.name}. Quote links again in new tabs."
+    except OSError as e:
+        # Read-only, a folder, a full disk: say so instead of ending setup.
+        return f"Couldn't change ~/{rc.name}: {e.strerror or e}."
 
 
 def _claude() -> str | None:
@@ -223,17 +254,32 @@ def claude_mcp_on() -> bool | None:
         return False
 
 
+def _claude_mcp(claude: str, *args) -> tuple:
+    """(worked, claude's last line of output). Never raises: a claude that
+    hangs, prints nothing or can't start is a message, not a crash in setup."""
+    try:
+        r = subprocess.run([claude, "mcp", *args], capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        return False, "Claude Code didn't answer in time."
+    except OSError as e:
+        return False, f"Couldn't run claude: {e.strerror or e}."
+    lines = (r.stderr or r.stdout or "").strip().splitlines()
+    return r.returncode == 0, lines[-1] if lines else f"claude exited with code {r.returncode}."
+
+
 def set_claude_mcp(on: bool) -> str:
     claude = _claude()
     if not claude:
         return "Claude Code isn't installed (claude not found on PATH)."
     if on:
-        r = subprocess.run([claude, "mcp", "add", "-s", "user", "sdexe", "--", *sdexe_command(), "mcp"],
-                           capture_output=True, text=True, timeout=60)
-        return "Connected. New Claude Code sessions can use sdexe." if r.returncode == 0 \
-            else (r.stderr or r.stdout).strip().splitlines()[-1]
-    r = subprocess.run([claude, "mcp", "remove", "-s", "user", "sdexe"], capture_output=True, text=True, timeout=60)
-    return "Disconnected." if r.returncode == 0 else (r.stderr or r.stdout).strip().splitlines()[-1]
+        ok, msg = _claude_mcp(claude, "add", "-s", "user", "sdexe", "--", *sdexe_command(), "mcp")
+        return "Connected. New Claude Code sessions can use sdexe." if ok else msg
+    ok, msg = _claude_mcp(claude, "remove", "-s", "user", "sdexe")
+    if not ok:
+        # Added by hand for one project (local scope)? `-s user` doesn't find
+        # that one, and the switch could never be turned off.
+        ok, _ = _claude_mcp(claude, "remove", "sdexe")
+    return "Disconnected." if ok else msg
 
 
 def skill_path() -> Path:

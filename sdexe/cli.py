@@ -11,6 +11,8 @@ import argparse
 import difflib
 import json
 import logging
+import math
+import os
 import queue
 import re
 import shutil
@@ -21,10 +23,11 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yt_dlp
+from sdexe import media, tools
 
-from sdexe import media, tools, ui
-from sdexe.app import _friendly_download_error, _safe_filename
+# yt_dlp, sdexe.app (Flask and every route) and sdexe.ui (Rich) are imported
+# where they are used: the file tools import this module for its helpers and,
+# run by a script or an agent, need none of them.
 
 
 class UsageError(Exception):
@@ -174,16 +177,22 @@ def parse_time(value: str) -> float:
     v = value.strip().lower()
     try:
         if ":" in v:
+            parts = [float(part) for part in v.split(":")]
+            if len(parts) > 3 or any(not 0 <= p < math.inf for p in parts):
+                raise ValueError(v)
             total = 0.0
-            for part in v.split(":"):
-                total = total * 60 + float(part)
+            for part in parts:
+                total = total * 60 + part
             return total
         if re.fullmatch(r"(\d+(\.\d+)?h)?(\d+(\.\d+)?m)?(\d+(\.\d+)?s)?", v) and v:
             total = 0.0
             for num, unit in re.findall(r"(\d+(?:\.\d+)?)([hms])", v):
                 total += float(num) * {"h": 3600, "m": 60, "s": 1}[unit]
             return total
-        return float(v)
+        total = float(v)
+        if not 0 <= total < math.inf:  # -5, nan and inf are numbers to float()
+            raise ValueError(v)
+        return total
     except ValueError:
         raise UsageError(f"Can't read time '{value}'. Use seconds (90), 1:30, 1:02:03 or 1m30s.")
 
@@ -225,7 +234,7 @@ def normalize_url(token: str) -> str | None:
 
 VALUE_OPTS = {"-o", "--output", "-i", "--input", "-f", "--format", "-q", "--quality", "--limit",
               "--start", "--end", "-j", "--jobs", "--cookies-from-browser"}
-FLAG_OPTS = {"-h", "--help", "--playlist", "--json", "--quiet", "-v", "--verbose", "--"}
+FLAG_OPTS = {"-h", "--help", "--playlist", "--json", "--quiet", "-v", "--verbose", "-c", "--clipboard", "--"}
 TAG_HINTS = sorted(set(FORMAT_ALIASES) | set(KIND_ALIASES) | BEST_ALIASES | {"1080p", "720p", "4k", "320"})
 
 
@@ -241,6 +250,7 @@ def _parser():
     p.add_argument("-o", "--output")
     p.add_argument("-i", "--input", action="append", default=[])
     p.add_argument("--playlist", action="store_true")
+    p.add_argument("-c", "--clipboard", action="store_true")
     p.add_argument("--limit", type=int)
     p.add_argument("--start")
     p.add_argument("--end")
@@ -329,6 +339,7 @@ HELP = """\
   [brand]◆[/brand] [title]Options[/title]
     [brand2]-o, --output PATH[/brand2]          a folder, or a file name like clip.mp4 for one link
     [brand2]-i, --input FILE[/brand2]           links from a file, one per line ([brand2]-[/brand2] for stdin)
+    [brand2]-c, --clipboard[/brand2]            use the links on your clipboard [muted](automatic when you type no link)[/muted]
     [brand2]--playlist[/brand2]                 every video in a playlist or channel link
     [brand2]--limit N[/brand2]                  only the first N of a playlist (implies --playlist)
     [brand2]--start TIME, --end TIME[/brand2]   only part: 90, 1:30, 1:02:03, 1m30s
@@ -357,6 +368,7 @@ def print_help(file=None):
     d = download_defaults()
     spec_v = resolve_spec([], defaults=d)
     spec_a = resolve_spec([("kind", "audio")], defaults=d)
+    from sdexe import ui
     c = ui.console(file=file or sys.stdout)
     c.print()
     c.print(HELP.format(video_default=spec_v.label, audio_default=spec_a.label, jobs=d["jobs"],
@@ -369,9 +381,11 @@ PP_STAGES = {
     "FFmpegMerger": "merging video + audio",
     "FFmpegVideoRemuxer": "remuxing",
     "FFmpegMetadata": "writing tags",
+    "FFmpegEmbedThumbnail": "adding cover art",
     "EmbedThumbnail": "adding cover art",
     "FFmpegEmbedSubtitle": "embedding subtitles",
     "MoveFiles": "finishing",
+    "FFmpegMoveFiles": "finishing",
 }
 _THUMB_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 ATTEMPTS = media.ATTEMPTS
@@ -394,14 +408,15 @@ class Item:
     info: dict = field(default_factory=dict)
     spinner: object = None
     thumbnail: bool = True
+    duplicate_of: str | None = None   # another link in this batch that is the same video
 
     @property
     def downloaded(self):
-        return sum(d for d, _ in self.streams.values())
+        return sum(d for d, _ in list(self.streams.values()))
 
     @property
     def total(self):
-        known = sum(t or 0 for _, t in self.streams.values())
+        known = sum(t or 0 for _, t in list(self.streams.values()))  # a copy: the download thread adds to it
         return max(self.expected, known) or None
 
     @property
@@ -473,6 +488,7 @@ class Downloader:
         self.lock = threading.Lock()
         self.cancel = threading.Event()
         self.claimed = set()
+        self.seen = {}  # (site, video id) -> the first Item that has it
         self.tmp_dirs = set()
         self.started = time.time()
         self.stderr_tty = sys.stderr.isatty()
@@ -480,8 +496,9 @@ class Downloader:
         self.live = None
         self.console = None
         self.silent = silent
+        self.stdout_gone = False
         if self.stderr_tty and not args.quiet and not silent:
-            from rich.console import Console
+            from sdexe import ui
             self.console = ui.console(stderr=True)
 
     # stderr events, for when there is no live display
@@ -512,6 +529,7 @@ class Downloader:
             thumbnail=item.thumbnail,
         )
         media.apply_clip(opts, *self.clip)
+        import yt_dlp
 
         def progress_hook(d):
             if self.cancel.is_set():
@@ -531,6 +549,7 @@ class Downloader:
             if d["status"] != "started":
                 return
             name = d.get("postprocessor", "")
+            name = name if name.startswith("FFmpeg") or name in PP_STAGES else "FFmpeg" + name
             if name == "FFmpegExtractAudio":
                 item.stage = f"converting to {self.spec.fmt.upper()}"
             elif name.startswith("FFmpegFixup"):
@@ -573,6 +592,8 @@ class Downloader:
                 continue
             children.append(Item(url, entry=e, playlist=title, title=e.get("title") or "",
                                  thumbnail=bool(self.defaults["cover_art"])))
+        if not children:
+            raise _Fail("Every video in this playlist is private, deleted or unavailable.")
         with self.lock:
             idx = self.items.index(item)
             self.items[idx:idx + 1] = [item] + children
@@ -611,20 +632,32 @@ class Downloader:
                     item.streams.clear()
                     time.sleep(attempt)
                     continue
+                from sdexe.app import _friendly_download_error
                 item.status = "failed"
                 item.error = _friendly_download_error(raw, cancelled=self.cancel.is_set(), cli=True)
                 break
 
         if item.status == "done":
-            size = item.path.stat().st_size
-            bits = ", ".join(b for b in (item.quality(), fmt_size(size)) if b)
+            try:
+                size = item.path.stat().st_size
+            except OSError:
+                size = None  # moved away already; must not end this worker thread
+            bits = ", ".join(b for b in (item.quality(), fmt_size(size) if size else "") if b)
             self._event(f"✓ {item.name} → {item.path} ({bits})")
-            if not self.stdout_tty and not self.args.json and not self.silent:
-                print(item.path, flush=True)
+            if not self.stdout_tty and not self.args.json and not self.silent and not self.stdout_gone:
+                try:
+                    print(item.path, flush=True)
+                except BrokenPipeError:
+                    # `sdexe download … | head -1`: the reader left. Without
+                    # this the worker thread died here, and once every worker
+                    # had, the links still queued waited forever.
+                    self.stdout_gone = True
+                    _drop_stdout()
         else:
             self._event(f"✗ {item.url}: {item.error}", error=True)
 
     def _attempt(self, item):
+        import yt_dlp
         tmp = Path(tempfile.mkdtemp(prefix="sdexe-dl-"))
         self.tmp_dirs.add(tmp)
         try:
@@ -639,6 +672,8 @@ class Downloader:
                     self._expand(item, info)
                     return "expanded"
                 item.title = info.get("title") or item.title
+                if self._reuse_duplicate(item, info):
+                    return None
                 if self.clip == (None, None):
                     fmts = info.get("requested_formats") or [info]
                     item.expected = sum(f.get("filesize") or f.get("filesize_approx") or 0 for f in fmts)
@@ -649,6 +684,26 @@ class Downloader:
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
             self.tmp_dirs.discard(tmp)
+
+    def _reuse_duplicate(self, item, info) -> bool:
+        """Two links to the same video in one batch: the second waits for the
+        first and shares its file instead of saving a copy named "… (2)"."""
+        key = (info.get("extractor_key") or info.get("extractor"), info.get("id"))
+        if not key[1]:
+            return False
+        with self.lock:
+            first = self.seen.setdefault(key, item)
+        if first is item:
+            return False
+        item.stage = "same video as another link"
+        while first.status in ("queued", "running") and not self.cancel.is_set():
+            time.sleep(0.3)
+        if first.status != "done":
+            with self.lock:
+                self.seen[key] = item  # the first failed; this one downloads it
+            return False
+        item.info, item.path, item.duplicate_of = first.info, first.path, first.url
+        return True
 
     def _save(self, item, info, tmp):
         produced = None
@@ -673,6 +728,7 @@ class Downloader:
                 if ext != self.out_file.suffix.lstrip("."):
                     self._event(f"note: saved as .{ext}, the source had no {self.out_file.suffix} stream")
             else:
+                from sdexe.app import _safe_filename
                 stem = _safe_filename(info.get("title") or item.title, "download", max_len=180)
                 start, end = self.clip
                 if start is not None or end is not None:
@@ -847,7 +903,10 @@ class Downloader:
                 i.status, i.error = "failed", "Download cancelled."
 
         if self.args.json:
-            print(json.dumps(self._json(items), indent=2, ensure_ascii=False), flush=True)
+            try:
+                print(json.dumps(self._json(items), indent=2, ensure_ascii=False), flush=True)
+            except BrokenPipeError:
+                _drop_stdout()
         if self.console:
             self._summary(items, interrupted)
         else:
@@ -884,6 +943,8 @@ class Downloader:
         c.print()
 
     def _summary(self, items, interrupted):
+        from rich.text import Text
+        from sdexe import ui
         c = self.console
         done = [i for i in items if i.status == "done"]
         failed = [i for i in items if i.status == "failed"]
@@ -894,7 +955,7 @@ class Downloader:
                     f"[muted]in {elapsed}[/muted]\n")
             for i in done:
                 meta = " · ".join(b for b in (i.quality(), fmt_size(i.path.stat().st_size)) if b)
-                c.print(f"    [link=file://{i.path}]{_escape(i.path.name)}[/link]  [muted]{meta}[/muted]",
+                c.print(Text.assemble("    ", ui.file_link(i.path, i.path.name), ("  " + meta, "muted")),
                         overflow="ellipsis", no_wrap=True)
             c.print()
         if failed:
@@ -912,6 +973,8 @@ class Downloader:
         results = []
         for i in items:
             r = {"url": i.url, "ok": i.status == "done", "title": i.title or None}
+            if i.duplicate_of:
+                r["duplicate_of"] = i.duplicate_of
             if i.playlist:
                 r["playlist"] = i.playlist
             if i.status == "done":
@@ -945,6 +1008,31 @@ class _Fail(Exception):
     """A failure whose message is already fit to show."""
 
 
+def _drop_stdout():
+    """After a broken pipe: point stdout at nothing, so nothing later (the
+    flush Python does on exit included) raises again."""
+    try:
+        sys.stdout = open(os.devnull, "w")
+        os.dup2(sys.stdout.fileno(), 1)
+    except (OSError, ValueError):
+        pass
+
+
+def wants_json(argv) -> bool:
+    cut = argv.index("--") if "--" in argv else len(argv)
+    return "--json" in argv[:cut]
+
+
+def fail(prog: str, message, argv, code: int = 2) -> int:
+    """An error before any work started (bad usage, mostly): one line on
+    stderr, and with --json a document on stdout too, so a caller that asked
+    for JSON can always parse what it gets."""
+    print(f"sdexe {prog}: {message}", file=sys.stderr)
+    if wants_json(argv):
+        print(json.dumps({"ok": False, "error": str(message)}, ensure_ascii=False))
+    return code
+
+
 def _videos(n):
     return f"{n} video" if n == 1 else f"{n} videos"
 
@@ -968,26 +1056,68 @@ def _read_links(sources):
     links = []
     for src in sources:
         try:
-            text = sys.stdin.read() if src == "-" else Path(src).expanduser().read_text()
+            # utf-8-sig: Notepad saves a byte-order mark that would otherwise
+            # end up glued to the first link.
+            text = sys.stdin.read() if src == "-" else Path(src).expanduser().read_text(encoding="utf-8-sig")
         except OSError as e:
             raise UsageError(f"Can't read {src}: {e.strerror}.")
+        except UnicodeDecodeError:
+            raise UsageError(f"{src} is not a text file. -i takes a list of links, one per line.")
         for line in text.splitlines():
             line = line.strip()
-            if line and not line.startswith("#"):
-                links.extend(line.split())
+            if not line or line.startswith("#"):
+                continue
+            # "ytsearch:song name" is one entry; other lines may hold several links.
+            links.extend([line] if is_search(line) else line.split())
     return links
+
+
+_LINK_RE = re.compile(r"https?://[^\s<>\"'`]+", re.I)
+
+
+def clipboard_links() -> list:
+    """Links on the system clipboard, in order (pbpaste, wl-paste, xclip, xsel or
+    PowerShell). Empty when there's no clipboard tool or no link."""
+    import shutil
+    import subprocess
+    if sys.platform == "darwin":
+        tries = [["pbpaste"]]
+    elif sys.platform.startswith("win"):
+        tries = [["powershell", "-NoProfile", "-Command", "Get-Clipboard"]]
+    else:
+        tries = [["wl-paste", "--no-newline"], ["xclip", "-o", "-selection", "clipboard"], ["xsel", "-ob"]]
+    for cmd in tries:
+        if not shutil.which(cmd[0]):
+            continue
+        try:
+            text = subprocess.run(cmd, capture_output=True, text=True, timeout=3).stdout or ""
+        except Exception:  # noqa: BLE001
+            continue
+        links = [u.rstrip(".,;:!?)]}>") for u in _LINK_RE.findall(text)]
+        return list(dict.fromkeys(links))[:50]
+    return []
 
 
 def collect_urls(args, prog):
     urls = []
-    for tok in list(args.urls) + _read_links(args.input):
+    raw = list(args.urls) + _read_links(args.input)
+    # No links typed: a person at a terminal most likely just copied one.
+    # Scripts and agents only get the clipboard when they ask (--clipboard).
+    checked_clipboard = not raw and (args.clipboard or (sys.stdin.isatty() and sys.stderr.isatty()))
+    if checked_clipboard:
+        raw = clipboard_links()
+        if raw:
+            shown = raw[0] if len(raw) == 1 else f"{len(raw)} links"
+            print(f"Using {shown} from your clipboard.", file=sys.stderr)
+    for tok in raw:
         url = normalize_url(tok)
         if not url:
             raise UsageError(f"'{tok}' is not a link or a known tag. Run `sdexe {prog} --help`.")
         urls.append(url)
     urls = list(dict.fromkeys(urls))
     if not urls:
-        raise UsageError(f"No links given. Example: sdexe {prog} https://youtu.be/dQw4w9WgXcQ")
+        where = ", and none on your clipboard" if checked_clipboard else ""
+        raise UsageError(f"No links given{where}. Example: sdexe {prog} \"https://youtu.be/dQw4w9WgXcQ\"")
     if args.limit is not None:
         if args.limit < 1:
             raise UsageError("--limit must be 1 or more.")
@@ -1031,28 +1161,54 @@ def download_main(argv) -> int:
 
         start = parse_time(args.start) if args.start else None
         end = parse_time(args.end) if args.end else None
-        if start is not None and end is not None and end <= start:
-            raise UsageError("--end must be after --start.")
+        # "--end 0" used to mean "to the end" and re-encode the whole video.
+        if end is not None and end <= (start or 0):
+            raise UsageError("--end must be after --start." if start else "--end must be more than 0.")
+        if start == 0 and end is None:
+            start = None  # "--start 0" is the whole video, not a clip to cut and re-encode
         if not 1 <= args.jobs <= 8:
             raise UsageError("--jobs must be between 1 and 8.")
+        check_browser(args.cookies_from_browser)
     except UsageError as e:
-        print(f"sdexe download: {e}", file=sys.stderr)
-        return 2
+        return fail("download", e, argv)
 
     if not tools.ffmpeg_path():
-        print("sdexe download: ffmpeg is required to merge and convert media. Install it "
-              "(macOS: brew install ffmpeg) or run `sdexe` once, which offers to install it.", file=sys.stderr)
-        return 1
+        return fail("download", "ffmpeg is required to merge and convert media. Install it "
+                    "(macOS: brew install ffmpeg) or run `sdexe` once, which offers to install it.", argv, code=1)
 
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        print(f"sdexe download: can't create {out_dir}: {e.strerror}", file=sys.stderr)
-        return 1
+        return fail("download", f"can't create {out_dir}: {e.strerror}", argv, code=1)
 
     spec.warnings += youtube_warnings(urls)
     dl = Downloader(urls, spec, args, out_dir, out_file, clip=(start, end), defaults=defaults)
     if not dl.console:
         for w in spec.warnings:
             print(f"warning: {w}", file=sys.stderr)
+    _interrupt_on_sigterm()
     return dl.run()
+
+
+def check_browser(name):
+    """--cookies-from-browser takes a browser yt-dlp can read. A typo used to
+    surface once per link, as a download failure."""
+    if not name:
+        return
+    from yt_dlp.cookies import SUPPORTED_BROWSERS
+    if name.lower() not in SUPPORTED_BROWSERS:
+        raise UsageError(f"Unknown browser '{name}'. Use one of: {', '.join(sorted(SUPPORTED_BROWSERS))}.")
+
+
+def _interrupt_on_sigterm():
+    """Treat `kill` (and a parent that stops us) like Ctrl+C, so partial files
+    in the temp folder are removed instead of left behind."""
+    import signal
+
+    def stop(signum, frame):
+        raise KeyboardInterrupt
+
+    try:
+        signal.signal(signal.SIGTERM, stop)
+    except (ValueError, OSError, AttributeError):  # not the main thread, or no SIGTERM here
+        pass

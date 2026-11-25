@@ -43,7 +43,7 @@ def _form_float(key: str, default: float) -> float:
 def _form_int(key: str, default: int) -> int:
     try:
         return int(float(request.form.get(key, default)))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):  # OverflowError: "inf"
         raise ValueError(f"Invalid value for {key}")
 
 

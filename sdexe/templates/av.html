@@ -36,13 +36,13 @@
                 <div id="av-convert-audio-info" class="split-info" hidden>
                     <span id="av-convert-audio-name" class="split-name"></span>
                     <span id="av-convert-audio-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('av-convert-audio')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('av-convert-audio')">&times;</button>
                 </div>
 
                 <div id="av-convert-audio-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Output Format</label>
+                            <label for="av-convert-audio-format">Output Format</label>
                             <select id="av-convert-audio-format">
                                 <option value="mp3">MP3</option>
                                 <option value="wav">WAV</option>
@@ -62,7 +62,7 @@
                     </button>
                 </div>
 
-                <div id="av-convert-audio-error" class="error" hidden></div>
+                <div id="av-convert-audio-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -85,17 +85,17 @@
                 <div id="av-trim-audio-info" class="split-info" hidden>
                     <span id="av-trim-audio-name" class="split-name"></span>
                     <span id="av-trim-audio-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('av-trim-audio')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('av-trim-audio')">&times;</button>
                 </div>
 
                 <div id="av-trim-audio-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Start time</label>
+                            <label for="av-trim-audio-start">Start time</label>
                             <input type="text" id="av-trim-audio-start" placeholder="00:00:30">
                         </div>
                         <div class="field">
-                            <label>End time (optional)</label>
+                            <label for="av-trim-audio-end">End time (optional)</label>
                             <input type="text" id="av-trim-audio-end" placeholder="00:01:30">
                         </div>
                     </div>
@@ -108,7 +108,7 @@
                     </button>
                 </div>
 
-                <div id="av-trim-audio-error" class="error" hidden></div>
+                <div id="av-trim-audio-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -130,13 +130,13 @@
                 <div id="av-speed-info" class="split-info" hidden>
                     <span id="av-speed-name" class="split-name"></span>
                     <span id="av-speed-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('av-speed')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('av-speed')">&times;</button>
                 </div>
 
                 <div id="av-speed-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Speed</label>
+                            <label for="av-speed-value">Speed</label>
                             <select id="av-speed-value">
                                 <option value="0.5">0.5× (half speed)</option>
                                 <option value="0.75">0.75×</option>
@@ -155,7 +155,7 @@
                     </button>
                 </div>
 
-                <div id="av-speed-error" class="error" hidden></div>
+                <div id="av-speed-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -183,13 +183,13 @@
                 <div id="av-extract-audio-info" class="split-info" hidden>
                     <span id="av-extract-audio-name" class="split-name"></span>
                     <span id="av-extract-audio-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('av-extract-audio')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('av-extract-audio')">&times;</button>
                 </div>
 
                 <div id="av-extract-audio-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Audio Format</label>
+                            <label for="av-extract-audio-format">Audio Format</label>
                             <select id="av-extract-audio-format">
                                 <option value="mp3">MP3</option>
                                 <option value="wav">WAV</option>
@@ -208,7 +208,7 @@
                     </button>
                 </div>
 
-                <div id="av-extract-audio-error" class="error" hidden></div>
+                <div id="av-extract-audio-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -230,17 +230,17 @@
                 <div id="av-trim-video-info" class="split-info" hidden>
                     <span id="av-trim-video-name" class="split-name"></span>
                     <span id="av-trim-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('av-trim-video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('av-trim-video')">&times;</button>
                 </div>
 
                 <div id="av-trim-video-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Start time</label>
+                            <label for="av-trim-video-start">Start time</label>
                             <input type="text" id="av-trim-video-start" placeholder="00:00:30">
                         </div>
                         <div class="field">
-                            <label>End time (optional)</label>
+                            <label for="av-trim-video-end">End time (optional)</label>
                             <input type="text" id="av-trim-video-end" placeholder="00:01:30">
                         </div>
                     </div>
@@ -253,7 +253,7 @@
                     </button>
                 </div>
 
-                <div id="av-trim-video-error" class="error" hidden></div>
+                <div id="av-trim-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -275,13 +275,13 @@
                 <div id="av-compress-video-info" class="split-info" hidden>
                     <span id="av-compress-video-name" class="split-name"></span>
                     <span id="av-compress-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('av-compress-video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('av-compress-video')">&times;</button>
                 </div>
 
                 <div id="av-compress-video-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Quality</label>
+                            <label for="av-compress-video-quality">Quality</label>
                             <select id="av-compress-video-quality">
                                 <option value="high">High (larger file, better quality)</option>
                                 <option value="medium" selected>Medium (balanced)</option>
@@ -298,7 +298,7 @@
                     </button>
                 </div>
 
-                <div id="av-compress-video-error" class="error" hidden></div>
+                <div id="av-compress-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -320,13 +320,13 @@
                 <div id="av-convert-video-info" class="split-info" hidden>
                     <span id="av-convert-video-name" class="split-name"></span>
                     <span id="av-convert-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('av-convert-video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('av-convert-video')">&times;</button>
                 </div>
 
                 <div id="av-convert-video-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Output Format</label>
+                            <label for="av-convert-video-format">Output Format</label>
                             <select id="av-convert-video-format">
                                 <option value="mp4">MP4</option>
                                 <option value="webm">WebM</option>
@@ -344,7 +344,7 @@
                     </button>
                 </div>
 
-                <div id="av-convert-video-error" class="error" hidden></div>
+                <div id="av-convert-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -360,7 +360,7 @@
                         <path d="M15.54 8.46a5 5 0 010 7.07"/>
                     </svg>
                     <label class="drop-browse">Select audio files<input type="file" id="av-merge-audio-input" accept="audio/*" multiple hidden></label>
-                    <p class="drop-hint">or drop files here &middot; add 2+ audio files &middot; drag to reorder</p>
+                    <p class="drop-hint">or drop files here &middot; add 2+ audio files &middot; joined in the order added</p>
                 </div>
 
                 <div id="av-merge-audio-list" class="file-list"></div>
@@ -368,7 +368,7 @@
                 <div id="av-merge-audio-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Output Format</label>
+                            <label for="av-merge-audio-format">Output Format</label>
                             <select id="av-merge-audio-format">
                                 <option value="mp3">MP3</option>
                                 <option value="wav">WAV</option>
@@ -386,7 +386,7 @@
                     </button>
                 </div>
 
-                <div id="av-merge-audio-error" class="error" hidden></div>
+                <div id="av-merge-audio-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -409,7 +409,7 @@
                 <div id="av-normalize-info" class="split-info" hidden>
                     <span id="av-normalize-name" class="split-name"></span>
                     <span id="av-normalize-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('av-normalize')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('av-normalize')">&times;</button>
                 </div>
 
                 <div id="av-normalize-options" hidden></div>
@@ -421,7 +421,7 @@
                     </button>
                 </div>
 
-                <div id="av-normalize-error" class="error" hidden></div>
+                <div id="av-normalize-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -443,13 +443,13 @@
                 <div id="av-video-to-gif-info" class="split-info" hidden>
                     <span id="av-video-to-gif-name" class="split-name"></span>
                     <span id="av-video-to-gif-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('av-video-to-gif')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('av-video-to-gif')">&times;</button>
                 </div>
 
                 <div id="av-video-to-gif-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>FPS</label>
+                            <label for="av-video-to-gif-fps">FPS</label>
                             <select id="av-video-to-gif-fps">
                                 <option value="5">5 fps (small file)</option>
                                 <option value="10" selected>10 fps (balanced)</option>
@@ -458,7 +458,7 @@
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Width</label>
+                            <label for="av-video-to-gif-width">Width</label>
                             <select id="av-video-to-gif-width">
                                 <option value="320">320px</option>
                                 <option value="480" selected>480px</option>
@@ -476,7 +476,7 @@
                     </button>
                 </div>
 
-                <div id="av-video-to-gif-error" class="error" hidden></div>
+                <div id="av-video-to-gif-error" class="error" role="alert" hidden></div>
             </div>
         </div>
         <!-- Reverse Audio -->
@@ -498,7 +498,7 @@
                 <div id="reverse-audio-info" class="split-info" hidden>
                     <span id="reverse-audio-name" class="split-name"></span>
                     <span id="reverse-audio-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('reverse-audio')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('reverse-audio')">&times;</button>
                 </div>
 
                 <div id="reverse-audio-options" hidden></div>
@@ -510,7 +510,7 @@
                     </button>
                 </div>
 
-                <div id="reverse-audio-error" class="error" hidden></div>
+                <div id="reverse-audio-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -534,13 +534,13 @@
                 <div id="pitch-info" class="split-info" hidden>
                     <span id="pitch-name" class="split-name"></span>
                     <span id="pitch-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('pitch')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('pitch')">&times;</button>
                 </div>
 
                 <div id="pitch-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Semitones (-12 to 12)</label>
+                            <label for="pitch-semitones">Semitones (-12 to 12)</label>
                             <input type="number" id="pitch-semitones" min="-12" max="12" value="0" step="1">
                         </div>
                     </div>
@@ -553,7 +553,7 @@
                     </button>
                 </div>
 
-                <div id="pitch-error" class="error" hidden></div>
+                <div id="pitch-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -582,21 +582,21 @@
                 <div id="equalizer-info" class="split-info" hidden>
                     <span id="equalizer-name" class="split-name"></span>
                     <span id="equalizer-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('equalizer')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('equalizer')">&times;</button>
                 </div>
 
                 <div id="equalizer-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Bass <span id="eq-bass-val">0</span> dB</label>
+                            <label for="eq-bass">Bass <span id="eq-bass-val">0</span> dB</label>
                             <input type="range" id="eq-bass" min="-10" max="10" value="0" step="1" oninput="document.getElementById('eq-bass-val').textContent=this.value">
                         </div>
                         <div class="field">
-                            <label>Mid <span id="eq-mid-val">0</span> dB</label>
+                            <label for="eq-mid">Mid <span id="eq-mid-val">0</span> dB</label>
                             <input type="range" id="eq-mid" min="-10" max="10" value="0" step="1" oninput="document.getElementById('eq-mid-val').textContent=this.value">
                         </div>
                         <div class="field">
-                            <label>Treble <span id="eq-treble-val">0</span> dB</label>
+                            <label for="eq-treble">Treble <span id="eq-treble-val">0</span> dB</label>
                             <input type="range" id="eq-treble" min="-10" max="10" value="0" step="1" oninput="document.getElementById('eq-treble-val').textContent=this.value">
                         </div>
                     </div>
@@ -609,7 +609,7 @@
                     </button>
                 </div>
 
-                <div id="equalizer-error" class="error" hidden></div>
+                <div id="equalizer-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -633,21 +633,21 @@
                 <div id="fade-info" class="split-info" hidden>
                     <span id="fade-name" class="split-name"></span>
                     <span id="fade-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('fade')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('fade')">&times;</button>
                 </div>
 
                 <div id="fade-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Fade in (seconds)</label>
+                            <label for="fade-in">Fade in (seconds)</label>
                             <input type="number" id="fade-in" min="0" step="0.5" value="0" placeholder="0">
                         </div>
                         <div class="field">
-                            <label>Fade out (seconds)</label>
+                            <label for="fade-out">Fade out (seconds)</label>
                             <input type="number" id="fade-out" min="0" step="0.5" value="0" placeholder="0">
                         </div>
                         <div class="field">
-                            <label>Duration (seconds, optional)</label>
+                            <label for="fade-duration">Duration (seconds, optional)</label>
                             <input type="number" id="fade-duration" min="0" step="0.1" placeholder="auto">
                         </div>
                     </div>
@@ -660,7 +660,7 @@
                     </button>
                 </div>
 
-                <div id="fade-error" class="error" hidden></div>
+                <div id="fade-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -683,17 +683,17 @@
                 <div id="silence-info" class="split-info" hidden>
                     <span id="silence-name" class="split-name"></span>
                     <span id="silence-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('silence')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('silence')">&times;</button>
                 </div>
 
                 <div id="silence-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Silence threshold (dB)</label>
+                            <label for="silence-threshold">Silence threshold (dB)</label>
                             <input type="number" id="silence-threshold" min="-90" max="0" value="-40" step="1">
                         </div>
                         <div class="field">
-                            <label>Minimum silence (seconds)</label>
+                            <label for="silence-min">Minimum silence (seconds)</label>
                             <input type="number" id="silence-min" min="0.05" max="30" value="0.5" step="0.1">
                         </div>
                     </div>
@@ -706,7 +706,7 @@
                     </button>
                 </div>
 
-                <div id="silence-error" class="error" hidden></div>
+                <div id="silence-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -731,20 +731,20 @@
                 <div id="split-audio-info" class="split-info" hidden>
                     <span id="split-audio-name" class="split-name"></span>
                     <span id="split-audio-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('split-audio')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('split-audio')">&times;</button>
                 </div>
 
                 <div id="split-audio-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Split by</label>
+                            <label for="split-audio-mode">Split by</label>
                             <select id="split-audio-mode" onchange="updateSplitAudioMode()">
                                 <option value="duration">Part length (seconds)</option>
                                 <option value="count">Number of parts</option>
                             </select>
                         </div>
                         <div class="field">
-                            <label id="split-audio-value-label">Seconds per part</label>
+                            <label id="split-audio-value-label" for="split-audio-value">Seconds per part</label>
                             <input type="number" id="split-audio-value" min="1" value="60" step="1">
                         </div>
                     </div>
@@ -757,7 +757,7 @@
                     </button>
                 </div>
 
-                <div id="split-audio-error" class="error" hidden></div>
+                <div id="split-audio-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -779,13 +779,13 @@
                 <div id="channels-info" class="split-info" hidden>
                     <span id="channels-name" class="split-name"></span>
                     <span id="channels-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('channels')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('channels')">&times;</button>
                 </div>
 
                 <div id="channels-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Mode</label>
+                            <label for="channels-mode">Mode</label>
                             <select id="channels-mode">
                                 <option value="mono">Stereo to mono (mix down)</option>
                                 <option value="stereo">Mono to stereo</option>
@@ -804,7 +804,7 @@
                     </button>
                 </div>
 
-                <div id="channels-error" class="error" hidden></div>
+                <div id="channels-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -825,13 +825,13 @@
                 <div id="bitrate-info" class="split-info" hidden>
                     <span id="bitrate-name" class="split-name"></span>
                     <span id="bitrate-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('bitrate')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('bitrate')">&times;</button>
                 </div>
 
                 <div id="bitrate-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Bitrate</label>
+                            <label for="bitrate-value">Bitrate</label>
                             <select id="bitrate-value">
                                 <option value="64">64 kbps</option>
                                 <option value="96">96 kbps</option>
@@ -842,7 +842,7 @@
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Format</label>
+                            <label for="bitrate-format">Format</label>
                             <select id="bitrate-format">
                                 <option value="keep">Keep original</option>
                                 <option value="mp3">MP3</option>
@@ -860,7 +860,7 @@
                     </button>
                 </div>
 
-                <div id="bitrate-error" class="error" hidden></div>
+                <div id="bitrate-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -882,43 +882,43 @@
                 <div id="tags-info" class="split-info" hidden>
                     <span id="tags-name" class="split-name"></span>
                     <span id="tags-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearTagsFile()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearTagsFile()">&times;</button>
                 </div>
 
                 <div id="tags-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Title</label>
+                            <label for="tags-title">Title</label>
                             <input type="text" id="tags-title" placeholder="Title">
                         </div>
                         <div class="field">
-                            <label>Artist</label>
+                            <label for="tags-artist">Artist</label>
                             <input type="text" id="tags-artist" placeholder="Artist">
                         </div>
                     </div>
                     <div class="field-row">
                         <div class="field">
-                            <label>Album</label>
+                            <label for="tags-album">Album</label>
                             <input type="text" id="tags-album" placeholder="Album">
                         </div>
                         <div class="field">
-                            <label>Year</label>
+                            <label for="tags-year">Year</label>
                             <input type="text" id="tags-year" placeholder="2024">
                         </div>
                     </div>
                     <div class="field-row">
                         <div class="field">
-                            <label>Genre</label>
+                            <label for="tags-genre">Genre</label>
                             <input type="text" id="tags-genre" placeholder="Genre">
                         </div>
                         <div class="field">
-                            <label>Track</label>
+                            <label for="tags-track">Track</label>
                             <input type="text" id="tags-track" placeholder="1">
                         </div>
                     </div>
                     <div class="field-row">
                         <div class="field">
-                            <label>Comment</label>
+                            <label for="tags-comment">Comment</label>
                             <input type="text" id="tags-comment" placeholder="Comment">
                         </div>
                     </div>
@@ -935,7 +935,7 @@
                         <div id="tags-cover-info" class="split-info" hidden>
                             <span id="tags-cover-name" class="split-name"></span>
                             <span id="tags-cover-size" class="file-size"></span>
-                            <button class="split-remove" onclick="clearTagsCover()">&times;</button>
+                            <button class="split-remove" aria-label="Remove file" onclick="clearTagsCover()">&times;</button>
                         </div>
                     </div>
                 </div>
@@ -947,7 +947,7 @@
                     </button>
                 </div>
 
-                <div id="tags-error" class="error" hidden></div>
+                <div id="tags-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -969,13 +969,13 @@
                 <div id="audio2video-info" class="split-info" hidden>
                     <span id="audio2video-name" class="split-name"></span>
                     <span id="audio2video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('audio2video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('audio2video')">&times;</button>
                 </div>
 
                 <div id="audio2video-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Style</label>
+                            <label for="audio2video-style">Style</label>
                             <select id="audio2video-style" onchange="updateAudio2VideoStyle()">
                                 <option value="waveform">Waveform</option>
                                 <option value="spectrum">Spectrum bars</option>
@@ -983,7 +983,7 @@
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Resolution</label>
+                            <label for="audio2video-resolution">Resolution</label>
                             <select id="audio2video-resolution">
                                 <option value="1280x720">1280 x 720</option>
                                 <option value="1920x1080">1920 x 1080</option>
@@ -992,11 +992,11 @@
                     </div>
                     <div class="field-row">
                         <div class="field" id="audio2video-color-field">
-                            <label>Colour</label>
+                            <label for="audio2video-color">Colour</label>
                             <input type="color" id="audio2video-color" value="#4285f4">
                         </div>
                         <div class="field">
-                            <label>Background</label>
+                            <label for="audio2video-background">Background</label>
                             <input type="color" id="audio2video-background" value="#000000">
                         </div>
                     </div>
@@ -1013,7 +1013,7 @@
                         <div id="audio2video-image-info" class="split-info" hidden>
                             <span id="audio2video-image-name" class="split-name"></span>
                             <span id="audio2video-image-size" class="file-size"></span>
-                            <button class="split-remove" onclick="clearAudio2VideoImage()">&times;</button>
+                            <button class="split-remove" aria-label="Remove file" onclick="clearAudio2VideoImage()">&times;</button>
                         </div>
                     </div>
                 </div>
@@ -1025,7 +1025,7 @@
                     </button>
                 </div>
 
-                <div id="audio2video-error" class="error" hidden></div>
+                <div id="audio2video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1047,25 +1047,25 @@
                 <div id="crop-video-info" class="split-info" hidden>
                     <span id="crop-video-name" class="split-name"></span>
                     <span id="crop-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('crop-video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('crop-video')">&times;</button>
                 </div>
 
                 <div id="crop-video-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Width (px)</label>
+                            <label for="crop-video-width">Width (px)</label>
                             <input type="number" id="crop-video-width" min="1" placeholder="640">
                         </div>
                         <div class="field">
-                            <label>Height (px)</label>
+                            <label for="crop-video-height">Height (px)</label>
                             <input type="number" id="crop-video-height" min="1" placeholder="480">
                         </div>
                         <div class="field">
-                            <label>X offset (px)</label>
+                            <label for="crop-video-x">X offset (px)</label>
                             <input type="number" id="crop-video-x" min="0" value="0">
                         </div>
                         <div class="field">
-                            <label>Y offset (px)</label>
+                            <label for="crop-video-y">Y offset (px)</label>
                             <input type="number" id="crop-video-y" min="0" value="0">
                         </div>
                     </div>
@@ -1078,7 +1078,7 @@
                     </button>
                 </div>
 
-                <div id="crop-video-error" class="error" hidden></div>
+                <div id="crop-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1100,13 +1100,13 @@
                 <div id="rotate-video-info" class="split-info" hidden>
                     <span id="rotate-video-name" class="split-name"></span>
                     <span id="rotate-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('rotate-video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('rotate-video')">&times;</button>
                 </div>
 
                 <div id="rotate-video-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Angle</label>
+                            <label for="rotate-video-angle">Angle</label>
                             <select id="rotate-video-angle">
                                 <option value="90">90° clockwise</option>
                                 <option value="180">180°</option>
@@ -1123,7 +1123,7 @@
                     </button>
                 </div>
 
-                <div id="rotate-video-error" class="error" hidden></div>
+                <div id="rotate-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1147,17 +1147,17 @@
                 <div id="resize-video-info" class="split-info" hidden>
                     <span id="resize-video-name" class="split-name"></span>
                     <span id="resize-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('resize-video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('resize-video')">&times;</button>
                 </div>
 
                 <div id="resize-video-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Width (px)</label>
+                            <label for="resize-video-width">Width (px)</label>
                             <input type="number" id="resize-video-width" min="1" placeholder="1280">
                         </div>
                         <div class="field">
-                            <label>Height (px)</label>
+                            <label for="resize-video-height">Height (px)</label>
                             <input type="number" id="resize-video-height" min="1" placeholder="720">
                         </div>
                     </div>
@@ -1170,7 +1170,7 @@
                     </button>
                 </div>
 
-                <div id="resize-video-error" class="error" hidden></div>
+                <div id="resize-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1193,7 +1193,7 @@
                 <div id="reverse-video-info" class="split-info" hidden>
                     <span id="reverse-video-name" class="split-name"></span>
                     <span id="reverse-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('reverse-video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('reverse-video')">&times;</button>
                 </div>
 
                 <div id="reverse-video-options" hidden></div>
@@ -1205,7 +1205,7 @@
                     </button>
                 </div>
 
-                <div id="reverse-video-error" class="error" hidden></div>
+                <div id="reverse-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1229,13 +1229,13 @@
                 <div id="loop-video-info" class="split-info" hidden>
                     <span id="loop-video-name" class="split-name"></span>
                     <span id="loop-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('loop-video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('loop-video')">&times;</button>
                 </div>
 
                 <div id="loop-video-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Loop count</label>
+                            <label for="loop-video-count">Loop count</label>
                             <input type="number" id="loop-video-count" min="2" value="2" step="1">
                         </div>
                     </div>
@@ -1248,7 +1248,7 @@
                     </button>
                 </div>
 
-                <div id="loop-video-error" class="error" hidden></div>
+                <div id="loop-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1271,7 +1271,7 @@
                 <div id="mute-video-info" class="split-info" hidden>
                     <span id="mute-video-name" class="split-name"></span>
                     <span id="mute-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('mute-video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('mute-video')">&times;</button>
                 </div>
 
                 <div id="mute-video-options" hidden></div>
@@ -1283,7 +1283,7 @@
                     </button>
                 </div>
 
-                <div id="mute-video-error" class="error" hidden></div>
+                <div id="mute-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1305,7 +1305,7 @@
                 <div id="add-audio-video-info" class="split-info" hidden>
                     <span id="add-audio-video-name" class="split-name"></span>
                     <span id="add-audio-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAddAudioVideo()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAddAudioVideo()">&times;</button>
                 </div>
 
                 <div class="drop-zone" id="add-audio-audio-drop" style="margin-top: 16px;">
@@ -1320,7 +1320,7 @@
                 <div id="add-audio-audio-info" class="split-info" hidden>
                     <span id="add-audio-audio-name" class="split-name"></span>
                     <span id="add-audio-audio-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAddAudioAudio()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAddAudioAudio()">&times;</button>
                 </div>
 
                 <div id="add-audio-actions" class="pdf-actions" hidden>
@@ -1330,7 +1330,7 @@
                     </button>
                 </div>
 
-                <div id="add-audio-error" class="error" hidden></div>
+                <div id="add-audio-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1352,7 +1352,7 @@
                 <div id="burn-subs-video-info" class="split-info" hidden>
                     <span id="burn-subs-video-name" class="split-name"></span>
                     <span id="burn-subs-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearBurnSubsVideo()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearBurnSubsVideo()">&times;</button>
                 </div>
 
                 <div class="drop-zone" id="burn-subs-srt-drop" style="margin-top: 16px;">
@@ -1369,7 +1369,7 @@
                 <div id="burn-subs-srt-info" class="split-info" hidden>
                     <span id="burn-subs-srt-name" class="split-name"></span>
                     <span id="burn-subs-srt-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearBurnSubsSrt()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearBurnSubsSrt()">&times;</button>
                 </div>
 
                 <div id="burn-subs-actions" class="pdf-actions" hidden>
@@ -1379,7 +1379,7 @@
                     </button>
                 </div>
 
-                <div id="burn-subs-error" class="error" hidden></div>
+                <div id="burn-subs-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1404,7 +1404,7 @@
                 <div id="merge-video-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Output size</label>
+                            <label for="merge-video-resolution">Output size</label>
                             <select id="merge-video-resolution">
                                 <option value="auto">Auto (largest clip)</option>
                                 <option value="match-first">Match first clip</option>
@@ -1422,7 +1422,7 @@
                     </button>
                 </div>
 
-                <div id="merge-video-error" class="error" hidden></div>
+                <div id="merge-video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1444,7 +1444,7 @@
                 <div id="video-watermark-video-info" class="split-info" hidden>
                     <span id="video-watermark-video-name" class="split-name"></span>
                     <span id="video-watermark-video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearVideoWatermarkVideo()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearVideoWatermarkVideo()">&times;</button>
                 </div>
 
                 <div class="drop-zone" id="video-watermark-image-drop" style="margin-top: 16px;">
@@ -1460,13 +1460,13 @@
                 <div id="video-watermark-image-info" class="split-info" hidden>
                     <span id="video-watermark-image-name" class="split-name"></span>
                     <span id="video-watermark-image-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearVideoWatermarkImage()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearVideoWatermarkImage()">&times;</button>
                 </div>
 
                 <div id="video-watermark-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Position</label>
+                            <label for="video-watermark-position">Position</label>
                             <select id="video-watermark-position">
                                 <option value="top-left">Top left</option>
                                 <option value="top-right">Top right</option>
@@ -1478,15 +1478,15 @@
                     </div>
                     <div class="field-row">
                         <div class="field">
-                            <label>Size (% of video width)</label>
+                            <label for="video-watermark-scale">Size (% of video width)</label>
                             <input type="number" id="video-watermark-scale" min="1" max="100" value="15" step="1">
                         </div>
                         <div class="field">
-                            <label>Opacity (%)</label>
+                            <label for="video-watermark-opacity">Opacity (%)</label>
                             <input type="number" id="video-watermark-opacity" min="0" max="100" value="100" step="5">
                         </div>
                         <div class="field">
-                            <label>Margin (px)</label>
+                            <label for="video-watermark-margin">Margin (px)</label>
                             <input type="number" id="video-watermark-margin" min="0" max="2000" value="16" step="1">
                         </div>
                     </div>
@@ -1499,7 +1499,7 @@
                     </button>
                 </div>
 
-                <div id="video-watermark-error" class="error" hidden></div>
+                <div id="video-watermark-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1527,13 +1527,13 @@
                 <div id="frames-info" class="split-info" hidden>
                     <span id="frames-name" class="split-name"></span>
                     <span id="frames-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('frames')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('frames')">&times;</button>
                 </div>
 
                 <div id="frames-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Mode</label>
+                            <label for="frames-mode">Mode</label>
                             <select id="frames-mode" onchange="updateFramesMode()">
                                 <option value="single">Single frame at a time</option>
                                 <option value="interval">Every N seconds</option>
@@ -1541,7 +1541,7 @@
                             </select>
                         </div>
                         <div class="select-wrap">
-                            <label>Image format</label>
+                            <label for="frames-format">Image format</label>
                             <select id="frames-format">
                                 <option value="png">PNG</option>
                                 <option value="jpg">JPG</option>
@@ -1550,15 +1550,15 @@
                     </div>
                     <div class="field-row">
                         <div class="field" id="frames-time-field">
-                            <label>Time (seconds)</label>
+                            <label for="frames-time">Time (seconds)</label>
                             <input type="number" id="frames-time" min="0" value="0" step="0.1">
                         </div>
                         <div class="field" id="frames-interval-field" hidden>
-                            <label>Interval (seconds)</label>
+                            <label for="frames-interval">Interval (seconds)</label>
                             <input type="number" id="frames-interval" min="0.1" value="1" step="0.1">
                         </div>
                         <div class="field" id="frames-count-field" hidden>
-                            <label>Number of frames</label>
+                            <label for="frames-count">Number of frames</label>
                             <input type="number" id="frames-count" min="1" max="500" value="10" step="1">
                         </div>
                     </div>
@@ -1571,7 +1571,7 @@
                     </button>
                 </div>
 
-                <div id="frames-error" class="error" hidden></div>
+                <div id="frames-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1593,13 +1593,13 @@
                 <div id="video-speed-info" class="split-info" hidden>
                     <span id="video-speed-name" class="split-name"></span>
                     <span id="video-speed-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('video-speed')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('video-speed')">&times;</button>
                 </div>
 
                 <div id="video-speed-options" hidden>
                     <div class="field-row" style="margin-top: 16px;">
                         <div class="field">
-                            <label>Speed (0.25 to 4)</label>
+                            <label for="video-speed-value">Speed (0.25 to 4)</label>
                             <input type="number" id="video-speed-value" min="0.25" max="4" value="1.5" step="0.05">
                         </div>
                     </div>
@@ -1617,7 +1617,7 @@
                     </button>
                 </div>
 
-                <div id="video-speed-error" class="error" hidden></div>
+                <div id="video-speed-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1639,13 +1639,13 @@
                 <div id="stabilize-info" class="split-info" hidden>
                     <span id="stabilize-name" class="split-name"></span>
                     <span id="stabilize-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('stabilize')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('stabilize')">&times;</button>
                 </div>
 
                 <div id="stabilize-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Strength</label>
+                            <label for="stabilize-strength">Strength</label>
                             <select id="stabilize-strength">
                                 <option value="low">Low</option>
                                 <option value="medium" selected>Medium</option>
@@ -1662,7 +1662,7 @@
                     </button>
                 </div>
 
-                <div id="stabilize-error" class="error" hidden></div>
+                <div id="stabilize-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1684,20 +1684,20 @@
                 <div id="gif2video-info" class="split-info" hidden>
                     <span id="gif2video-name" class="split-name"></span>
                     <span id="gif2video-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearAvFile('gif2video')">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearAvFile('gif2video')">&times;</button>
                 </div>
 
                 <div id="gif2video-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Format</label>
+                            <label for="gif2video-format">Format</label>
                             <select id="gif2video-format">
                                 <option value="mp4">MP4 (H.264)</option>
                                 <option value="webm">WebM (VP9)</option>
                             </select>
                         </div>
                         <div class="field">
-                            <label>Play count</label>
+                            <label for="gif2video-loop">Play count</label>
                             <input type="number" id="gif2video-loop" min="1" max="100" value="1" step="1">
                         </div>
                     </div>
@@ -1710,7 +1710,7 @@
                     </button>
                 </div>
 
-                <div id="gif2video-error" class="error" hidden></div>
+                <div id="gif2video-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1733,7 +1733,7 @@
                 <div id="video-info-info" class="split-info" hidden>
                     <span id="video-info-name" class="split-name"></span>
                     <span id="video-info-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearVideoInfo()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearVideoInfo()">&times;</button>
                 </div>
 
                 <div id="video-info-options" hidden>
@@ -1746,10 +1746,10 @@
                 </div>
 
                 <div id="video-info-actions" class="pdf-actions" hidden>
-                    <button id="video-info-btn" class="btn-secondary" onclick="copyVideoInfoJson()">Copy JSON</button>
+                    <button id="video-info-btn" class="btn-download btn-secondary" onclick="copyVideoInfoJson()">Copy JSON</button>
                 </div>
 
-                <div id="video-info-error" class="error" hidden></div>
+                <div id="video-info-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1771,7 +1771,7 @@
                 <div id="pip-main-info" class="split-info" hidden>
                     <span id="pip-main-name" class="split-name"></span>
                     <span id="pip-main-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearPipMain()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearPipMain()">&times;</button>
                 </div>
 
                 <div class="drop-zone" id="pip-overlay-drop" style="margin-top: 16px;">
@@ -1786,13 +1786,13 @@
                 <div id="pip-overlay-info" class="split-info" hidden>
                     <span id="pip-overlay-name" class="split-name"></span>
                     <span id="pip-overlay-size" class="file-size"></span>
-                    <button class="split-remove" onclick="clearPipOverlay()">&times;</button>
+                    <button class="split-remove" aria-label="Remove file" onclick="clearPipOverlay()">&times;</button>
                 </div>
 
                 <div id="pip-options" hidden>
                     <div class="control-row" style="margin-top: 16px;">
                         <div class="select-wrap">
-                            <label>Position</label>
+                            <label for="pip-position">Position</label>
                             <select id="pip-position">
                                 <option value="top-left">Top left</option>
                                 <option value="top-right">Top right</option>
@@ -1801,11 +1801,11 @@
                             </select>
                         </div>
                         <div class="field">
-                            <label>Size (% of video width)</label>
+                            <label for="pip-scale">Size (% of video width)</label>
                             <input type="number" id="pip-scale" min="5" max="100" value="25" step="1">
                         </div>
                         <div class="field">
-                            <label>Margin (px)</label>
+                            <label for="pip-margin">Margin (px)</label>
                             <input type="number" id="pip-margin" min="0" max="2000" value="16" step="1">
                         </div>
                     </div>
@@ -1818,7 +1818,7 @@
                     </button>
                 </div>
 
-                <div id="pip-error" class="error" hidden></div>
+                <div id="pip-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1848,7 +1848,7 @@
                     <audio id="recorder-audio-player" controls style="width:100%;margin:16px 0;"></audio>
                     <div class="control-row" style="margin-bottom:12px;">
                         <div class="select-wrap">
-                            <label>Format</label>
+                            <label for="recorder-audio-format">Format</label>
                             <select id="recorder-audio-format">
                                 <option value="webm" selected>WebM (original)</option>
                                 <option value="wav">WAV</option>
@@ -1861,11 +1861,11 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
                             Download Recording
                         </button>
-                        <button class="btn-secondary" onclick="resetAudioRecording()">New Recording</button>
+                        <button class="btn-download btn-secondary" style="flex: 0 0 auto;" onclick="resetAudioRecording()">New Recording</button>
                     </div>
                 </div>
 
-                <div id="recorder-audio-error" class="error" hidden></div>
+                <div id="recorder-audio-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1901,11 +1901,11 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
                             Download Recording
                         </button>
-                        <button class="btn-secondary" onclick="resetScreenRecording()">New Recording</button>
+                        <button class="btn-download btn-secondary" style="flex: 0 0 auto;" onclick="resetScreenRecording()">New Recording</button>
                     </div>
                 </div>
 
-                <div id="recorder-screen-error" class="error" hidden></div>
+                <div id="recorder-screen-error" class="error" role="alert" hidden></div>
             </div>
         </div>
 
@@ -1951,11 +1951,11 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><path d="M12 3v14M5 12l7 7 7-7"/><path d="M5 21h14"/></svg>
                             Download Recording
                         </button>
-                        <button class="btn-secondary" onclick="resetWebcamRecording()">New Recording</button>
+                        <button class="btn-download btn-secondary" style="flex: 0 0 auto;" onclick="resetWebcamRecording()">New Recording</button>
                     </div>
                 </div>
 
-                <div id="webcam-error" class="error" hidden></div>
+                <div id="webcam-error" class="error" role="alert" hidden></div>
             </div>
         </div>
     </main>

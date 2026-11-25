@@ -10,7 +10,9 @@
         <p class="about-sub">120+ tools for media, PDF, images, audio, video, and text, all running locally on your machine. No uploads, no accounts, no cloud.</p>
     </div>
 
-    <div class="about-video-wrap">
+    {# The demo video is not part of the package (*.mp4 and *.webm are
+       git-ignored), so the player only appears where a copy has been added. #}
+    <div class="about-video-wrap" id="demo-video-wrap" hidden>
         <video id="demo-video" controls playsinline preload="metadata">
             <source src="/static/demo.mp4" type="video/mp4">
             <source src="/static/demo.webm" type="video/webm">
@@ -77,4 +79,14 @@
         </div>
     </div>
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const video = document.getElementById("demo-video");
+    const show = () => { document.getElementById("demo-video-wrap").hidden = false; };
+    if (video.readyState >= 1) show(); else video.addEventListener("loadedmetadata", show);
+})();
+</script>
 {% endblock %}
